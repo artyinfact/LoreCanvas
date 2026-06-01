@@ -33,7 +33,7 @@ required_files=(
   "docs/radar-rules.md"
   "docs/mode-lifecycle.md"
   "docs/sample-content.md"
-  "docs/acceptance-checklists.md"
+  "acceptance-checklists.md"
 )
 
 for file in "${required_files[@]}"; do

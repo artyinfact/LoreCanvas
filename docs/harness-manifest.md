@@ -28,7 +28,10 @@
 - `radar-rules.md`: 大地图与小地图雷达扫描细则。
 - `mode-lifecycle.md`: Maker 与 Runner 的生命周期边界。
 - `sample-content.md`: 最小可验证示例地图内容。
-- `acceptance-checklists.md`: 每个功能节点的验收清单。
+
+## 根目录执行清单
+
+- `../acceptance-checklists.md`: 每个功能节点的验收清单。该文件属于 feedback/checklist 层，放在仓库根目录，便于收尾时与 `AGENTS.md`、`feature_list.json`、`agent-progress.md` 一起检查。
 
 ## 图片参考缺口
 

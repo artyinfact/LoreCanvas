@@ -13,6 +13,7 @@
 - [x] 已将 Git 工作流写入 `AGENTS.md`：任务开始前优先检查远端同步并按需 `git pull --ff-only`；步骤完成且验证通过后执行 `git add`、`git commit`、`git push`。
 - [x] 已确认默认远端仓库为 `https://github.com/artyinfact/GM-Scout-Canvas`；上一轮 harness 已提交并推送为 `25aa19d Add agent harness for dual-map canvas`。
 - [x] 已补充 harness 文档清单、数据 schema、UI 工作流、布局、样式、组件、编辑器工具、交互规则、渲染契约、视觉验收、NPC roster、对话事件、雷达规则、模式生命周期、存储策略、示例内容和验收清单。
+- [x] 已将验收清单调整为根目录 `acceptance-checklists.md`，使其作为 feedback/checklist 层文件，而不是领域 docs 文件。
 
 ## 当前系统状态
 - 仓库当前仍是 harness-only 状态，没有 React/Vite 源码、`package.json`、`src/` 或 `tests/`。
