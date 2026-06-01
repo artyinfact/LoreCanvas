@@ -2,6 +2,28 @@
   "project": "GM-Scout-Canvas",
   "version": "0.2.0",
   "designBaseline": "双层地图：大地图为 Zone-based / Point-and-Click 区域节点图，小地图为 square-grid 方形格子；左侧工具栏统一支持放置、移动、删除建筑/地块/NPC 图块。",
+  "harnessDocs": [
+    "docs/harness-manifest.md",
+    "docs/map-architecture.md",
+    "docs/data-schema.md",
+    "docs/state-management.md",
+    "docs/game-mechanics.md",
+    "docs/storage-strategy.md",
+    "docs/ui-workflows.md",
+    "docs/ui-layout-spec.md",
+    "docs/ui-style-guide.md",
+    "docs/ui-components.md",
+    "docs/editor-tools.md",
+    "docs/interaction-rules.md",
+    "docs/rendering-contract.md",
+    "docs/visual-acceptance.md",
+    "docs/npc-roster.md",
+    "docs/dialogue-events.md",
+    "docs/radar-rules.md",
+    "docs/mode-lifecycle.md",
+    "docs/sample-content.md",
+    "docs/acceptance-checklists.md"
+  ],
   "features": [
     {
       "id": "F-00",
@@ -16,7 +38,7 @@
       "id": "F-01",
       "priority": 1,
       "title": "建立双层地图核心数据模型 (Zustand)",
-      "description": "实现 worldMap 与 localMaps 的 Store。worldMap 使用 zones 和 edges 表示大地图区域节点图；localMaps 使用 gridSize、dimensions、tiles、buildings、npcs 表示方形格子小地图。实现选择当前地图层、选中实体、放置/移动/删除实体的纯逻辑。",
+      "description": "根据 docs/data-schema.md 实现 worldMap 与 localMaps 的 Store。worldMap 使用 zones 和 edges 表示大地图区域节点图；localMaps 使用 gridSize、dimensions、tiles、buildings、npcs 表示方形格子小地图。实现选择当前地图层、选中实体、放置/移动/删除实体的纯逻辑。",
       "status": "pending",
       "dependencies": ["F-00"],
       "verification": "npx vitest run tests/mapStore.test.ts"
@@ -61,7 +83,7 @@
       "id": "F-06",
       "priority": 6,
       "title": "地图数据序列化与导入导出",
-      "description": "实现 Save/Load，将 worldMap、localMaps、实体 schema、当前版本号导出为 JSON；导入时校验 schema 与引用完整性，例如 edge.zoneId、npc.localMapId、building.zoneId/localMapId 必须存在。",
+      "description": "根据 docs/storage-strategy.md 实现 Save/Load，将 worldMap、localMaps、实体 schema、当前版本号导出为 JSON；导入时校验 schema 与引用完整性，例如 edge.zoneId、npc.localMapId、building.zoneId/localMapId 必须存在。",
       "status": "pending",
       "dependencies": ["F-05"],
       "verification": "npx vitest run tests/serialization.test.ts"

@@ -6,9 +6,16 @@
 
 ## 1. 知识路由
 不要猜测特定技术实现。进入对应领域前先读取本地文档：
+- 文档入口与路由：`docs/harness-manifest.md`
 - 地图架构与数据模型：`docs/map-architecture.md`
+- 数据 schema 与引用完整性：`docs/data-schema.md`
 - UI 与 Zustand 状态流转：`docs/state-management.md`
+- UI 工作流、布局和组件：`docs/ui-workflows.md`、`docs/ui-layout-spec.md`、`docs/ui-components.md`
+- 编辑器工具与交互规则：`docs/editor-tools.md`、`docs/interaction-rules.md`
+- PixiJS 渲染层级与坐标契约：`docs/rendering-contract.md`
 - 昼夜系统、移动与雷达数学：`docs/game-mechanics.md`
+- 对话、事件、NPC 和示例内容：`docs/dialogue-events.md`、`docs/npc-roster.md`、`docs/sample-content.md`
+- 存储策略：`docs/storage-strategy.md`
 - PixiJS 渲染与交互：必须优先调用官方 PixiJS Skills，并结合 `@pixi/react` 声明式语法；禁止编造 v5/v6 旧 API。
 
 ## 2. 开工流程
