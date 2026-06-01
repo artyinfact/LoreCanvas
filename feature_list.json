@@ -1,0 +1,106 @@
+{
+  "project": "GM-Scout-Canvas",
+  "version": "0.2.0",
+  "designBaseline": "双层地图：大地图为 Zone-based / Point-and-Click 区域节点图，小地图为 square-grid 方形格子；左侧工具栏统一支持放置、移动、删除建筑/地块/NPC 图块。",
+  "features": [
+    {
+      "id": "F-00",
+      "priority": 0,
+      "title": "创建 React + Zustand + PixiJS + Vitest 项目骨架",
+      "description": "补齐 package.json、Vite/React/TypeScript 基础结构、Vitest 配置和空白应用入口，使 init.sh 能执行类型检查与测试。不得开始地图业务实现，先保证反馈回路可运行。",
+      "status": "pending",
+      "dependencies": [],
+      "verification": "./init.sh"
+    },
+    {
+      "id": "F-01",
+      "priority": 1,
+      "title": "建立双层地图核心数据模型 (Zustand)",
+      "description": "实现 worldMap 与 localMaps 的 Store。worldMap 使用 zones 和 edges 表示大地图区域节点图；localMaps 使用 gridSize、dimensions、tiles、buildings、npcs 表示方形格子小地图。实现选择当前地图层、选中实体、放置/移动/删除实体的纯逻辑。",
+      "status": "pending",
+      "dependencies": ["F-00"],
+      "verification": "npx vitest run tests/mapStore.test.ts"
+    },
+    {
+      "id": "F-02",
+      "priority": 2,
+      "title": "实现大地图区域节点图渲染 (PixiJS)",
+      "description": "使用 @pixi/react 渲染 Zone-based 大地图：区域节点、节点标签、连接边和可点击热点。点击节点可选中区域；点击边或节点导航点可触发 Point-and-Click 跳转意图。",
+      "status": "pending",
+      "dependencies": ["F-01"],
+      "verification": "视觉测试记录于 agent-progress.md，且 npx vitest run tests/worldMap.test.ts 通过"
+    },
+    {
+      "id": "F-03",
+      "priority": 3,
+      "title": "实现小地图方形格子渲染与坐标转换",
+      "description": "使用 @pixi/react 渲染 square-grid 小地图，订阅 localMaps 的 tiles/buildings/npcs。实现 screen-to-grid 和 grid-to-screen 转换、格子命中检测、障碍格占用校验。",
+      "status": "pending",
+      "dependencies": ["F-01"],
+      "verification": "npx vitest run tests/gridMap.test.ts"
+    },
+    {
+      "id": "F-04",
+      "priority": 4,
+      "title": "搭建 Maker 左侧工具栏",
+      "description": "实现左侧工具栏与 Zustand 双向绑定，支持 select、place、move、delete 四类动作，以及 zone/building/tile/npc 四类目标。大地图中 building 作为 zone 内或 zone 旁的建筑节点，小地图中 building/tile 作为占用格实体。",
+      "status": "pending",
+      "dependencies": ["F-01", "F-02", "F-03"],
+      "verification": "npx vitest run tests/editorToolbar.test.ts"
+    },
+    {
+      "id": "F-05",
+      "priority": 5,
+      "title": "实现通用 Inspector 面板",
+      "description": "选中 zone、edge、building、tile 或 npc 后在右侧 Inspector 编辑名称、描述、图标、占用规则、AppearanceTime、Dialogues、目标 localMapId 等属性。保存时走 Store action，不直接改对象引用。",
+      "status": "pending",
+      "dependencies": ["F-04"],
+      "verification": "npx vitest run tests/inspector.test.ts"
+    },
+    {
+      "id": "F-06",
+      "priority": 6,
+      "title": "地图数据序列化与导入导出",
+      "description": "实现 Save/Load，将 worldMap、localMaps、实体 schema、当前版本号导出为 JSON；导入时校验 schema 与引用完整性，例如 edge.zoneId、npc.localMapId、building.zoneId/localMapId 必须存在。",
+      "status": "pending",
+      "dependencies": ["F-05"],
+      "verification": "npx vitest run tests/serialization.test.ts"
+    },
+    {
+      "id": "F-07",
+      "priority": 7,
+      "title": "Runner 模式与昼夜系统",
+      "description": "引入 mode 与 globalTime。Runner 模式只能消费已保存地图；昼夜系统影响 NPC 可见性、节点可用性和 PixiJS 色调滤镜。大地图区域与小地图 NPC 均可声明 Day/Night/Always 可见规则。",
+      "status": "pending",
+      "dependencies": ["F-02", "F-03", "F-06"],
+      "verification": "npx vitest run tests/timeSystem.test.ts"
+    },
+    {
+      "id": "F-08",
+      "priority": 8,
+      "title": "玩家导航与地图层切换",
+      "description": "大地图支持点击区域节点进行 Point-and-Click 导航；进入建筑或区域详情时切换到绑定的小地图。小地图支持基于方形格子的玩家移动，先实现曼哈顿邻接移动，再预留 A* 扩展点。",
+      "status": "pending",
+      "dependencies": ["F-07"],
+      "verification": "npx vitest run tests/navigation.test.ts"
+    },
+    {
+      "id": "F-09",
+      "priority": 9,
+      "title": "核心索敌机制 (雷达系统)",
+      "description": "实现雷达面板。大地图扫描以当前 zone 为中心按图距离或 edge hops 发现隐藏信号；小地图扫描以玩家格子为中心按曼哈顿距离或欧几里得距离发现不可见 NPC，并标记对应节点或格子。",
+      "status": "pending",
+      "dependencies": ["F-08"],
+      "verification": "npx vitest run tests/radar.test.ts"
+    },
+    {
+      "id": "F-10",
+      "priority": 10,
+      "title": "遭遇事件与对话触发",
+      "description": "当玩家到达大地图目标节点、进入建筑或在小地图靠近 NPC 时，解析 Dialogues 与事件条件，在底部 React 对话框触发打字机渲染，并记录本次 Runner 会话的已触发事件。",
+      "status": "pending",
+      "dependencies": ["F-08", "F-05"],
+      "verification": "npx vitest run tests/dialogue.test.ts"
+    }
+  ]
+}
