@@ -1,21 +1,13 @@
 # AGENTS.md: GM-Scout-Canvas Agent 入口
 
-`GM-Scout-Canvas` 是一款为线下跑团/桌游 GM 提供地图编辑、昼夜系统、雷达索敌与互动事件支持的数字辅助地图工具。目标架构是双层地图：大地图采用区域切片/节点图 (Zone-based / Point-and-Click)，小地图采用方形格子移动。
+`GM-Scout-Canvas` 是一款为线下跑团/桌游 GM 提供地图面板编辑、桌游配件操作、规则事件编辑与运行模拟的数字辅助工具。核心目标是把真实桌游的地图面板、配件和规则书流程搬到一个可操作的数字桌面里。
 
 技术栈：React + Zustand + PixiJS + Vitest。仓库当前以 harness 为系统事实来源，所有实现任务必须从 `feature_list.json` 中单线程领取。
 
 ## 1. 知识路由
 不要猜测特定技术实现。进入对应领域前先读取本地文档：
-- 文档入口与路由：`docs/harness-manifest.md`
-- 地图架构与数据模型：`docs/map-architecture.md`
-- 数据 schema 与引用完整性：`docs/data-schema.md`
-- UI 与 Zustand 状态流转：`docs/state-management.md`
-- UI 工作流、布局和组件：`docs/ui-workflows.md`、`docs/ui-layout-spec.md`、`docs/ui-components.md`
-- 编辑器工具与交互规则：`docs/editor-tools.md`、`docs/interaction-rules.md`
-- PixiJS 渲染层级与坐标契约：`docs/rendering-contract.md`
-- 昼夜系统、移动与雷达数学：`docs/game-mechanics.md`
-- 对话、事件、NPC 和示例内容：`docs/dialogue-events.md`、`docs/npc-roster.md`、`docs/sample-content.md`
-- 存储策略：`docs/storage-strategy.md`
+- 产品基础框架：`docs/product-framework.md`
+- 功能验收清单：`acceptance-checklists.md`
 - PixiJS 渲染与交互：必须优先调用官方 PixiJS Skills，并结合 `@pixi/react` 声明式语法；禁止编造 v5/v6 旧 API。
 
 ## 2. 开工流程
@@ -30,22 +22,23 @@
 红线：如果 `./init.sh` 在已有 `package.json` 的实现阶段报错，停止新功能开发，先修复基础状态。不要在损坏的起点上叠加代码。
 
 ## 3. 产品边界
-- 大地图是区域/节点图：区域节点可表示城镇、建筑群、街区、野外地点；边表示可点击通路、门、传送点或 GM 定义路线。
-- 小地图是方形格子：用于房间、战斗、探索和精确移动；格子可承载地块、建筑部件、障碍、NPC、事件触发器。
-- 左侧工具栏支持常见编辑动作：放置、移动、删除建筑/地块/NPC 图块；不同地图层使用同一工具语义，但写入不同数据结构。
-- Runner 模式只消费 Maker 模式产物，不应绕过序列化 schema 直接修改地图。
+- 地图编辑器导入一张桌游地图面板背景图，并允许手动放置、移动、删除各种桌游配件。
+- 配件是通用对象，不预设 NPC、建筑、雷达目标或格子地块等固定玩法语义。
+- 事件编辑器用于预设桌游规则书中的流程规则，在适当时机弹出剧情、投骰判定、规则提示或其他窗口。
+- Runner 模式模拟玩家操作配件后的游戏流程，按预设规则触发事件；它只消费 Maker 产物，不直接修改项目模板。
+- 小地图、方形格子移动、区域节点图、雷达索敌、昼夜系统、固定 NPC roster 和自动寻路均不属于当前范围。
 
 ## 4. 执行规则
 - 单线程推进：一次只做一个 `feature_list.json` 功能节点。
 - 最小化干涉：除非为当前任务消除 blocker，不重构无关文件。
-- 测试优先：核心状态、坐标转换、序列化、移动、雷达均需 Vitest 覆盖。
+- 测试优先：核心状态、坐标转换、序列化、配件操作和事件触发均需 Vitest 覆盖。
 - 事实来源：以仓库文件为准，不依赖聊天记忆。需求变化必须同步到 harness 文档。
 
 ## 5. 完成定义
 一个功能节点只有在以下条件全部满足时才算完成：
 1. 目标行为已实现。
 2. 对应 `verification` 命令通过；实现阶段的全量 `npx vitest run` 必须全绿。
-3. 涉及 PixiJS 视觉、拖拽、雷达或地图交互时，在 `agent-progress.md` 记录手动验证步骤。
+3. 涉及 PixiJS 视觉、拖拽、事件弹窗或地图交互时，在 `agent-progress.md` 记录手动验证步骤。
 4. `feature_list.json` 状态已更新，`agent-progress.md` 可让下一轮 agent 直接续上。
 
 ## 6. 收尾
