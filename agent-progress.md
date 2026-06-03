@@ -16,6 +16,7 @@
 - [x] 已将验收清单调整为根目录 `acceptance-checklists.md`，使其作为 feedback/checklist 层文件，而不是领域 docs 文件。
 - [x] 已将 docs 收敛为 `docs/product-framework.md`，删除小地图、雷达、NPC roster、昼夜、节点图、战术移动等已砍掉方向的细分文档。
 - [x] 已将 harness 中的项目显示名更新为 `LoreCanvas`。
+- [x] 已将 GitHub 仓库重命名为 `https://github.com/artyinfact/LoreCanvas`，并验证新 URL 指向最新提交。
 
 ## 当前系统状态
 - 仓库当前仍是 harness-only 状态，没有 React/Vite 源码、`package.json`、`src/` 或 `tests/`。
@@ -23,7 +24,7 @@
 - 在 `F-00` 完成前，`init.sh` 只应验证 harness 文件完整性并清楚报告实现脚手架尚未创建；`F-00` 完成后必须恢复为真实类型检查和 Vitest 反馈回路。
 
 ## 遗留风险 / 卡点 (Blockers)
-- 当前仓库未配置 git remote，但已知默认远端 URL；重命名前使用旧 URL，重命名后使用 `https://github.com/artyinfact/LoreCanvas`。
+- 当前仓库未配置 git remote，但已知默认远端 URL：`https://github.com/artyinfact/LoreCanvas`。
 - UI 参考图仍未创建；当前 harness 先用 `docs/product-framework.md` 和 `acceptance-checklists.md` 约束产品范围。
 - 注意：执行任何依赖 `@pixi/react` 的任务前，必须调用官方 PixiJS Skills 确认当前版本语法，避免使用过时 API。
 
