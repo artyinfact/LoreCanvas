@@ -1,5 +1,5 @@
 {
-  "project": "GM-Scout-Canvas",
+  "project": "LoreCanvas",
   "version": "0.3.0",
   "designBaseline": "通用桌游数字桌面：导入桌游地图面板背景图，手动放置/移动/删除桌游配件；用事件编辑器描述规则书流程；Runner 根据玩家操作配件触发剧情、投骰判定、规则提示等窗口。",
   "harnessDocs": [

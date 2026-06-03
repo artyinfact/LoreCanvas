@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# GM-Scout-Canvas - Agent 初始化与状态验证脚本
+# LoreCanvas - Agent 初始化与状态验证脚本
 # Harness principle: fail fast once implementation exists, but keep the seed
 # harness runnable before F-00 creates package.json.
 # ==============================================================================
@@ -53,6 +53,6 @@ npx vitest run
 echo "[4/5] Vitest passed."
 
 echo "[5/5] Implementation baseline is healthy."
-echo "GM-Scout-Canvas is ready for the next pending feature."
+echo "LoreCanvas is ready for the next pending feature."
 
 exit 0

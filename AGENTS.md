@@ -1,6 +1,6 @@
-# AGENTS.md: GM-Scout-Canvas Agent 入口
+# AGENTS.md: LoreCanvas Agent 入口
 
-`GM-Scout-Canvas` 是一款为线下跑团/桌游 GM 提供地图面板编辑、桌游配件操作、规则事件编辑与运行模拟的数字辅助工具。核心目标是把真实桌游的地图面板、配件和规则书流程搬到一个可操作的数字桌面里。
+`LoreCanvas` 是一款为线下跑团/桌游 GM 提供地图面板编辑、桌游配件操作、规则事件编辑与运行模拟的数字辅助工具。核心目标是把真实桌游的地图面板、配件和规则书流程搬到一个可操作的数字桌面里。
 
 技术栈：React + Zustand + PixiJS + Vitest。仓库当前以 harness 为系统事实来源，所有实现任务必须从 `feature_list.json` 中单线程领取。
 
@@ -15,7 +15,7 @@
 1. 运行 `pwd` 确认处于项目根目录。
 2. 读取 `agent-progress.md`，了解已验证状态和 blocker。
 3. 读取 `feature_list.json`，选择 `status: "pending"` 且 `priority` 最小的任务。
-4. 运行 `git status --short --branch`、`git remote -v` 和 `git log --oneline -5` 查看分支、远端与近期变更。项目默认远端仓库为 `https://github.com/artyinfact/GM-Scout-Canvas`。
+4. 运行 `git status --short --branch`、`git remote -v` 和 `git log --oneline -5` 查看分支、远端与近期变更。项目默认远端仓库为 `https://github.com/artyinfact/LoreCanvas`。
 5. 如果当前分支配置了 upstream 且工作区干净，优先 `git pull --ff-only` 同步远端；如果没有 upstream，可用默认远端 URL 执行只读 `git fetch` 并确认本地 HEAD 与远端基线关系。如果存在本地未提交变更，先判断是否属于当前任务，避免覆盖用户工作。
 6. 运行 `./init.sh` 做 harness 与测试基线验证。
 
