@@ -1,92 +1,95 @@
 {
+  "$schema": "LoreCanvas-Engine-Core",
   "project": "LoreCanvas",
-  "version": "0.3.0",
-  "designBaseline": "通用桌游数字桌面：导入桌游地图面板背景图，手动放置/移动/删除桌游配件；用事件编辑器描述规则书流程；Runner 根据玩家操作配件触发剧情、投骰判定、规则提示等窗口。",
+  "version": "0.4.0",
+  "tagline": "A Theatrical VTT Engine tailored for Story-Driven Board Games.",
+  "designBaseline": "美式/叙事驱动桌游的戏剧化 VTT 引擎：以 Node-Graph 表达地图与位置，以通用 Entity 表达配件与角色，以 JSON 规则树驱动事件流和 CCFOLIA 风格 Cut-in 自动演出。",
+  "validationScenario": "Local testing only: E2E validation via ignored LOTR Tabletop Simulator fixture.",
   "harnessDocs": [
-    "docs/product-framework.md",
-    "acceptance-checklists.md"
+    "docs/product.md",
+    "clean-state-checklists.md",
+    "progress.md"
   ],
   "features": [
     {
-      "id": "F-00",
-      "priority": 0,
-      "title": "创建 React + Zustand + PixiJS + Vitest 项目骨架",
-      "description": "补齐 package.json、Vite/React/TypeScript 基础结构、Vitest 配置和空白应用入口，使 init.sh 能执行类型检查与测试。不得开始业务实现，先保证反馈回路可运行。",
+      "id": "F-01-GraphBoard",
+      "priority": 1,
+      "title": "核心图谱 Board",
+      "description": "引擎层支持导入任意 URL 作为底图。实现点对点 Node-Graph 架构，提供创建/删除 Location 和连线的 API 与 UI，剔除任何 Grid 相关代码。",
       "status": "pending",
       "dependencies": [],
-      "verification": "./init.sh"
+      "verification": "npx vitest run tests/engine/board.test.ts",
+      "evidence": null
     },
     {
-      "id": "F-01",
-      "priority": 1,
-      "title": "建立项目数据模型与 Zustand Store",
-      "description": "根据 docs/product-framework.md 建立项目 schema：背景图引用、配件列表、事件规则、运行状态和 schemaVersion。实现新增/更新/删除配件、选择当前配件、更新配件状态的纯逻辑。",
-      "status": "pending",
-      "dependencies": ["F-00"],
-      "verification": "npx vitest run tests/projectStore.test.ts"
-    },
-    {
-      "id": "F-02",
+      "id": "F-02-EntitySystem",
       "priority": 2,
-      "title": "实现地图面板背景图画布",
-      "description": "使用 @pixi/react 渲染导入的桌游地图背景图，并支持基础缩放、平移和 screen-to-board 坐标转换。背景图是自由画布，不实现小地图、网格、区域节点或寻路。",
+      "title": "通用 Entity 系统",
+      "description": "实现通用 Entity 状态模型 `{ id, type, state: Record<string, any> }`。允许 GM 定义任意属性键值对，例如 hp、faction、stealth。提供在 Node 间绑定/解绑 Entity 的逻辑。",
       "status": "pending",
-      "dependencies": ["F-01"],
-      "verification": "npx vitest run tests/boardCanvas.test.ts，视觉验证记录于 agent-progress.md"
+      "dependencies": ["F-01-GraphBoard"],
+      "verification": "npx vitest run tests/engine/entity.test.ts",
+      "evidence": null
     },
     {
-      "id": "F-03",
+      "id": "F-03-MovementValidation",
       "priority": 3,
-      "title": "实现桌游配件编辑工具",
-      "description": "实现左侧工具栏和画布交互，支持放置、选择、移动、删除通用配件。配件类型由用户自定义 kind 表示，不预设 NPC、建筑、雷达目标或格子地块语义。",
+      "title": "图谱移动校验",
+      "description": "实现通用的图谱移动校验算法。暴露 API 供外部调用，判断 Entity 能否合法移动到目标 Node，第一版仅基于连线连通性。",
       "status": "pending",
-      "dependencies": ["F-01", "F-02"],
-      "verification": "npx vitest run tests/pieceEditing.test.ts"
+      "dependencies": ["F-01-GraphBoard", "F-02-EntitySystem"],
+      "verification": "npx vitest run tests/engine/movement.test.ts",
+      "evidence": null
     },
     {
-      "id": "F-04",
+      "id": "F-04-GlobalTrackerAndVisuals",
       "priority": 4,
-      "title": "实现配件 Inspector",
-      "description": "选中配件后在右侧 Inspector 编辑名称、kind、外观、位置、状态字段和 GM 备注。保存必须通过 Store action，不直接修改对象引用。",
+      "title": "全局追踪器与视觉映射",
+      "description": "实现 Global Trackers 与视觉滤镜映射表。引擎允许配置任意全局变量，如 Time、Threat、Sanity，并允许通过映射字典将数值区间绑定到 PixiJS 滤镜组合。",
       "status": "pending",
-      "dependencies": ["F-03"],
-      "verification": "npx vitest run tests/pieceInspector.test.ts"
+      "dependencies": ["F-01-GraphBoard"],
+      "verification": "npx vitest run tests/engine/atmosphere.test.ts",
+      "evidence": null
     },
     {
-      "id": "F-05",
+      "id": "F-05-RuleTriggerEngine",
       "priority": 5,
-      "title": "实现事件规则编辑器",
-      "description": "实现事件列表和表单，允许 GM 创建 trigger、conditions、effects、repeatable。事件可响应点击配件、移动配件、进入阶段、状态变化或手动触发。",
+      "title": "JSON 规则触发器引擎",
+      "description": "实现泛用事件监听器。允许以 JSON 注入规则树，例如 `{ trigger: \"ENTITY_MOVE\", conditions: [{ attr: \"faction\", operator: \"!==\" }], actions: [\"DISPATCH_CUT_IN\"] }`。引擎负责解析并在条件命中时发射事件流。",
       "status": "pending",
-      "dependencies": ["F-01", "F-04"],
-      "verification": "npx vitest run tests/eventRules.test.ts"
+      "dependencies": ["F-02-EntitySystem", "F-03-MovementValidation", "F-04-GlobalTrackerAndVisuals"],
+      "verification": "npx vitest run tests/engine/rules.test.ts",
+      "evidence": null
     },
     {
-      "id": "F-06",
+      "id": "F-06-TheatricalRenderer",
       "priority": 6,
-      "title": "实现事件弹窗系统",
-      "description": "根据事件 effect 弹出窗口。第一版支持剧情/说明文本窗口、投骰判定窗口、选择分支窗口和规则提示窗口；窗口数据由事件规则驱动。",
+      "title": "Cut-in 演出渲染层",
+      "description": "实现底层 Cut-in 渲染总线。当接收到 `DISPATCH_CUT_IN` 指令时，依据 payload 在前端渲染遮罩、图片滑入动画和打字机文本。",
       "status": "pending",
-      "dependencies": ["F-05"],
-      "verification": "npx vitest run tests/eventWindows.test.ts"
+      "dependencies": ["F-05-RuleTriggerEngine"],
+      "verification": "npx vitest run tests/engine/theatrical.test.ts",
+      "evidence": null
     },
     {
-      "id": "F-07",
+      "id": "F-07-StateSerialization",
       "priority": 7,
-      "title": "实现 Runner 运行模拟",
-      "description": "Runner 加载项目模板并创建独立运行状态。玩家操作配件时，系统匹配事件规则、触发弹窗、记录已触发事件和配件状态变化。Runner 不直接修改 Maker 项目模板。",
+      "title": ".lorecanvas 剧本包序列化",
+      "description": "提供整个引擎 state 的深度序列化与反序列化 API，覆盖图谱、实体、追踪器映射、触发器 JSON 和演出资源引用，产出 `.lorecanvas` 剧本包。",
       "status": "pending",
-      "dependencies": ["F-06"],
-      "verification": "npx vitest run tests/runnerSimulation.test.ts"
+      "dependencies": ["F-01-GraphBoard", "F-02-EntitySystem", "F-04-GlobalTrackerAndVisuals", "F-05-RuleTriggerEngine", "F-06-TheatricalRenderer"],
+      "verification": "npx vitest run tests/engine/serialization.test.ts",
+      "evidence": null
     },
     {
-      "id": "F-08",
+      "id": "F-08-E2E-LOTR-Validation",
       "priority": 8,
-      "title": "实现 Save/Load JSON",
-      "description": "将背景图引用、配件、事件规则和 schemaVersion 导出为 JSON；导入时校验 schemaVersion、配件引用和事件引用。暂不引入 Supabase 或远端数据库。",
+      "title": "LOTR 本地端到端验收",
+      "description": "不污染核心引擎，编写特定 E2E 测试脚本。通过调用 F-01 至 F-07 的引擎 API 并加载被 `.gitignore` 排除的 LOTR 专属 fixture，走通一次“戒灵拦截 -> 触发滤镜变深与演出”的测试闭环。",
       "status": "pending",
-      "dependencies": ["F-07"],
-      "verification": "npx vitest run tests/serialization.test.ts"
+      "dependencies": ["F-07-StateSerialization"],
+      "verification": "npx vitest run tests/e2e/lotr-scenario.test.ts",
+      "evidence": null
     }
   ]
 }

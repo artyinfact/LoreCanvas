@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # ==============================================================================
-# LoreCanvas - Agent 初始化与状态验证脚本
+# LoreCanvas - Agent initialization and state validation script
 # Harness principle: fail fast once implementation exists, but keep the seed
-# harness runnable before F-00 creates package.json.
+# harness runnable before the implementation scaffold creates package.json.
 # ==============================================================================
 
 set -euo pipefail
@@ -12,10 +12,10 @@ echo "[1/5] Checking harness files..."
 
 required_files=(
   "AGENTS.md"
-  "agent-progress.md"
   "feature_list.json"
-  "docs/product-framework.md"
-  "acceptance-checklists.md"
+  "progress.md"
+  "docs/product.md"
+  "clean-state-checklists.md"
 )
 
 for file in "${required_files[@]}"; do
@@ -29,10 +29,10 @@ echo "[1/5] Harness files are present."
 
 echo "[2/5] Checking implementation scaffold..."
 if [ ! -f "package.json" ]; then
-  echo "[2/5] package.json not found. This is expected before feature F-00."
+  echo "[2/5] package.json not found. This is expected before the implementation scaffold exists."
   echo "[3/5] Skipping dependency installation."
   echo "[4/5] Skipping TypeScript and Vitest checks."
-  echo "[5/5] Next required task: complete F-00 in feature_list.json."
+  echo "[5/5] Next required task: complete the smallest-priority pending feature in feature_list.json."
   echo "Harness is ready; implementation scaffold is still pending."
   exit 0
 fi
