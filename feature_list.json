@@ -12,12 +12,22 @@
   ],
   "features": [
     {
+      "id": "F-00-EnvironmentAndPages",
+      "priority": 0,
+      "title": "环境配置与 GitHub Pages 部署",
+      "description": "创建 React + Vite + TypeScript + Zustand + PixiJS + Vitest 项目骨架，补齐 package.json、lockfile、src/、tests/ 和稳定 npm scripts。配置 GitHub Pages 构建部署 workflow，确保 main 分支可自动发布静态站点，并将部署 URL 写入 evidence。",
+      "status": "pending",
+      "dependencies": [],
+      "verification": "bash ./init.sh && npm run build；GitHub Actions Pages workflow 通过后记录部署 URL",
+      "evidence": null
+    },
+    {
       "id": "F-01-GraphBoard",
       "priority": 1,
       "title": "核心图谱 Board",
-      "description": "引擎层支持导入任意 URL 作为底图。实现点对点 Node-Graph 架构，提供创建/删除 Location 和连线的 API 与 UI，剔除任何 Grid 相关代码。",
+      "description": "引擎层支持导入任意图片作为底图。实现点对点 Node-Graph 架构，提供创建/删除 Location 和连线的 API 与 UI，剔除任何 Grid 相关代码。",
       "status": "pending",
-      "dependencies": [],
+      "dependencies": ["F-00-EnvironmentAndPages"],
       "verification": "npx vitest run tests/engine/board.test.ts",
       "evidence": null
     },

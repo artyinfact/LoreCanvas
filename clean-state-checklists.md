@@ -5,14 +5,26 @@
 ## 全局清洁状态
 
 - `./init.sh` 可运行；没有 `package.json` 时应清楚报告实现脚手架尚未创建。
+- `./init.sh` 的 harness state validation 通过，包括 `feature_list.json` 结构、依赖、状态和 evidence 校验。
 - 已有实现阶段中，`npx vitest run` 必须全绿。
 - `feature_list.json`、`progress.md` 和本清单保持一致。
 - `local-fixtures/lotr/` 必须处于 `.gitignore` 覆盖范围内，不得作为正式资产提交。
 - 新实现不得为了 LOTR 场景写入游戏专属分支。
+- 会话结束前确认新 agent 只凭 `AGENTS.md`、`feature_list.json`、`progress.md` 和本清单即可接手；如果需要聊天记忆，必须补 harness 状态文件。
+
+## F-00-EnvironmentAndPages 环境配置与 GitHub Pages 部署
+
+- `package.json`、lockfile、`src/` 和 `tests/` 存在。
+- `npm install` 可成功。
+- `npm run build` 可成功并产出静态构建目录。
+- `bash ./init.sh` 在脚手架存在后真实执行依赖安装、类型检查和 Vitest。
+- 至少有一个 Vitest smoke test 证明测试框架可运行。
+- GitHub Pages workflow 存在，并从 main 分支构建和发布静态站点。
+- GitHub Actions Pages workflow 通过，部署 URL 写入 `feature_list.json` 的 evidence。
 
 ## F-01-GraphBoard 核心图谱 Board
 
-- 可以导入或引用任意 URL 作为 Board 背景图。
+- 可以导入任意图片作为 Board 背景图。
 - 可以创建、更新、删除 Location。
 - 可以创建、更新、删除 Edge。
 - Edge 引用不存在的 Location 时校验失败。
