@@ -12,15 +12,15 @@
 - 新实现不得为了 LOTR 场景写入游戏专属分支。
 - 会话结束前确认新 agent 只凭 `AGENTS.md`、`feature_list.json`、`progress.md` 和本清单即可接手；如果需要聊天记忆，必须补 harness 状态文件。
 
-## F-00-EnvironmentAndPages 环境配置与 GitHub Pages 部署
+## F-00-EnvironmentAndVercel 环境配置与 Vercel 部署
 
 - `package.json`、lockfile、`src/` 和 `tests/` 存在。
 - `npm install` 可成功。
 - `npm run build` 可成功并产出静态构建目录。
 - `bash ./init.sh` 在脚手架存在后真实执行依赖安装、类型检查和 Vitest。
 - 至少有一个 Vitest smoke test 证明测试框架可运行。
-- GitHub Pages workflow 存在，并从 main 分支构建和发布静态站点。
-- GitHub Actions Pages workflow 通过，部署 URL 写入 `feature_list.json` 的 evidence。
+- Vercel 项目部署配置存在，并从 main 分支构建和发布生产站点。
+- Vercel production deployment 通过，部署 URL 写入 `feature_list.json` 的 evidence。
 
 ## F-01-GraphBoard 核心图谱 Board
 

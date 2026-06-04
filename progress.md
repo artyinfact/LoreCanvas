@@ -3,7 +3,7 @@
 这是 `LoreCanvas` 的长时任务系统事实来源。每次会话开始时先读本文件，结束时写回已验证状态、下一步和 blocker。
 
 ## 当前会话目标
-- 在 harness 中加入 `F-00-EnvironmentAndPages`，要求先完成项目环境配置与 GitHub Pages 部署，再进入引擎功能实现。
+- 将 F00 部署目标设为 Vercel，要求先完成项目环境配置与 Vercel production deployment，再进入引擎功能实现。
 
 ## 已完成 / 已验证状态
 - [x] 已读取当前 harness 文件：`AGENTS.md`、`feature_list.json`、`new_feature_list.json`、`docs/product.md`、`clean-state-checklists.md`、`progress.md`、`init.sh`。
@@ -26,14 +26,15 @@
 - [x] 已按用户要求删除上一轮新增的 `docs/harness.md` 与 `docs/environment.md`，并移除所有 harness 引用。
 - [x] 已在 `AGENTS.md` 中明确：初始化完成后，后续 feature 交给 Codex 按“计划 -> 实现 -> 验收”循环推进；产品 docs 默认不在日常实现循环中改写。
 - [x] 删除多余 docs 后已重新运行 `bash ./init.sh`，harness state validation 通过。
-- [x] 已在 `feature_list.json` 中新增 `F-00-EnvironmentAndPages`，作为 priority 0 的前置任务。
-- [x] 已将 `F-01-GraphBoard` 依赖调整为 `F-00-EnvironmentAndPages`。
-- [x] 已在 `AGENTS.md` 和 `clean-state-checklists.md` 中明确 F0 的环境、构建、测试与 GitHub Pages 部署完成要求。
+- [x] 已在 `feature_list.json` 中新增 `F-00-EnvironmentAndVercel`，作为 priority 0 的前置任务。
+- [x] 已将 `F-01-GraphBoard` 依赖调整为 `F-00-EnvironmentAndVercel`。
+- [x] 已在 `AGENTS.md` 和 `clean-state-checklists.md` 中明确 F0 的环境、构建、测试与 Vercel 部署完成要求。
 - [x] 已运行 `bash ./init.sh`，确认新增 F0 后 harness state validation 通过。
+- [x] 已将 F00 设为 `F-00-EnvironmentAndVercel`，并同步 F01 依赖、验收清单和 Codex 初始化完成定义。
 
 ## 当前系统状态
 - 仓库当前仍是 harness-only 状态，没有 React/Vite 源码、`package.json`、`src/` 或 `tests/`。
-- 下一轮 agent 应从 `feature_list.json` 中优先级最高的 pending 任务开始：`F-00-EnvironmentAndPages`。
+- 下一轮 agent 应从 `feature_list.json` 中优先级最高的 pending 任务开始：`F-00-EnvironmentAndVercel`。
 - 在实现脚手架创建前，`init.sh` 只验证 harness 文件完整性并清楚报告 implementation scaffold 尚未创建；一旦存在 `package.json`，必须真实执行依赖安装、类型检查和 Vitest。
 - `init.sh` 现在还会执行 harness state validation；后续修改 `feature_list.json` 或 harness 状态文件时应先跑它。
 - LOTR fixture 位于 `local-fixtures/lotr/`，应只在本地 E2E 验收中读取，不得上传 GitHub。
@@ -43,10 +44,10 @@
 - UI 参考图仍未创建；当前 harness 先用 `docs/product.md` 和 `clean-state-checklists.md` 约束产品范围。
 - 注意：执行任何依赖 `@pixi/react` 的任务前，必须调用官方 PixiJS Skills 确认当前版本语法，避免使用过时 API。
 - 如果后续 E2E 环境缺少 `local-fixtures/lotr/`，应明确 skip 或提示本地 fixture 缺失，而不是提交素材。
-- 尚未创建 `package.json`、lockfile、GitHub Pages workflow 或 CI；这些应在 `F-00-EnvironmentAndPages` 中补齐。
+- 尚未创建 `package.json`、lockfile、Vercel 部署配置或 CI；这些应在 `F-00-EnvironmentAndVercel` 中补齐。
 
 ## 下一步行动 (Next Steps)
 1. 运行 `./init.sh` 确认 harness 检查通过。
-2. 执行 `F-00-EnvironmentAndPages`：创建 React/Vite/TypeScript/Zustand/PixiJS/Vitest 脚手架，补齐 npm scripts、lockfile、smoke test、构建脚本和 GitHub Pages workflow。
-3. 运行 `bash ./init.sh && npm run build`，并确认 GitHub Actions Pages workflow 通过。
-4. 将 `F-00-EnvironmentAndPages` 标记为 `completed` 并写入本地验证与部署 URL evidence，再进入 `F-01-GraphBoard`。
+2. 执行 `F-00-EnvironmentAndVercel`：创建 React/Vite/TypeScript/Zustand/PixiJS/Vitest 脚手架，补齐 npm scripts、lockfile、smoke test、构建脚本和 Vercel 部署配置。
+3. 运行 `bash ./init.sh && npm run build`，并确认 Vercel production deployment 通过。
+4. 将 `F-00-EnvironmentAndVercel` 标记为 `completed` 并写入本地验证与部署 URL evidence，再进入 `F-01-GraphBoard`。

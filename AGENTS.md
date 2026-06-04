@@ -23,7 +23,7 @@
 6. 运行 `./init.sh` 做 harness 与测试基线验证。
 
 红线：如果 `./init.sh` 在已有 `package.json` 的实现阶段报错，停止新功能开发，先修复基础状态。不要在损坏的起点上叠加代码。
-在 `F-00-EnvironmentAndPages` 完成前，不进入业务引擎功能实现。
+在 `F-00-EnvironmentAndVercel` 完成前，不进入业务引擎功能实现。
 
 ## 3. 标准验证命令
 - Harness 基线：`bash ./init.sh`
@@ -31,7 +31,7 @@
 - 实现后全量验证：`bash ./init.sh` 必须安装依赖、执行类型检查并跑完整 Vitest
 - JSON 清单校验：由 `./init.sh` 自动检查 `feature_list.json` 结构、依赖和 evidence 规则
 
-初始化完成后，后续功能开发交给 Codex 按“计划 -> 实现 -> 验收”循环推进：先根据 `feature_list.json` 选择单个任务并写明计划，再实现最小闭环，最后运行 verification、记录 evidence、更新 `progress.md`。初始化完成的定义包括 `F-00-EnvironmentAndPages` 通过验证，并完成 GitHub Pages workflow 部署。`docs/product.md` 是稳定产品规格，除非用户明确要求或规格变更，Codex 日常实现循环不得改写产品 docs。
+初始化完成后，后续功能开发交给 Codex 按“计划 -> 实现 -> 验收”循环推进：先根据 `feature_list.json` 选择单个任务并写明计划，再实现最小闭环，最后运行 verification、记录 evidence、更新 `progress.md`。初始化完成的定义包括 `F-00-EnvironmentAndVercel` 通过验证，并完成 Vercel production deployment。`docs/product.md` 是稳定产品规格，除非用户明确要求或规格变更，Codex 日常实现循环不得改写产品 docs。
 
 ## 4. 产品边界
 - Board 是带背景图的 Node-Graph，不是方格地图。Location 与 Edge 是一等模型；任何 Grid、A*、战术格移动都不属于核心实现。
