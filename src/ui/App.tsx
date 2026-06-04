@@ -57,6 +57,7 @@ export function App() {
   const setBackgroundAsset = useBoardStore((state) => state.setBackgroundAsset);
   const setActiveTool = useBoardStore((state) => state.setActiveTool);
   const setBoardZoom = useBoardStore((state) => state.setBoardZoom);
+  const resetBoardView = useBoardStore((state) => state.resetBoardView);
   const setCreationPanelCollapsed = useBoardStore(
     (state) => state.setCreationPanelCollapsed,
   );
@@ -363,7 +364,7 @@ export function App() {
             <button
               aria-label="Reset zoom"
               className="icon-only icon-only--neutral"
-              onClick={() => setBoardZoom(1)}
+              onClick={resetBoardView}
               title="Reset zoom"
               type="button"
             >

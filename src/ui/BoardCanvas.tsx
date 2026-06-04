@@ -57,6 +57,7 @@ export function BoardCanvas() {
   const board = useBoardStore((state) => state.board);
   const activeTool = useBoardStore((state) => state.activeTool);
   const boardZoom = useBoardStore((state) => state.boardZoom);
+  const boardPan = useBoardStore((state) => state.boardPan);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const edgeDraftFromId = useBoardStore((state) => state.edgeDraftFromId);
@@ -69,6 +70,7 @@ export function BoardCanvas() {
   const moveLocation = useBoardStore((state) => state.moveLocation);
   const selectLocation = useBoardStore((state) => state.selectLocation);
   const selectPlacement = useBoardStore((state) => state.selectPlacement);
+  const setBoardPan = useBoardStore((state) => state.setBoardPan);
   const setLastError = useBoardStore((state) => state.setLastError);
   const startOrCompleteEdge = useBoardStore((state) => state.startOrCompleteEdge);
   const updateTemplatePlacement = useBoardStore(
@@ -80,7 +82,6 @@ export function BoardCanvas() {
   const [draggingPlacementId, setDraggingPlacementId] = useState<string | null>(
     null,
   );
-  const [boardPan, setBoardPan] = useState<PointData>({ x: 0, y: 0 });
   const [draggingBoardPan, setDraggingBoardPan] =
     useState<BoardPanDrag | null>(null);
   const frame = useMemo(

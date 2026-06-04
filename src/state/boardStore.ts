@@ -41,6 +41,11 @@ export interface AccessoryTemplatePlacement {
   height: number;
 }
 
+export interface BoardPan {
+  x: number;
+  y: number;
+}
+
 export type BoardTool = "select" | "location" | "edge";
 
 export type AccessoryTemplatePatch = Partial<
@@ -62,6 +67,7 @@ export interface BoardStore {
   edgeDraftFromId: string | null;
   activeTool: BoardTool;
   boardZoom: number;
+  boardPan: BoardPan;
   isCreationPanelCollapsed: boolean;
   isInspectorCollapsed: boolean;
   lastError: string | null;
@@ -95,6 +101,8 @@ export interface BoardStore {
   ) => void;
   deleteSelectedPlacement: () => void;
   setBoardZoom: (zoom: number) => void;
+  setBoardPan: (pan: BoardPan) => void;
+  resetBoardView: () => void;
   setCreationPanelCollapsed: (isCollapsed: boolean) => void;
   setInspectorCollapsed: (isCollapsed: boolean) => void;
   setLastError: (message: string) => void;
@@ -112,6 +120,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
   edgeDraftFromId: null,
   activeTool: "select",
   boardZoom: 1,
+  boardPan: { x: 0, y: 0 },
   isCreationPanelCollapsed: false,
   isInspectorCollapsed: false,
   lastError: null,
@@ -540,6 +549,18 @@ export const useBoardStore = create<BoardStore>((set) => ({
   setBoardZoom: (zoom) =>
     set({
       boardZoom: clampNumber(zoom, 0.5, 4),
+    }),
+  setBoardPan: (pan) =>
+    set({
+      boardPan: {
+        x: Number.isFinite(pan.x) ? pan.x : 0,
+        y: Number.isFinite(pan.y) ? pan.y : 0,
+      },
+    }),
+  resetBoardView: () =>
+    set({
+      boardZoom: 1,
+      boardPan: { x: 0, y: 0 },
     }),
   setCreationPanelCollapsed: (isCollapsed) =>
     set({

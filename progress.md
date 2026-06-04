@@ -94,3 +94,9 @@
 - Added empty-map panning in Select mode. When no location or placed piece is selected, the PixiJS canvas uses a hand cursor (`grab`) and dragging the background pans the visible board frame in x/y screen space.
 - Interaction priority remains: dragging placed pieces moves the piece, dragging locations moves the location, and background dragging pans only when nothing is selected.
 - In-app Browser verification against `http://127.0.0.1:5173/`: default active tool was `Select`, hovering empty board canvas reported cursor `grab`, and before/after screenshots confirmed the board background shifted after a drag gesture.
+
+## 2026-06-04 F-01 Reset View Fix
+
+- Updated the Reset zoom button to reset the full board view, not only the zoom value. Board pan is now stored in `boardStore`, and `resetBoardView()` restores `boardZoom` to `1` and `boardPan` to `{ x: 0, y: 0 }`.
+- `BoardCanvas` now reads and updates pan through the store, so toolbar controls can reset pan created by Select-mode background dragging.
+- In-app Browser verification: starting from default `100%`, zoomed to `120%`, dragged the board background to pan, then clicked `Reset zoom`; the zoom label returned to `100%` and the board framing visually returned to the initial view.
