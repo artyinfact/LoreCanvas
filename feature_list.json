@@ -44,10 +44,39 @@
       "priority": 1,
       "title": "核心图谱 Board",
       "description": "引擎层支持导入任意图片作为底图。实现点对点 Node-Graph 架构，提供创建/删除 Location 和连线的 API 与 UI，剔除任何 Grid 相关代码。",
-      "status": "pending",
+      "status": "completed",
       "dependencies": ["F-00-EnvironmentAndVercel"],
       "verification": "npx vitest run tests/engine/board.test.ts",
-      "evidence": null
+      "evidence": {
+        "completedAt": "2026-06-04",
+        "localVerification": [
+          "npx vitest run tests/engine/board.test.ts",
+          "npm run build",
+          "bash ./init.sh"
+        ],
+        "browserVerification": [
+          "Started Vite dev server at http://127.0.0.1:5173",
+          "Playwright snapshot confirmed Maker UI, metrics, tools, asset list, location inspector, edge inspector, and piece template panel render.",
+          "Playwright snapshot confirmed Tools labels are Select, Add Location, and Add Edge.",
+          "Playwright click flow created two Locations and one Edge on the PixiJS board canvas.",
+          "Playwright upload flow imported public/favicon.svg as an image asset, automatically selected it as the board background, and rendered it through PixiJS without console errors or warnings.",
+          "Playwright clicked Piece on the uploaded image asset and confirmed one sidebar piece template was created.",
+          "Playwright edited the piece template rendered width, height, and max copy count, switched to Select, dragged the template to the graph board twice, and confirmed the template showed 2 / 2 copies.",
+          "Playwright attempted a third drag and confirmed the max copy limit displayed an error without increasing the copy count.",
+          "Playwright deleted the piece template and confirmed the template and placed copies were removed.",
+          "Playwright deleted the uploaded image and confirmed Images returned to 0, the background was cleared, and no piece templates remained.",
+          "Playwright confirmed the Maker layout uses a left Creation toolbar, central GraphBoard canvas, and collapsible right Board inspector.",
+          "Playwright confirmed Tools, Piece Templates, Image Assets, Location, and Edges sections are collapsible.",
+          "Playwright confirmed Piece Templates live in the left Creation toolbar adjacent to the GraphBoard, then dragged a template from that toolbar to the board and confirmed the copy count updated.",
+          "Playwright/Chrome bulk-uploaded 28 SVG image assets and confirmed the page body stayed fixed at viewport height while the asset list scrolled internally.",
+          "Playwright/Chrome confirmed collapsing both Creation toolbar and Board inspector widened the GraphBoard canvas from 752px to 1312px.",
+          "Playwright/Chrome confirmed map zoom controls changed the board zoom from 100% to 120%.",
+          "Playwright/Chrome dragged a piece template onto the GraphBoard, confirmed the placed piece appeared in the inspector, edited the placed copy size to 144 x 96, selected it again from the canvas, and deleted it back to 0 / 1 copies.",
+          "Playwright/Chrome reproduced the collapsed-sidebar canvas clipping bug, then confirmed the PixiJS canvas now resizes from 750 x 734 to the expanded 1310 x 734 content area when both sidebars are hidden.",
+          "In-app Browser confirmed Select is the default tool, the empty board canvas reports a grab cursor in Select mode, and dragging the unselected map background pans the visible board."
+        ],
+        "notes": "F-01 implements normalized Node-Graph Board state, arbitrary uploaded image background references, Location and Edge create/update/delete APIs, a neutral Maker UI, PixiJS/@pixi/react canvas interactions, Select as the default editing mode, empty-map hand cursor and drag panning, deletable image assets, configurable draggable piece templates, editable/deletable placed template copies, copy-limit guarded template placements, scroll-contained sidebars, map zoom controls, collapsible left Creation toolbar, collapsible right Board inspector, and central board expansion when sidebars are hidden. Template placements remain F-01 Maker placeholders; F-02 will map templates to real Entity instances. No grid, pathfinding, tactical distance, or game-specific branches were introduced."
+      }
     },
     {
       "id": "F-02-EntitySystem",
