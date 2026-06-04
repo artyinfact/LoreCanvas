@@ -31,23 +31,32 @@
 - [x] 已在 `AGENTS.md` 和 `clean-state-checklists.md` 中明确 F0 的环境、构建、测试与 Vercel 部署完成要求。
 - [x] 已运行 `bash ./init.sh`，确认新增 F0 后 harness state validation 通过。
 - [x] 已将 F00 设为 `F-00-EnvironmentAndVercel`，并同步 F01 依赖、验收清单和 Codex 初始化完成定义。
+- [x] 已执行 `npx skills add https://github.com/pixijs/pixijs-skills`，安装 26 个 PixiJS skills；`skills-lock.json` 记录来源与 hash，skills 文件位于 `.agents/skills/`。
+- [x] 已完成 `F-00-EnvironmentAndVercel`：新增 React + Vite + TypeScript + Zustand + PixiJS + Vitest 脚手架、npm scripts、lockfile、smoke tests、Vercel 配置和 `.vercelignore`。
+- [x] 已修复当前 Windows/WSL 混合环境下的 Node 与 Rolldown native binding 问题：npm scripts 通过 `scripts/run-with-modern-node.mjs` 在旧 Node 下临时使用 Node 24.13.0；`init.sh` 会补齐 WSL 需要的 Linux Rolldown optional binding。
+- [x] 已运行 `bash -lc "./init.sh && npm run build"`：harness validation、依赖安装、TypeScript、Vitest 2 个测试文件 / 3 个测试、Vite production build 全部通过。
+- [x] 已运行 `npm audit --audit-level=moderate`，结果为 0 vulnerabilities。
+- [x] 已完成 Vercel production deployment：project `lorecanvas`，deployment `dpl_CqR6L6HPGmTiXzFi2Rk3XZH6W9ky`，生产 URL `https://lorecanvas-mu.vercel.app`，状态 Ready。
+- [x] 已用 HTTP 检查 `https://lorecanvas-mu.vercel.app` 返回 200，页面内容包含 LoreCanvas。
 
 ## 当前系统状态
-- 仓库当前仍是 harness-only 状态，没有 React/Vite 源码、`package.json`、`src/` 或 `tests/`。
-- 下一轮 agent 应从 `feature_list.json` 中优先级最高的 pending 任务开始：`F-00-EnvironmentAndVercel`。
-- 在实现脚手架创建前，`init.sh` 只验证 harness 文件完整性并清楚报告 implementation scaffold 尚未创建；一旦存在 `package.json`，必须真实执行依赖安装、类型检查和 Vitest。
-- `init.sh` 现在还会执行 harness state validation；后续修改 `feature_list.json` 或 harness 状态文件时应先跑它。
-- LOTR fixture 位于 `local-fixtures/lotr/`，应只在本地 E2E 验收中读取，不得上传 GitHub。
+- `F-00-EnvironmentAndVercel` 已完成并写入 `feature_list.json` evidence。
+- 仓库现在已有实现脚手架：`package.json`、`package-lock.json`、`src/`、`tests/`、Vite/Vitest/TypeScript 配置和 Vercel 部署配置。
+- `init.sh` 在存在 `package.json` 后会真实执行依赖安装、类型检查和 Vitest；当前已验证通过。
+- Vercel production deployment 已通过，生产 URL 为 `https://lorecanvas-mu.vercel.app`。
+- 下一轮 agent 应从 `feature_list.json` 中优先级最高的 pending 任务开始：`F-01-GraphBoard`。
+- LOTR fixture 位于 `local-fixtures/lotr/`，被 `.gitignore` 和 `.vercelignore` 排除，应只在本地 E2E 验收中读取，不得上传 GitHub 或 Vercel。
 
 ## 遗留风险 / 卡点 (Blockers)
 - 当前仓库配置了远端 `https://github.com/artyinfact/LoreCanvas`。
 - UI 参考图仍未创建；当前 harness 先用 `docs/product.md` 和 `clean-state-checklists.md` 约束产品范围。
 - 注意：执行任何依赖 `@pixi/react` 的任务前，必须调用官方 PixiJS Skills 确认当前版本语法，避免使用过时 API。
 - 如果后续 E2E 环境缺少 `local-fixtures/lotr/`，应明确 skip 或提示本地 fixture 缺失，而不是提交素材。
-- 尚未创建 `package.json`、lockfile、Vercel 部署配置或 CI；这些应在 `F-00-EnvironmentAndVercel` 中补齐。
+- Vite production build 当前有 PixiJS chunk 大于 500 kB 的提示；F-00 阶段可接受，后续进入功能实现和资源加载后再评估 code splitting。
+- 当前本地分支 `main` 比 `origin/main` ahead 3，且存在本轮和此前未提交变更；未按用户要求执行 git add/commit/push。
 
 ## 下一步行动 (Next Steps)
-1. 运行 `./init.sh` 确认 harness 检查通过。
-2. 执行 `F-00-EnvironmentAndVercel`：创建 React/Vite/TypeScript/Zustand/PixiJS/Vitest 脚手架，补齐 npm scripts、lockfile、smoke test、构建脚本和 Vercel 部署配置。
-3. 运行 `bash ./init.sh && npm run build`，并确认 Vercel production deployment 通过。
-4. 将 `F-00-EnvironmentAndVercel` 标记为 `completed` 并写入本地验证与部署 URL evidence，再进入 `F-01-GraphBoard`。
+1. 运行 `bash ./init.sh` 确认环境基线仍通过。
+2. 按单线程规则领取 `F-01-GraphBoard`。
+3. 进入 PixiJS/`@pixi/react` 地图交互前，先读取官方 PixiJS skills 中对应领域文档。
+4. 为 F-01 实现最小 Node-Graph Board 闭环，并运行 `npx vitest run tests/engine/board.test.ts`。

@@ -1,0 +1,33 @@
+{
+  "name": "lorecanvas",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=18.19.0"
+  },
+  "scripts": {
+    "dev": "node ./scripts/run-with-modern-node.mjs ./node_modules/vite/bin/vite.js --host 0.0.0.0",
+    "build": "node ./scripts/run-with-modern-node.mjs ./node_modules/typescript/bin/tsc -b && node ./scripts/run-with-modern-node.mjs ./node_modules/vite/bin/vite.js build",
+    "check-types": "node ./scripts/run-with-modern-node.mjs ./node_modules/typescript/bin/tsc -b --pretty false",
+    "test": "node ./scripts/run-with-modern-node.mjs ./node_modules/vitest/vitest.mjs run",
+    "preview": "node ./scripts/run-with-modern-node.mjs ./node_modules/vite/bin/vite.js preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@pixi/react": "^8.0.5",
+    "pixi.js": "^8.19.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  }
+}

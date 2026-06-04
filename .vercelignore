@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+local-fixtures/
+lotr/
+3727065341.json
+new_feature_list.json
+.agents/
+.git/

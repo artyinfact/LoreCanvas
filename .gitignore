@@ -1,4 +1,10 @@
 local-fixtures/
-3727065341.json
-lotr/
+.agents\skills
 new_feature_list.json
+node_modules/
+dist/
+coverage/
+.vercel/
+.env
+.env.*
+!.env.example

@@ -16,10 +16,28 @@
       "priority": 0,
       "title": "环境配置与 Vercel 部署",
       "description": "创建 React + Vite + TypeScript + Zustand + PixiJS + Vitest 项目骨架，补齐 package.json、lockfile、src/、tests/ 和稳定 npm scripts。配置 Vercel 静态站点部署，确保 main 分支可自动发布生产站点，并将 Vercel 部署 URL 写入 evidence。",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "verification": "bash ./init.sh && npm run build；Vercel production deployment 通过后记录部署 URL",
-      "evidence": null
+      "evidence": {
+        "completedAt": "2026-06-04",
+        "localVerification": [
+          "npx skills add https://github.com/pixijs/pixijs-skills",
+          "bash -lc \"./init.sh && npm run build\"",
+          "npm audit --audit-level=moderate"
+        ],
+        "vercelVerification": [
+          "npx vercel project add lorecanvas",
+          "npx vercel deploy --prod --yes --project lorecanvas",
+          "npx vercel inspect https://lorecanvas-mu.vercel.app",
+          "Invoke-WebRequest https://lorecanvas-mu.vercel.app -> 200"
+        ],
+        "pixijsSkills": "skills-lock.json records 26 PixiJS skills installed from pixijs/pixijs-skills under .agents/skills.",
+        "deploymentId": "dpl_CqR6L6HPGmTiXzFi2Rk3XZH6W9ky",
+        "deploymentUrl": "https://lorecanvas-mu.vercel.app",
+        "inspectorUrl": "https://vercel.com/artyinfacts-projects/lorecanvas/CqR6L6HPGmTiXzFi2Rk3XZH6W9ky",
+        "notes": "Vercel production deployment is READY. Vite build reports a large PixiJS chunk warning, acceptable for F-00 and to revisit during feature-level code splitting."
+      }
     },
     {
       "id": "F-01-GraphBoard",

@@ -153,6 +153,23 @@ fi
 
 echo "[4/6] Installing npm dependencies..."
 npm install --silent
+if [ "$(uname -s)" = "Linux" ] && [ -d "node_modules/rolldown" ] && [ ! -d "node_modules/@rolldown/binding-linux-x64-gnu" ]; then
+  rolldown_linux_binding_version="$(node - <<'NODE'
+const fs = require("fs");
+
+const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+const optionalDependencies =
+  lock.packages?.["node_modules/rolldown"]?.optionalDependencies ?? {};
+
+process.stdout.write(optionalDependencies["@rolldown/binding-linux-x64-gnu"] ?? "");
+NODE
+)"
+
+  if [ -n "$rolldown_linux_binding_version" ]; then
+    echo "[4/6] Installing missing Linux Rolldown optional binding..."
+    npm install --no-save --silent "@rolldown/binding-linux-x64-gnu@$rolldown_linux_binding_version"
+  fi
+fi
 echo "[4/6] Dependencies are ready."
 
 echo "[5/6] Running TypeScript checks..."
@@ -163,7 +180,7 @@ else
 fi
 
 echo "[6/6] Running Vitest..."
-npx vitest run
+npm run test
 echo "[6/6] Vitest passed."
 
 echo "Implementation baseline is healthy."
