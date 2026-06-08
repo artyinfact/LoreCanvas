@@ -35,7 +35,7 @@
 
 - [x] `npx vitest run tests/engine/board.test.ts` 通过：1 个测试文件 / 7 个测试。
 - [x] `npm run check-types` 通过。
-- [x] `npm run build` 通过；仍有 PixiJS chunk 大于 500 kB 的提示，沿用 F-00 记录的后续优化风险。
+- [x] `npm run build` 通过；2026-06-08 已通过 lazy-loading BoardCanvas 消除 PixiJS big chunk warning。
 - [x] 完整 `bash ./init.sh` 通过：3 个测试文件 / 10 个测试，全量 Vitest 绿。
 - [x] 已启动本地 Vite dev server：`http://127.0.0.1:5173`，后台进程 id 为 `15808`。
 - [x] 已用 Playwright 打开本地页面并截图检查：画布非空、侧栏不挤压、按钮文本可读。
@@ -63,7 +63,7 @@
 ## 遗留风险 / 卡点 (Blockers)
 
 - 当前没有阻塞 F-02 的已知 blocker。
-- Vite production build 仍提示主 PixiJS chunk 大于 500 kB；功能阶段可接受，后续资源加载和渲染扩展后再评估 code splitting。
+- Vite production build 的 PixiJS big chunk warning 已在 2026-06-08 消除：BoardCanvas/PixiJS 被拆成 async chunk，主入口保持在 500 kB 阈值以下。
 - `local-fixtures/lotr/` 仍应保持 `.gitignore` / `.vercelignore` 排除，只用于本地 E2E 验收。
 - 执行依赖 PixiJS 或 `@pixi/react` 的后续任务前，仍必须优先读取对应 PixiJS skills。
 
@@ -124,3 +124,11 @@
 - `scripts/init.mjs` validates required harness files, validates `feature_list.json`, checks ignored LOTR fixtures, runs dependency installation with `npm ci` when `package-lock.json` exists, then runs type-check and full Vitest.
 - Verification passed sequentially with `.\init.ps1`, `npm.cmd run harness`, `.\init.cmd`, and explicit Git Bash `& 'C:\Program Files\Git\bin\bash.exe' ./init.sh`; each run completed 5 test files / 19 tests.
 - `bash ./init.sh` from PowerShell may still resolve to `C:\Windows\System32\bash.exe` on machines without WSL. That is now documented as an environment command-resolution issue; on Windows use `.\init.ps1` or `npm.cmd run harness`.
+
+## 2026-06-08 PixiJS Chunk Split
+
+- Analyzed the production build warning: the main entry imported `BoardCanvas` synchronously, which pulled `@pixi/react` and `pixi.js` into the first application chunk.
+- Fixed it by lazy-loading `BoardCanvas` with `React.lazy` and `Suspense`, keeping the stage layout stable with `.board-canvas-loading`. No warning-threshold increase was used.
+- Verification: `npm.cmd run build` now emits no Vite large chunk warning. Largest JS chunks after the split were `BoardCanvas` at about 350 KB and the main `index` chunk at about 223 KB.
+- Verification: Vite preview served `/` and the async `BoardCanvas` chunk with HTTP 200.
+- Verification: `npm.cmd run harness` passed with 5 test files / 19 tests. Browser REPL had no browser control globals exposed in this session, so this change was validated by build and tests rather than manual browser interaction.

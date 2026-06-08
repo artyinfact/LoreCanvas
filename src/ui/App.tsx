@@ -15,9 +15,15 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useMemo,
+  useState,
+} from "react";
 import type { ChangeEvent, DragEvent } from "react";
-import { BoardCanvas } from "./BoardCanvas";
 import { getSelectedLocation, useBoardStore } from "../state/boardStore";
 import {
   canCreateTemplateForCategory,
@@ -40,6 +46,10 @@ const TOOL_OPTIONS: Array<{
   { id: "location", label: "Add Location", Icon: MapPinPlus },
   { id: "edge", label: "Add Edge", Icon: Network },
 ];
+
+const BoardCanvas = lazy(() =>
+  import("./BoardCanvas").then((module) => ({ default: module.BoardCanvas })),
+);
 
 export function App() {
   const board = useBoardStore((state) => state.board);
@@ -401,7 +411,11 @@ export function App() {
               <RotateCcw aria-hidden="true" size={16} />
             </button>
           </div>
-          <BoardCanvas />
+          <Suspense
+            fallback={<div className="board-canvas-loading">Loading map...</div>}
+          >
+            <BoardCanvas />
+          </Suspense>
         </section>
 
         <aside
