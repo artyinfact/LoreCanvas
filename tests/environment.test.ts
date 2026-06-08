@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { useHarnessStore } from "../src/state/harnessStore";
+import { useBoardStore } from "../src/state/boardStore";
 
 describe("F-00 environment scaffold", () => {
-  it("boots the Zustand harness store in a ready state", () => {
-    expect(useHarnessStore.getState().environment).toBe("ready");
-  });
+  it("boots the real Maker board store without harness-only state", () => {
+    const state = useBoardStore.getState();
 
-  it("allows the harness state to be updated by tests and UI code", () => {
-    useHarnessStore.getState().setEnvironment("checking");
-    expect(useHarnessStore.getState().environment).toBe("checking");
-
-    useHarnessStore.getState().setEnvironment("ready");
-    expect(useHarnessStore.getState().environment).toBe("ready");
+    expect(state.activeTool).toBe("select");
+    expect(state.board.locations).toHaveLength(0);
+    expect(state.board.edges).toHaveLength(0);
+    expect(state.entityState.entities).toHaveLength(0);
   });
 });
