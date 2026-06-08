@@ -12,7 +12,7 @@ import {
 } from "../engine/board";
 import type { BoardLocation, BoardState } from "../engine/board";
 import {
-  canCreateTemplateForCategory,
+  canPlaceAssetForCategory,
   clearLocationBindings,
   createEmptyEntityState,
   createEntity,
@@ -29,22 +29,14 @@ export interface UploadedImageAsset {
   size: number;
   width?: number;
   height?: number;
+  maxCopies: number;
+  placementWidth: number;
+  placementHeight: number;
 }
 
-export interface AccessoryTemplate {
+export interface AssetPlacement {
   id: string;
   assetId: string;
-  category: ResourceCategory;
-  name: string;
-  imageUrl: string;
-  width: number;
-  height: number;
-  maxCopies: number;
-}
-
-export interface AccessoryTemplatePlacement {
-  id: string;
-  templateId: string;
   category: ResourceCategory;
   entityId: string;
   locationId?: string;
@@ -61,20 +53,19 @@ export interface BoardPan {
 
 export type BoardTool = "select" | "location" | "edge";
 
-export type AccessoryTemplatePatch = Partial<
-  Pick<AccessoryTemplate, "name" | "width" | "height" | "maxCopies">
+export type AssetPlacementConfigPatch = Partial<
+  Pick<UploadedImageAsset, "placementWidth" | "placementHeight" | "maxCopies">
 >;
 
 export type AccessoryPlacementPatch = Partial<
-  Pick<AccessoryTemplatePlacement, "x" | "y" | "width" | "height">
+  Pick<AssetPlacement, "x" | "y" | "width" | "height">
 >;
 
 export interface BoardStore {
   board: BoardState;
   entityState: EntityState;
   assets: UploadedImageAsset[];
-  accessoryTemplates: AccessoryTemplate[];
-  templatePlacements: AccessoryTemplatePlacement[];
+  assetPlacements: AssetPlacement[];
   selectedAssetId: string | null;
   selectedLocationId: string | null;
   selectedPlacementId: string | null;
@@ -88,6 +79,10 @@ export interface BoardStore {
   addAsset: (asset: UploadedImageAsset) => void;
   removeAsset: (assetId: string) => void;
   updateAssetCategory: (assetId: string, category: ResourceCategory) => void;
+  updateAssetPlacementConfig: (
+    assetId: string,
+    patch: AssetPlacementConfigPatch,
+  ) => void;
   setBackgroundAsset: (assetId: string) => void;
   setActiveTool: (tool: BoardTool) => void;
   selectLocation: (locationId: string | null) => void;
@@ -99,19 +94,13 @@ export interface BoardStore {
   startOrCompleteEdge: (locationId: string) => void;
   updateEdgeLabel: (edgeId: string, label: string) => void;
   deleteEdge: (edgeId: string) => void;
-  createAccessoryTemplate: (assetId: string) => void;
-  updateAccessoryTemplate: (
-    templateId: string,
-    patch: AccessoryTemplatePatch,
-  ) => void;
-  deleteAccessoryTemplate: (templateId: string) => void;
-  createTemplatePlacement: (
-    templateId: string,
+  createAssetPlacement: (
+    assetId: string,
     x: number,
     y: number,
     locationId?: string,
   ) => string | null;
-  updateTemplatePlacement: (
+  updateAssetPlacement: (
     placementId: string,
     patch: AccessoryPlacementPatch,
   ) => void;
@@ -129,8 +118,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
   board: createEmptyBoard(),
   entityState: createEmptyEntityState(),
   assets: [],
-  accessoryTemplates: [],
-  templatePlacements: [],
+  assetPlacements: [],
   selectedAssetId: null,
   selectedLocationId: null,
   selectedPlacementId: null,
@@ -142,24 +130,23 @@ export const useBoardStore = create<BoardStore>((set) => ({
   isInspectorCollapsed: false,
   lastError: null,
   addAsset: (asset) =>
-    set((state) => ({
-      assets: state.assets.some((candidate) => candidate.id === asset.id)
-        ? state.assets
-        : [...state.assets, asset],
-      selectedAssetId: asset.id,
-      lastError: null,
-    })),
+    set((state) => {
+      if (state.assets.some((candidate) => candidate.id === asset.id)) {
+        return state;
+      }
+
+      return {
+        assets: [...state.assets, normalizeAsset(asset)],
+        selectedAssetId: asset.id,
+        lastError: null,
+      };
+    }),
   removeAsset: (assetId) =>
     set((state) => {
       const asset = state.assets.find((candidate) => candidate.id === assetId);
-      const removedTemplateIds = new Set(
-        state.accessoryTemplates
-          .filter((template) => template.assetId === assetId)
-          .map((template) => template.id),
-      );
       const removedEntityIds = new Set(
-        state.templatePlacements
-          .filter((placement) => removedTemplateIds.has(placement.templateId))
+        state.assetPlacements
+          .filter((placement) => placement.assetId === assetId)
           .map((placement) => placement.entityId),
       );
 
@@ -173,25 +160,22 @@ export const useBoardStore = create<BoardStore>((set) => ({
             ? setBoardBackground(state.board, null)
             : state.board,
         assets: state.assets.filter((candidate) => candidate.id !== assetId),
-        accessoryTemplates: state.accessoryTemplates.filter(
-          (template) => template.assetId !== assetId,
-        ),
         entityState: {
           entities: state.entityState.entities.filter(
             (entity) => !removedEntityIds.has(entity.id),
           ),
         },
-        templatePlacements: state.templatePlacements.filter(
-          (placement) => !removedTemplateIds.has(placement.templateId),
+        assetPlacements: state.assetPlacements.filter(
+          (placement) => placement.assetId !== assetId,
         ),
         selectedAssetId:
           state.selectedAssetId === assetId ? null : state.selectedAssetId,
         selectedPlacementId:
           state.selectedPlacementId &&
-          state.templatePlacements.some(
+          state.assetPlacements.some(
             (placement) =>
               placement.id === state.selectedPlacementId &&
-              removedTemplateIds.has(placement.templateId),
+              placement.assetId === assetId,
           )
             ? null
             : state.selectedPlacementId,
@@ -207,7 +191,17 @@ export const useBoardStore = create<BoardStore>((set) => ({
       }
 
       const nextAssets = state.assets.map((asset) =>
-        asset.id === assetId ? { ...asset, category } : asset,
+        asset.id === assetId
+          ? normalizeAsset({ ...asset, category })
+          : asset,
+      );
+      const removedPlacements = canPlaceAssetForCategory(category)
+        ? []
+        : state.assetPlacements.filter(
+            (placement) => placement.assetId === assetId,
+          );
+      const removedEntityIds = new Set(
+        removedPlacements.map((placement) => placement.entityId),
       );
 
       return {
@@ -218,6 +212,73 @@ export const useBoardStore = create<BoardStore>((set) => ({
             : state.board.background?.assetId === assetId
               ? setBoardBackground(state.board, null)
               : state.board,
+        assetPlacements: canPlaceAssetForCategory(category)
+          ? state.assetPlacements.map((placement) =>
+              placement.assetId === assetId
+                ? {
+                    ...placement,
+                    category,
+                  }
+                : placement,
+            )
+          : state.assetPlacements.filter(
+              (placement) => placement.assetId !== assetId,
+            ),
+        entityState: {
+          entities: state.entityState.entities
+            .filter((entity) => !removedEntityIds.has(entity.id))
+            .map((entity) =>
+              entity.state.assetId === assetId
+                ? {
+                    ...entity,
+                    type: category,
+                    state: {
+                      ...entity.state,
+                      category,
+                    },
+                  }
+                : entity,
+            ),
+        },
+        selectedPlacementId:
+          state.selectedPlacementId &&
+          removedPlacements.some(
+            (placement) => placement.id === state.selectedPlacementId,
+          )
+            ? null
+            : state.selectedPlacementId,
+        lastError: null,
+      };
+    }),
+  updateAssetPlacementConfig: (assetId, patch) =>
+    set((state) => {
+      const asset = state.assets.find((candidate) => candidate.id === assetId);
+
+      if (!asset) {
+        return {
+          lastError: `Image asset '${assetId}' was not found.`,
+        };
+      }
+
+      const nextAsset = normalizeAsset({
+        ...asset,
+        placementWidth: clampInteger(
+          patch.placementWidth ?? asset.placementWidth,
+          12,
+          640,
+        ),
+        placementHeight: clampInteger(
+          patch.placementHeight ?? asset.placementHeight,
+          12,
+          640,
+        ),
+        maxCopies: clampInteger(patch.maxCopies ?? asset.maxCopies, 1, 999),
+      });
+
+      return {
+        assets: state.assets.map((candidate) =>
+          candidate.id === assetId ? nextAsset : candidate,
+        ),
         lastError: null,
       };
     }),
@@ -338,7 +399,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
             state.entityState,
             state.selectedLocationId,
           ),
-          templatePlacements: state.templatePlacements.map((placement) => {
+          assetPlacements: state.assetPlacements.map((placement) => {
             if (placement.locationId !== state.selectedLocationId) {
               return placement;
             }
@@ -433,7 +494,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
     }),
-  createAccessoryTemplate: (assetId) =>
+  createAssetPlacement: (assetId, x, y, locationId) => {
+    let createdId: string | null = null;
+
     set((state) => {
       const asset = state.assets.find((candidate) => candidate.id === assetId);
 
@@ -443,127 +506,25 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
 
-      if (!canCreateTemplateForCategory(asset.category)) {
+      if (!canPlaceAssetForCategory(asset.category)) {
         return {
-          lastError: `${asset.category} assets are not placed on the graph board as templates.`,
+          lastError: `${asset.category} assets cannot be placed on the graph board.`,
         };
       }
 
-      const id = createSequentialId(
-        asset.category.toLowerCase(),
-        state.accessoryTemplates.map((template) => template.id),
-      );
-      const defaultSize = getDefaultTemplateSize(asset);
-
-      return {
-        accessoryTemplates: [
-          ...state.accessoryTemplates,
-          {
-            id,
-            assetId: asset.id,
-            category: asset.category,
-            name: asset.name.replace(/\.[^.]+$/, ""),
-            imageUrl: asset.url,
-            width: defaultSize.width,
-            height: defaultSize.height,
-            maxCopies: 1,
-          },
-        ],
-        selectedAssetId: asset.id,
-        lastError: null,
-      };
-    }),
-  updateAccessoryTemplate: (templateId, patch) =>
-    set((state) => {
-      const template = state.accessoryTemplates.find(
-        (candidate) => candidate.id === templateId,
-      );
-
-      if (!template) {
-        return {
-          lastError: `Piece template '${templateId}' was not found.`,
-        };
-      }
-
-      const nextTemplate = {
-        ...template,
-        ...patch,
-        name: normalizeTemplateName(patch.name ?? template.name, template.id),
-        width: clampInteger(patch.width ?? template.width, 12, 640),
-        height: clampInteger(patch.height ?? template.height, 12, 640),
-        maxCopies: clampInteger(
-          patch.maxCopies ?? template.maxCopies,
-          1,
-          999,
-        ),
-      };
-
-      return {
-        accessoryTemplates: state.accessoryTemplates.map((candidate) =>
-          candidate.id === templateId ? nextTemplate : candidate,
-        ),
-        lastError: null,
-      };
-    }),
-  deleteAccessoryTemplate: (templateId) =>
-    set((state) => {
-      const removedEntityIds = new Set(
-        state.templatePlacements
-          .filter((placement) => placement.templateId === templateId)
-          .map((placement) => placement.entityId),
-      );
-
-      return {
-        accessoryTemplates: state.accessoryTemplates.filter(
-          (template) => template.id !== templateId,
-        ),
-        entityState: {
-          entities: state.entityState.entities.filter(
-            (entity) => !removedEntityIds.has(entity.id),
-          ),
-        },
-        templatePlacements: state.templatePlacements.filter(
-          (placement) => placement.templateId !== templateId,
-        ),
-        selectedPlacementId:
-          state.selectedPlacementId &&
-          state.templatePlacements.some(
-            (placement) =>
-              placement.id === state.selectedPlacementId &&
-              placement.templateId === templateId,
-          )
-            ? null
-            : state.selectedPlacementId,
-        lastError: null,
-      };
-    }),
-  createTemplatePlacement: (templateId, x, y, locationId) => {
-    let createdId: string | null = null;
-
-    set((state) => {
-      const template = state.accessoryTemplates.find(
-        (candidate) => candidate.id === templateId,
-      );
-
-      if (!template) {
-        return {
-          lastError: `Piece template '${templateId}' was not found.`,
-        };
-      }
-
-      const usedCopies = state.templatePlacements.filter(
-        (placement) => placement.templateId === templateId,
+      const usedCopies = state.assetPlacements.filter(
+        (placement) => placement.assetId === assetId,
       ).length;
 
-      if (usedCopies >= template.maxCopies) {
+      if (usedCopies >= asset.maxCopies) {
         return {
-          lastError: `${template.name} has reached its ${template.maxCopies} copy limit.`,
+          lastError: `${asset.name} has reached its ${asset.maxCopies} copy limit.`,
         };
       }
 
       const id = createSequentialId(
-        `${template.id}-copy`,
-        state.templatePlacements.map((placement) => placement.id),
+        `${asset.category.toLowerCase()}-copy`,
+        state.assetPlacements.map((placement) => placement.id),
       );
       const entityId = createSequentialId(
         "entity",
@@ -577,11 +538,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
           state.entityState,
           {
             id: entityId,
-            type: template.category,
+            type: asset.category,
             state: {
-              assetId: template.assetId,
-              category: template.category,
-              templateId,
+              assetId,
+              category: asset.category,
               placementId: id,
             },
             ...(locationId ? { locationId } : {}),
@@ -591,18 +551,18 @@ export const useBoardStore = create<BoardStore>((set) => ({
 
         return {
           entityState,
-          templatePlacements: [
-            ...state.templatePlacements,
+          assetPlacements: [
+            ...state.assetPlacements,
             {
               id,
-              templateId,
-              category: template.category,
+              assetId,
+              category: asset.category,
               entityId,
               ...(locationId ? { locationId } : {}),
               x: clampNumber(x, 0, 1),
               y: clampNumber(y, 0, 1),
-              width: template.width,
-              height: template.height,
+              width: asset.placementWidth,
+              height: asset.placementHeight,
             },
           ],
           selectedLocationId: null,
@@ -618,9 +578,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
 
     return createdId;
   },
-  updateTemplatePlacement: (placementId, patch) =>
+  updateAssetPlacement: (placementId, patch) =>
     set((state) => {
-      const placement = state.templatePlacements.find(
+      const placement = state.assetPlacements.find(
         (candidate) => candidate.id === placementId,
       );
 
@@ -630,7 +590,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
 
-      const nextPlacement: AccessoryTemplatePlacement = {
+      const nextPlacement: AssetPlacement = {
         ...placement,
         ...patch,
         x: clampNumber(patch.x ?? placement.x, 0, 1),
@@ -640,7 +600,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
       };
 
       return {
-        templatePlacements: state.templatePlacements.map((candidate) =>
+        assetPlacements: state.assetPlacements.map((candidate) =>
           candidate.id === placementId ? nextPlacement : candidate,
         ),
         selectedLocationId: null,
@@ -654,7 +614,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
         return state;
       }
 
-      const placement = state.templatePlacements.find(
+      const placement = state.assetPlacements.find(
         (candidate) => candidate.id === state.selectedPlacementId,
       );
       const nextEntityState = placement
@@ -663,7 +623,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
 
       return {
         entityState: nextEntityState,
-        templatePlacements: state.templatePlacements.filter(
+        assetPlacements: state.assetPlacements.filter(
           (placement) => placement.id !== state.selectedPlacementId,
         ),
         selectedPlacementId: null,
@@ -721,7 +681,26 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Board update failed.";
 }
 
-function getDefaultTemplateSize(asset: UploadedImageAsset) {
+function normalizeAsset(asset: UploadedImageAsset): UploadedImageAsset {
+  const defaultSize = getDefaultPlacementSize(asset);
+
+  return {
+    ...asset,
+    maxCopies: clampInteger(asset.maxCopies ?? 1, 1, 999),
+    placementWidth: clampInteger(
+      asset.placementWidth ?? defaultSize.width,
+      12,
+      640,
+    ),
+    placementHeight: clampInteger(
+      asset.placementHeight ?? defaultSize.height,
+      12,
+      640,
+    ),
+  };
+}
+
+function getDefaultPlacementSize(asset: UploadedImageAsset) {
   if (!asset.width || !asset.height) {
     return {
       width: 64,
@@ -735,12 +714,6 @@ function getDefaultTemplateSize(asset: UploadedImageAsset) {
     width: Math.max(24, Math.round(asset.width * scale)),
     height: Math.max(24, Math.round(asset.height * scale)),
   };
-}
-
-function normalizeTemplateName(name: string | undefined, fallback: string) {
-  const trimmed = name?.trim();
-
-  return trimmed && trimmed.length > 0 ? trimmed : fallback;
 }
 
 function clampInteger(value: number, min: number, max: number) {

@@ -56,7 +56,7 @@ export interface ResourceCategoryDefinition {
   id: ResourceCategory;
   label: string;
   layer: number;
-  canCreateTemplate: boolean;
+  canPlaceAsset: boolean;
   canBindToLocation: boolean;
   canPath: boolean;
   description: string;
@@ -70,7 +70,7 @@ export const RESOURCE_CATEGORY_DEFINITIONS: Record<
     id: "BOARD",
     label: "Board",
     layer: 0,
-    canCreateTemplate: false,
+    canPlaceAsset: false,
     canBindToLocation: false,
     canPath: false,
     description: "Base map image and absolute graph coordinate surface.",
@@ -79,7 +79,7 @@ export const RESOURCE_CATEGORY_DEFINITIONS: Record<
     id: "TILE",
     label: "Tile",
     layer: 20,
-    canCreateTemplate: true,
+    canPlaceAsset: true,
     canBindToLocation: false,
     canPath: false,
     description: "Map overlay above the board and below actors.",
@@ -88,7 +88,7 @@ export const RESOURCE_CATEGORY_DEFINITIONS: Record<
     id: "PAWN",
     label: "Pawn",
     layer: 60,
-    canCreateTemplate: true,
+    canPlaceAsset: true,
     canBindToLocation: true,
     canPath: true,
     description: "Entity actor placed on graph locations with future pathing.",
@@ -97,7 +97,7 @@ export const RESOURCE_CATEGORY_DEFINITIONS: Record<
     id: "TOKEN",
     label: "Token",
     layer: 70,
-    canCreateTemplate: true,
+    canPlaceAsset: true,
     canBindToLocation: true,
     canPath: false,
     description: "State marker attached to a pawn or location.",
@@ -106,7 +106,7 @@ export const RESOURCE_CATEGORY_DEFINITIONS: Record<
     id: "CARD",
     label: "Card",
     layer: 80,
-    canCreateTemplate: true,
+    canPlaceAsset: true,
     canBindToLocation: false,
     canPath: false,
     description: "Data display asset for floating card/image popovers.",
@@ -115,7 +115,7 @@ export const RESOURCE_CATEGORY_DEFINITIONS: Record<
     id: "OTHER",
     label: "Other",
     layer: 90,
-    canCreateTemplate: false,
+    canPlaceAsset: false,
     canBindToLocation: false,
     canPath: false,
     description: "Off-board cut-in, UI, or performance asset.",
@@ -273,8 +273,8 @@ export function isBoardEntityCategory(
   return value !== "BOARD" && value !== "OTHER";
 }
 
-export function canCreateTemplateForCategory(category: ResourceCategory) {
-  return RESOURCE_CATEGORY_DEFINITIONS[category].canCreateTemplate;
+export function canPlaceAssetForCategory(category: ResourceCategory) {
+  return RESOURCE_CATEGORY_DEFINITIONS[category].canPlaceAsset;
 }
 
 export function canBindCategoryToLocation(category: ResourceCategory) {

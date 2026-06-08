@@ -1,9 +1,7 @@
 import {
-  Box,
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
-  GripVertical,
   ImageIcon,
   Link2,
   MapPinPlus,
@@ -26,15 +24,11 @@ import {
 import type { ChangeEvent, DragEvent } from "react";
 import { getSelectedLocation, useBoardStore } from "../state/boardStore";
 import {
-  canCreateTemplateForCategory,
+  canPlaceAssetForCategory,
   RESOURCE_CATEGORIES,
   RESOURCE_CATEGORY_DEFINITIONS,
 } from "../engine/entity";
-import type {
-  AccessoryTemplate,
-  BoardTool,
-  UploadedImageAsset,
-} from "../state/boardStore";
+import type { BoardTool, UploadedImageAsset } from "../state/boardStore";
 import type { ResourceCategory } from "../engine/entity";
 
 const TOOL_OPTIONS: Array<{
@@ -55,8 +49,7 @@ export function App() {
   const board = useBoardStore((state) => state.board);
   const entityState = useBoardStore((state) => state.entityState);
   const assets = useBoardStore((state) => state.assets);
-  const accessoryTemplates = useBoardStore((state) => state.accessoryTemplates);
-  const templatePlacements = useBoardStore((state) => state.templatePlacements);
+  const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const activeTool = useBoardStore((state) => state.activeTool);
@@ -72,6 +65,9 @@ export function App() {
   const addAsset = useBoardStore((state) => state.addAsset);
   const removeAsset = useBoardStore((state) => state.removeAsset);
   const updateAssetCategory = useBoardStore((state) => state.updateAssetCategory);
+  const updateAssetPlacementConfig = useBoardStore(
+    (state) => state.updateAssetPlacementConfig,
+  );
   const setBackgroundAsset = useBoardStore((state) => state.setBackgroundAsset);
   const setActiveTool = useBoardStore((state) => state.setActiveTool);
   const setBoardZoom = useBoardStore((state) => state.setBoardZoom);
@@ -90,29 +86,18 @@ export function App() {
   );
   const updateEdgeLabel = useBoardStore((state) => state.updateEdgeLabel);
   const deleteEdge = useBoardStore((state) => state.deleteEdge);
-  const createAccessoryTemplate = useBoardStore(
-    (state) => state.createAccessoryTemplate,
-  );
-  const updateAccessoryTemplate = useBoardStore(
-    (state) => state.updateAccessoryTemplate,
-  );
-  const deleteAccessoryTemplate = useBoardStore(
-    (state) => state.deleteAccessoryTemplate,
-  );
-  const updateTemplatePlacement = useBoardStore(
-    (state) => state.updateTemplatePlacement,
+  const updateAssetPlacement = useBoardStore(
+    (state) => state.updateAssetPlacement,
   );
   const deleteSelectedPlacement = useBoardStore(
     (state) => state.deleteSelectedPlacement,
   );
   const selectedLocation = getSelectedLocation(board, selectedLocationId);
   const selectedPlacement =
-    templatePlacements.find((placement) => placement.id === selectedPlacementId) ??
+    assetPlacements.find((placement) => placement.id === selectedPlacementId) ??
     null;
-  const selectedPlacementTemplate = selectedPlacement
-    ? accessoryTemplates.find(
-        (template) => template.id === selectedPlacement.templateId,
-      ) ?? null
+  const selectedPlacementAsset = selectedPlacement
+    ? assets.find((asset) => asset.id === selectedPlacement.assetId) ?? null
     : null;
   const connectedEdges = useMemo(
     () =>
@@ -135,6 +120,7 @@ export function App() {
       for (const [index, file] of files.entries()) {
         const url = URL.createObjectURL(file);
         const dimensions = await readImageDimensions(url);
+        const placementSize = getDefaultPlacementSize(dimensions);
         const asset: UploadedImageAsset = {
           id: createUploadId(file, index),
           category: "OTHER",
@@ -143,6 +129,9 @@ export function App() {
           mimeType: file.type,
           size: file.size,
           ...dimensions,
+          maxCopies: 1,
+          placementWidth: placementSize.width,
+          placementHeight: placementSize.height,
         };
 
         addAsset(asset);
@@ -258,34 +247,6 @@ export function App() {
             </CollapsibleSection>
 
             <CollapsibleSection
-              id="pieces"
-              isCollapsed={collapsedSections.pieces}
-              onToggle={toggleSection}
-              title="Entity Templates"
-              trailing={<span>{accessoryTemplates.length}</span>}
-            >
-              <div className="piece-list">
-                {accessoryTemplates.length === 0 ? (
-                  <p className="empty-state">No entity templates</p>
-                ) : (
-                  accessoryTemplates.map((template) => (
-                    <PieceTemplateItem
-                      copyCount={
-                        templatePlacements.filter(
-                          (placement) => placement.templateId === template.id,
-                        ).length
-                      }
-                      deleteAccessoryTemplate={deleteAccessoryTemplate}
-                      key={template.id}
-                      template={template}
-                      updateAccessoryTemplate={updateAccessoryTemplate}
-                    />
-                  ))
-                )}
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
               id="assets"
               isCollapsed={collapsedSections.assets}
               onToggle={toggleSection}
@@ -297,66 +258,20 @@ export function App() {
                   <p className="empty-state">No images imported</p>
                 ) : (
                   assets.map((asset) => (
-                    <article className="asset-item" key={asset.id}>
-                      <img alt="" src={asset.url} />
-                      <div className="asset-item__body">
-                        <strong title={asset.name}>{asset.name}</strong>
-                        <span>{formatAssetMeta(asset)}</span>
-                        <div className="asset-actions">
-                          <label className="asset-category">
-                            <span>Category</span>
-                            <select
-                              aria-label={`${asset.name} category`}
-                              onChange={(event) =>
-                                updateAssetCategory(
-                                  asset.id,
-                                  event.currentTarget.value as ResourceCategory,
-                                )
-                              }
-                              value={asset.category}
-                            >
-                              {RESOURCE_CATEGORIES.map((category) => (
-                                <option key={category} value={category}>
-                                  {RESOURCE_CATEGORY_DEFINITIONS[category].label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <button
-                            className="mini-button"
-                            data-active={board.background?.assetId === asset.id}
-                            onClick={() => setBackgroundAsset(asset.id)}
-                            type="button"
-                          >
-                            <ImageIcon aria-hidden="true" size={14} />
-                            <span>
-                              {board.background?.assetId === asset.id
-                                ? "Board"
-                                : "Set Board"}
-                            </span>
-                          </button>
-                          {canCreateTemplateForCategory(asset.category) ? (
-                            <button
-                              className="mini-button"
-                              onClick={() => createAccessoryTemplate(asset.id)}
-                              type="button"
-                            >
-                              <Box aria-hidden="true" size={14} />
-                              <span>Template</span>
-                            </button>
-                          ) : null}
-                          <button
-                            aria-label={`Delete ${asset.name}`}
-                            className="mini-button mini-button--danger"
-                            onClick={() => removeAsset(asset.id)}
-                            type="button"
-                          >
-                            <Trash2 aria-hidden="true" size={14} />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      </div>
-                    </article>
+                    <AssetItem
+                      asset={asset}
+                      copyCount={
+                        assetPlacements.filter(
+                          (placement) => placement.assetId === asset.id,
+                        ).length
+                      }
+                      isBoardBackground={board.background?.assetId === asset.id}
+                      key={asset.id}
+                      onDelete={removeAsset}
+                      onSetBoard={setBackgroundAsset}
+                      onUpdateCategory={updateAssetCategory}
+                      onUpdatePlacementConfig={updateAssetPlacementConfig}
+                    />
                   ))
                 )}
               </div>
@@ -442,12 +357,12 @@ export function App() {
                 selectedPlacement ? <span>{selectedPlacement.id}</span> : null
               }
             >
-              {selectedPlacement && selectedPlacementTemplate ? (
+              {selectedPlacement && selectedPlacementAsset ? (
                 <div className="inspector-stack">
                   <div className="selected-piece-card">
-                    <img alt="" src={selectedPlacementTemplate.imageUrl} />
+                    <img alt="" src={selectedPlacementAsset.url} />
                     <div>
-                      <strong>{selectedPlacementTemplate.name}</strong>
+                      <strong>{selectedPlacementAsset.name}</strong>
                       <span>
                         {selectedPlacement.category} / {selectedPlacement.entityId}
                       </span>
@@ -469,7 +384,7 @@ export function App() {
                         min={12}
                         max={640}
                         onChange={(event) =>
-                          updateTemplatePlacement(selectedPlacement.id, {
+                          updateAssetPlacement(selectedPlacement.id, {
                             width: toNumber(
                               event.currentTarget.value,
                               selectedPlacement.width,
@@ -486,7 +401,7 @@ export function App() {
                         min={12}
                         max={640}
                         onChange={(event) =>
-                          updateTemplatePlacement(selectedPlacement.id, {
+                          updateAssetPlacement(selectedPlacement.id, {
                             height: toNumber(
                               event.currentTarget.value,
                               selectedPlacement.height,
@@ -643,120 +558,155 @@ function CollapsibleSection({
   );
 }
 
-interface PieceTemplateItemProps {
+interface AssetItemProps {
+  asset: UploadedImageAsset;
   copyCount: number;
-  deleteAccessoryTemplate: (templateId: string) => void;
-  template: AccessoryTemplate;
-  updateAccessoryTemplate: (
-    templateId: string,
+  isBoardBackground: boolean;
+  onDelete: (assetId: string) => void;
+  onSetBoard: (assetId: string) => void;
+  onUpdateCategory: (assetId: string, category: ResourceCategory) => void;
+  onUpdatePlacementConfig: (
+    assetId: string,
     patch: Partial<
-      Pick<AccessoryTemplate, "name" | "width" | "height" | "maxCopies">
+      Pick<UploadedImageAsset, "placementWidth" | "placementHeight" | "maxCopies">
     >,
   ) => void;
 }
 
-function PieceTemplateItem({
+function AssetItem({
+  asset,
   copyCount,
-  deleteAccessoryTemplate,
-  template,
-  updateAccessoryTemplate,
-}: PieceTemplateItemProps) {
+  isBoardBackground,
+  onDelete,
+  onSetBoard,
+  onUpdateCategory,
+  onUpdatePlacementConfig,
+}: AssetItemProps) {
+  const isPlaceable = canPlaceAssetForCategory(asset.category);
   const handleDragStart = useCallback(
-    (event: DragEvent<HTMLButtonElement>) => {
+    (event: DragEvent<HTMLElement>) => {
+      if (!isPlaceable) {
+        event.preventDefault();
+        return;
+      }
+
       event.dataTransfer.effectAllowed = "copy";
-      event.dataTransfer.setData(
-        "application/x-lorecanvas-template",
-        template.id,
-      );
-      event.dataTransfer.setData("text/plain", template.name);
+      event.dataTransfer.setData("application/x-lorecanvas-asset", asset.id);
+      event.dataTransfer.setData("text/plain", asset.name);
     },
-    [template.id, template.name],
+    [asset.id, asset.name, isPlaceable],
   );
 
   return (
-    <article className="piece-item">
-      <div className="piece-item__header">
-        <button
-          aria-label={`Drag ${template.name} to board`}
-          className="drag-handle"
-          draggable
-          onDragStart={handleDragStart}
-          title="Drag to board"
-          type="button"
-        >
-          <GripVertical aria-hidden="true" size={16} />
-        </button>
-        <img alt="" src={template.imageUrl} />
-        <div>
-          <input
-            aria-label={`${template.id} name`}
+    <article
+      className="asset-item"
+      data-draggable={isPlaceable}
+      draggable={isPlaceable}
+      onDragStart={handleDragStart}
+    >
+      <img alt="" src={asset.url} />
+      <div className="asset-item__body">
+        <strong title={asset.name}>{asset.name}</strong>
+        <span>{formatAssetMeta(asset)}</span>
+        <label className="asset-category">
+          <span>Category</span>
+          <select
+            aria-label={`${asset.name} category`}
             onChange={(event) =>
-              updateAccessoryTemplate(template.id, {
-                name: event.currentTarget.value,
-              })
+              onUpdateCategory(
+                asset.id,
+                event.currentTarget.value as ResourceCategory,
+              )
             }
-            value={template.name}
-          />
-          <span>
-            {template.category} / {copyCount} / {template.maxCopies} copies
-          </span>
+            value={asset.category}
+          >
+            {RESOURCE_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {RESOURCE_CATEGORY_DEFINITIONS[category].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {isPlaceable ? (
+          <>
+            <span className="copy-meter">
+              {copyCount} / {asset.maxCopies} copies
+            </span>
+            <div className="piece-controls">
+              <label>
+                <span>W</span>
+                <input
+                  min={12}
+                  max={640}
+                  onChange={(event) =>
+                    onUpdatePlacementConfig(asset.id, {
+                      placementWidth: toNumber(
+                        event.currentTarget.value,
+                        asset.placementWidth,
+                      ),
+                    })
+                  }
+                  type="number"
+                  value={asset.placementWidth}
+                />
+              </label>
+              <label>
+                <span>H</span>
+                <input
+                  min={12}
+                  max={640}
+                  onChange={(event) =>
+                    onUpdatePlacementConfig(asset.id, {
+                      placementHeight: toNumber(
+                        event.currentTarget.value,
+                        asset.placementHeight,
+                      ),
+                    })
+                  }
+                  type="number"
+                  value={asset.placementHeight}
+                />
+              </label>
+              <label>
+                <span>Max</span>
+                <input
+                  min={1}
+                  max={999}
+                  onChange={(event) =>
+                    onUpdatePlacementConfig(asset.id, {
+                      maxCopies: toNumber(
+                        event.currentTarget.value,
+                        asset.maxCopies,
+                      ),
+                    })
+                  }
+                  type="number"
+                  value={asset.maxCopies}
+                />
+              </label>
+            </div>
+          </>
+        ) : null}
+        <div className="asset-actions">
+          <button
+            className="mini-button"
+            data-active={isBoardBackground}
+            onClick={() => onSetBoard(asset.id)}
+            type="button"
+          >
+            <ImageIcon aria-hidden="true" size={14} />
+            <span>{isBoardBackground ? "Board" : "Set Board"}</span>
+          </button>
+          <button
+            aria-label={`Delete ${asset.name}`}
+            className="mini-button mini-button--danger"
+            onClick={() => onDelete(asset.id)}
+            type="button"
+          >
+            <Trash2 aria-hidden="true" size={14} />
+            <span>Delete</span>
+          </button>
         </div>
-        <button
-          aria-label={`Delete ${template.name}`}
-          className="icon-only"
-          onClick={() => deleteAccessoryTemplate(template.id)}
-          title="Delete piece template"
-          type="button"
-        >
-          <Trash2 aria-hidden="true" size={15} />
-        </button>
-      </div>
-      <div className="piece-controls">
-        <label>
-          <span>W</span>
-          <input
-            min={12}
-            max={640}
-            onChange={(event) =>
-              updateAccessoryTemplate(template.id, {
-                width: toNumber(event.currentTarget.value, template.width),
-              })
-            }
-            type="number"
-            value={template.width}
-          />
-        </label>
-        <label>
-          <span>H</span>
-          <input
-            min={12}
-            max={640}
-            onChange={(event) =>
-              updateAccessoryTemplate(template.id, {
-                height: toNumber(event.currentTarget.value, template.height),
-              })
-            }
-            type="number"
-            value={template.height}
-          />
-        </label>
-        <label>
-          <span>Max</span>
-          <input
-            min={1}
-            max={999}
-            onChange={(event) =>
-              updateAccessoryTemplate(template.id, {
-                maxCopies: toNumber(
-                  event.currentTarget.value,
-                  template.maxCopies,
-                ),
-              })
-            }
-            type="number"
-            value={template.maxCopies}
-          />
-        </label>
       </div>
     </article>
   );
@@ -780,6 +730,22 @@ function readImageDimensions(url: string): Promise<{
     };
     image.src = url;
   });
+}
+
+function getDefaultPlacementSize(dimensions: { width?: number; height?: number }) {
+  if (!dimensions.width || !dimensions.height) {
+    return {
+      width: 64,
+      height: 64,
+    };
+  }
+
+  const scale = Math.min(96 / dimensions.width, 96 / dimensions.height, 1);
+
+  return {
+    width: Math.max(24, Math.round(dimensions.width * scale)),
+    height: Math.max(24, Math.round(dimensions.height * scale)),
+  };
 }
 
 function createUploadId(file: File, index: number) {

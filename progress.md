@@ -1,5 +1,5 @@
 # Agent 进度与交接 (Agent Progress Handoff)
-
+ 
 这是 `LoreCanvas` 的长时任务系统事实来源。每次会话开始时先读本文件，结束时写回已验证状态、下一步和 blocker。
 
 ## 当前会话目标
@@ -132,3 +132,13 @@
 - Verification: `npm.cmd run build` now emits no Vite large chunk warning. Largest JS chunks after the split were `BoardCanvas` at about 350 KB and the main `index` chunk at about 223 KB.
 - Verification: Vite preview served `/` and the async `BoardCanvas` chunk with HTTP 200.
 - Verification: `npm.cmd run harness` passed with 5 test files / 19 tests. Browser REPL had no browser control globals exposed in this session, so this change was validated by build and tests rather than manual browser interaction.
+
+## 2026-06-08 F-01 Direct Asset Placement Rework
+
+- Reworked the Maker asset workflow so image assets are the direct drag source for placed entity copies. The separate Entity Templates section and `Template` asset button were removed from the UI.
+- Uploaded assets now own placement configuration: category, default placed width/height, and `maxCopies` with a default of 1. `PAWN`, `TOKEN`, `TILE`, and `CARD` assets can be dragged to the GraphBoard; `BOARD` and `OTHER` assets remain non-placeable.
+- `BoardCanvas` now accepts `application/x-lorecanvas-asset` drops and calls `createAssetPlacement`. `PAWN` and `TOKEN` still require dropping near a Location; other placeable categories can be placed directly on the board.
+- Store state now tracks `assetPlacements` instead of template placements. Deleting a source image removes its placed copies and generated Entities; deleting a placed copy removes its Entity.
+- Verification: `npm.cmd run check-types`, `npm.cmd run test` (5 files / 20 tests), and `npm.cmd run build` all passed.
+- Browser verification: Browser DOM check at `http://localhost:5173/` confirmed the Maker page loads, Image Assets is present, `Template` text is absent, and no Vite error overlay is rendered. Browser screenshot capture timed out, so screenshot evidence came from temporary Playwright.
+- Temporary Playwright verification uploaded `public/favicon.svg`, changed its category to `TILE`, confirmed `Template` text was absent, dragged the asset card directly onto `.board-canvas`, observed `1 / 1 copies` and `Entities1`, then attempted a second drag and confirmed the copy-limit error while Entities stayed at 1. Only Chromium headless WebGL driver performance warnings were filtered; app console errors were not observed in that run.

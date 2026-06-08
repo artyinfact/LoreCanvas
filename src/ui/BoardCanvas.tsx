@@ -19,10 +19,7 @@ import type {
 import type { DragEvent, RefObject } from "react";
 import type { BoardImageRef, BoardLocation } from "../engine/board";
 import { useBoardStore } from "../state/boardStore";
-import type {
-  AccessoryTemplate,
-  AccessoryTemplatePlacement,
-} from "../state/boardStore";
+import type { AssetPlacement, UploadedImageAsset } from "../state/boardStore";
 
 extend({
   Container,
@@ -68,11 +65,11 @@ export function BoardCanvas() {
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const edgeDraftFromId = useBoardStore((state) => state.edgeDraftFromId);
-  const accessoryTemplates = useBoardStore((state) => state.accessoryTemplates);
-  const templatePlacements = useBoardStore((state) => state.templatePlacements);
+  const assets = useBoardStore((state) => state.assets);
+  const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const createLocationAt = useBoardStore((state) => state.createLocationAt);
-  const createTemplatePlacement = useBoardStore(
-    (state) => state.createTemplatePlacement,
+  const createAssetPlacement = useBoardStore(
+    (state) => state.createAssetPlacement,
   );
   const moveLocation = useBoardStore((state) => state.moveLocation);
   const selectLocation = useBoardStore((state) => state.selectLocation);
@@ -81,8 +78,8 @@ export function BoardCanvas() {
   const setBoardZoom = useBoardStore((state) => state.setBoardZoom);
   const setLastError = useBoardStore((state) => state.setLastError);
   const startOrCompleteEdge = useBoardStore((state) => state.startOrCompleteEdge);
-  const updateTemplatePlacement = useBoardStore(
-    (state) => state.updateTemplatePlacement,
+  const updateAssetPlacement = useBoardStore(
+    (state) => state.updateAssetPlacement,
   );
   const [draggingLocationId, setDraggingLocationId] = useState<string | null>(
     null,
@@ -116,29 +113,29 @@ export function BoardCanvas() {
     () => new Map(board.locations.map((location) => [location.id, location])),
     [board.locations],
   );
-  const templateById = useMemo(
+  const assetById = useMemo(
     () =>
       new Map(
-        accessoryTemplates.map((template) => [template.id, template] as const),
+        assets.map((asset) => [asset.id, asset] as const),
       ),
-    [accessoryTemplates],
+    [assets],
   );
   const selectedPlacement = useMemo(
     () =>
       selectedPlacementId
-        ? templatePlacements.find(
+        ? assetPlacements.find(
             (placement) => placement.id === selectedPlacementId,
           ) ?? null
         : null,
-    [selectedPlacementId, templatePlacements],
+    [assetPlacements, selectedPlacementId],
   );
   const tilePlacements = useMemo(
-    () => templatePlacements.filter((placement) => placement.category === "TILE"),
-    [templatePlacements],
+    () => assetPlacements.filter((placement) => placement.category === "TILE"),
+    [assetPlacements],
   );
   const upperPlacements = useMemo(
-    () => templatePlacements.filter((placement) => placement.category !== "TILE"),
-    [templatePlacements],
+    () => assetPlacements.filter((placement) => placement.category !== "TILE"),
+    [assetPlacements],
   );
   const canvasCursor = getCanvasCursor({
     activeTool,
@@ -240,7 +237,7 @@ export function BoardCanvas() {
     (event: FederatedPointerEvent) => {
       if (draggingPlacementId) {
         const boardPoint = scenePointToClampedBoardPoint(event.global, frame);
-        updateTemplatePlacement(draggingPlacementId, {
+        updateAssetPlacement(draggingPlacementId, {
           x: boardPoint.x,
           y: boardPoint.y,
         });
@@ -268,7 +265,7 @@ export function BoardCanvas() {
       draggingPlacementId,
       frame,
       moveLocation,
-      updateTemplatePlacement,
+      updateAssetPlacement,
     ],
   );
   const stopDragging = useCallback(() => {
@@ -304,27 +301,27 @@ export function BoardCanvas() {
   );
   const handleDragOver = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      if (event.dataTransfer.types.includes("application/x-lorecanvas-template")) {
+      if (event.dataTransfer.types.includes("application/x-lorecanvas-asset")) {
         event.preventDefault();
         event.dataTransfer.dropEffect = activeTool === "select" ? "copy" : "none";
       }
     },
     [activeTool],
   );
-  const handleTemplateDrop = useCallback(
+  const handleAssetDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      const templateId = event.dataTransfer.getData(
-        "application/x-lorecanvas-template",
+      const assetId = event.dataTransfer.getData(
+        "application/x-lorecanvas-asset",
       );
 
-      if (!templateId) {
+      if (!assetId) {
         return;
       }
 
       event.preventDefault();
 
       if (activeTool !== "select") {
-        setLastError("Switch to Select before placing a piece template.");
+        setLastError("Switch to Select before placing an asset.");
         return;
       }
 
@@ -338,27 +335,27 @@ export function BoardCanvas() {
       );
 
       if (!boardPoint) {
-        setLastError("Drop the piece template inside the board background.");
+        setLastError("Drop the asset inside the board background.");
         return;
       }
 
-      const template = templateById.get(templateId);
+      const asset = assetById.get(assetId);
 
-      if (!template) {
-        setLastError(`Template '${templateId}' was not found.`);
+      if (!asset) {
+        setLastError(`Asset '${assetId}' was not found.`);
         return;
       }
 
-      if (template.category === "PAWN" || template.category === "TOKEN") {
+      if (asset.category === "PAWN" || asset.category === "TOKEN") {
         const nearestLocation = findNearestLocation(boardPoint, board.locations);
 
         if (!nearestLocation) {
-          setLastError(`${template.category} templates must be dropped on a location.`);
+          setLastError(`${asset.category} assets must be dropped on a location.`);
           return;
         }
 
-        createTemplatePlacement(
-          templateId,
+        createAssetPlacement(
+          assetId,
           nearestLocation.x,
           nearestLocation.y,
           nearestLocation.id,
@@ -366,15 +363,15 @@ export function BoardCanvas() {
         return;
       }
 
-      createTemplatePlacement(templateId, boardPoint.x, boardPoint.y);
+      createAssetPlacement(assetId, boardPoint.x, boardPoint.y);
     },
     [
       activeTool,
+      assetById,
       board.locations,
-      createTemplatePlacement,
+      createAssetPlacement,
       frame,
       setLastError,
-      templateById,
     ],
   );
   const handleWheel = useCallback(
@@ -388,7 +385,7 @@ export function BoardCanvas() {
       const scale = getWheelScale(event.deltaY);
 
       if (selectedPlacement) {
-        updateTemplatePlacement(selectedPlacement.id, {
+        updateAssetPlacement(selectedPlacement.id, {
           width: selectedPlacement.width * scale,
           height: selectedPlacement.height * scale,
         });
@@ -441,7 +438,7 @@ export function BoardCanvas() {
       selectedPlacement,
       setBoardPan,
       setBoardZoom,
-      updateTemplatePlacement,
+      updateAssetPlacement,
       viewport,
     ],
   );
@@ -464,7 +461,7 @@ export function BoardCanvas() {
       aria-label="Board editor"
       className="board-canvas"
       onDragOver={handleDragOver}
-      onDrop={handleTemplateDrop}
+      onDrop={handleAssetDrop}
       ref={hostRef}
     >
       <Application
@@ -493,7 +490,7 @@ export function BoardCanvas() {
             onPointerDown={handlePlacementPointerDown}
             placements={tilePlacements}
             selectedPlacementId={selectedPlacementId}
-            templateById={templateById}
+            assetById={assetById}
           />
           <pixiGraphics draw={drawEdges} />
           {board.locations.map((location, index) => (
@@ -512,7 +509,7 @@ export function BoardCanvas() {
             onPointerDown={handlePlacementPointerDown}
             placements={upperPlacements}
             selectedPlacementId={selectedPlacementId}
-            templateById={templateById}
+            assetById={assetById}
           />
         </pixiContainer>
       </Application>
@@ -523,24 +520,24 @@ export function BoardCanvas() {
 interface PlacementSpritesProps {
   frame: BoardFrame;
   onPointerDown: (placementId: string, event: FederatedPointerEvent) => void;
-  placements: AccessoryTemplatePlacement[];
+  placements: AssetPlacement[];
   selectedPlacementId: string | null;
-  templateById: Map<string, AccessoryTemplate>;
+  assetById: Map<string, UploadedImageAsset>;
 }
 
 function PlacementSprites({
+  assetById,
   frame,
   onPointerDown,
   placements,
   selectedPlacementId,
-  templateById,
 }: PlacementSpritesProps) {
   return (
     <>
       {placements.map((placement) => {
-        const template = templateById.get(placement.templateId);
+        const asset = assetById.get(placement.assetId);
 
-        if (!template) {
+        if (!asset) {
           return null;
         }
 
@@ -552,7 +549,7 @@ function PlacementSprites({
             key={placement.id}
             onPointerDown={onPointerDown}
             placementId={placement.id}
-            template={template}
+            asset={asset}
             width={placement.width}
             x={placement.x}
             y={placement.y}
@@ -564,24 +561,24 @@ function PlacementSprites({
 }
 
 interface PiecePlacementSpriteProps {
+  asset: UploadedImageAsset;
   frame: BoardFrame;
   height: number;
   isSelected: boolean;
   onPointerDown: (placementId: string, event: FederatedPointerEvent) => void;
   placementId: string;
-  template: AccessoryTemplate;
   width: number;
   x: number;
   y: number;
 }
 
 function PiecePlacementSprite({
+  asset,
   frame,
   height,
   isSelected,
   onPointerDown,
   placementId,
-  template,
   width,
   x,
   y,
@@ -626,8 +623,8 @@ function PiecePlacementSprite({
     >
       <ImageSprite
         height={height}
-        name={template.name}
-        url={template.imageUrl}
+        name={asset.name}
+        url={asset.url}
         width={width}
         x={0}
         y={0}

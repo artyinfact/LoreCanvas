@@ -7,7 +7,7 @@ import {
 import {
   bindEntityToLocation,
   canBindCategoryToLocation,
-  canCreateTemplateForCategory,
+  canPlaceAssetForCategory,
   clearLocationBindings,
   createEmptyEntityState,
   createEntity,
@@ -73,7 +73,7 @@ describe("F-02 generic entity system", () => {
       id: "pawn-1",
       type: "PAWN",
       state: {
-        templateId: "tpl-pawn",
+        assetId: "asset-pawn",
       },
     });
     const bound = bindEntityToLocation(initial, board, "pawn-1", "loc-1");
@@ -128,8 +128,8 @@ describe("F-02 generic entity system", () => {
     );
     expect(RESOURCE_CATEGORY_DEFINITIONS.PAWN.canPath).toBe(true);
     expect(RESOURCE_CATEGORY_DEFINITIONS.TOKEN.canPath).toBe(false);
-    expect(canCreateTemplateForCategory("BOARD")).toBe(false);
-    expect(canCreateTemplateForCategory("PAWN")).toBe(true);
+    expect(canPlaceAssetForCategory("BOARD")).toBe(false);
+    expect(canPlaceAssetForCategory("PAWN")).toBe(true);
     expect(canBindCategoryToLocation("PAWN")).toBe(true);
     expect(canBindCategoryToLocation("CARD")).toBe(false);
   });
