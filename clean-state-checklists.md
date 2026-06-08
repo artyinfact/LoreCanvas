@@ -1,5 +1,12 @@
 # 功能验收清单
 
+## Cross-Platform Harness
+
+- Canonical implementation: `node ./scripts/init.mjs`.
+- Windows / PowerShell accepted baseline commands: `.\init.ps1`, `.\init.cmd`, or `npm.cmd run harness`.
+- POSIX / Git Bash accepted baseline command: `./init.sh`.
+- A failure from `C:\Windows\System32\bash.exe` when WSL is not installed is not a project baseline failure; rerun the harness through `.\init.ps1` or `npm.cmd run harness`.
+
 每个 feature 完成时，除 `feature_list.json` 中的 verification 命令外，还应检查本文件中的人工验收项。
 
 ## 全局清洁状态

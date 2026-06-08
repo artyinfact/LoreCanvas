@@ -1,5 +1,12 @@
 # AGENTS.md: LoreCanvas Agent 入口
 
+## Windows Harness Note
+
+- The canonical harness implementation is `scripts/init.mjs`.
+- On Windows / PowerShell, run `.\init.ps1`, `.\init.cmd`, or `npm.cmd run harness`.
+- On POSIX shells or Git Bash, run `./init.sh`; from PowerShell, call Git Bash explicitly if needed: `& 'C:\Program Files\Git\bin\bash.exe' ./init.sh`.
+- If plain `bash ./init.sh` resolves to `C:\Windows\System32\bash.exe` and WSL is unavailable, use `.\init.ps1` or `npm.cmd run harness`; that WSL shim failure is an environment command-resolution issue, not a broken LoreCanvas baseline.
+
 `LoreCanvas` 是一款专为美式/叙事驱动桌游打造的戏剧化虚拟桌面引擎。英文定位：A Theatrical VTT Engine tailored for Story-Driven Board Games.
 
 项目以 CCFOLIA 的“房间准备 -> 玩家操作 -> 自动演出/提示 -> 可读档复位”体验为参考，但核心模型面向复杂美式桌游：使用 Node-Graph 表达地图位置和连接关系，使用通用 Entity 表达棋子、卡牌、威胁、目标和任意配件，使用 JSON 规则树驱动事件流和 Cut-in 演出。

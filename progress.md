@@ -117,3 +117,10 @@
 - Added `tests/engine/entity.test.ts` and `tests/state/boardStore.test.ts`. Verification passed with `npm.cmd run check-types`, `npm.cmd exec -- vitest run tests/engine/entity.test.ts`, `npm.cmd run test` (5 files / 19 tests), and `npm.cmd run build`.
 - `bash ./init.sh` could not complete in this Windows session because `bash` resolves to the WSL shim and WSL is unavailable; Git Bash ran harness validation but its `npm` step hit the same WSL shim. Equivalent implementation checks were run directly through `npm.cmd`.
 - Browser/plugin verification was attempted but blocked by the Browser Node REPL bridge failing with `windows sandbox failed: spawn setup refresh`; no browser evidence was recorded for this F-02 pass. Next pending feature is `F-03-MovementValidation`.
+## 2026-06-08 Harness And Windows Environment Fix
+
+- Fixed the harness/environment limitation recorded after F-02 by standardizing baseline validation on `scripts/init.mjs`.
+- Windows entrypoints now work without WSL: `.\init.ps1`, `.\init.cmd`, and `npm.cmd run harness`. POSIX/Git Bash still uses `./init.sh`, which delegates to the same Node harness.
+- `scripts/init.mjs` validates required harness files, validates `feature_list.json`, checks ignored LOTR fixtures, runs dependency installation with `npm ci` when `package-lock.json` exists, then runs type-check and full Vitest.
+- Verification passed sequentially with `.\init.ps1`, `npm.cmd run harness`, `.\init.cmd`, and explicit Git Bash `& 'C:\Program Files\Git\bin\bash.exe' ./init.sh`; each run completed 5 test files / 19 tests.
+- `bash ./init.sh` from PowerShell may still resolve to `C:\Windows\System32\bash.exe` on machines without WSL. That is now documented as an environment command-resolution issue; on Windows use `.\init.ps1` or `npm.cmd run harness`.

@@ -36,7 +36,18 @@
         "deploymentId": "dpl_CqR6L6HPGmTiXzFi2Rk3XZH6W9ky",
         "deploymentUrl": "https://lorecanvas-mu.vercel.app",
         "inspectorUrl": "https://vercel.com/artyinfacts-projects/lorecanvas/CqR6L6HPGmTiXzFi2Rk3XZH6W9ky",
-        "notes": "Vercel production deployment is READY. Vite build reports a large PixiJS chunk warning, acceptable for F-00 and to revisit during feature-level code splitting."
+        "notes": "Vercel production deployment is READY. Vite build reports a large PixiJS chunk warning, acceptable for F-00 and to revisit during feature-level code splitting.",
+        "harnessMaintenance": {
+          "updatedAt": "2026-06-08",
+          "summary": "Cross-platform harness is available through scripts/init.mjs, init.ps1, init.cmd, init.sh, and npm run harness. Windows no longer depends on bash resolving away from the WSL shim.",
+          "verification": [
+            ".\\init.ps1",
+            "npm.cmd run harness",
+            ".\\init.cmd",
+            "C:\\Program Files\\Git\\bin\\bash.exe ./init.sh"
+          ],
+          "notes": "Plain bash ./init.sh from PowerShell can still resolve to C:\\Windows\\System32\\bash.exe when WSL is absent; use .\\init.ps1 or npm.cmd run harness on Windows."
+        }
       }
     },
     {
