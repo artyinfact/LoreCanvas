@@ -790,6 +790,132 @@ button {
   font-size: 0.77rem;
 }
 
+.selected-piece-card--pawn {
+  border-color: #b9cdd0;
+  background: #f7fbfb;
+}
+
+.pawn-sheet {
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.pawn-sheet-zone {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #d3d8df;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.pawn-sheet-zone:focus-within,
+.pawn-sheet-zone:hover {
+  border-color: #9eb4b6;
+}
+
+.pawn-sheet-zone h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #20252b;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sheet-card-slot {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+}
+
+.sheet-card-slot img,
+.held-card img,
+.token-counter img {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  background: #d9dde3;
+  object-fit: cover;
+}
+
+.sheet-card-slot strong,
+.held-card strong {
+  overflow: hidden;
+  color: #222831;
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.held-card-grid,
+.token-counter-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.held-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.held-card img {
+  width: 44px;
+  height: 44px;
+}
+
+.token-counter-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.token-counter {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 7px;
+  border: 1px solid #d3d8df;
+  border-radius: 8px;
+  background: #f7f8fa;
+  cursor: pointer;
+}
+
+.token-counter:hover {
+  border-color: #87919d;
+}
+
+.token-counter img {
+  grid-row: 1 / span 2;
+  width: 42px;
+  height: 42px;
+}
+
+.token-counter span {
+  color: #20252b;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.token-counter small {
+  overflow: hidden;
+  color: #65707c;
+  font-size: 0.66rem;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .binding-pill {
   margin: 0;
   min-height: 30px;

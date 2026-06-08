@@ -20,6 +20,8 @@ import {
 } from "../engine/entity";
 import type { EntityState, ResourceCategory } from "../engine/entity";
 
+const DEFAULT_TOKEN_MAX_COPIES = 999;
+
 export interface UploadedImageAsset {
   id: string;
   category: ResourceCategory;
@@ -46,6 +48,17 @@ export interface AssetPlacement {
   height: number;
 }
 
+export interface PawnTokenCounter {
+  assetId: string;
+  count: number;
+}
+
+export interface PawnSheet {
+  characterCardAssetId?: string;
+  heldCardAssetIds: string[];
+  counters: PawnTokenCounter[];
+}
+
 export interface BoardPan {
   x: number;
   y: number;
@@ -66,6 +79,7 @@ export interface BoardStore {
   entityState: EntityState;
   assets: UploadedImageAsset[];
   assetPlacements: AssetPlacement[];
+  pawnSheets: Record<string, PawnSheet>;
   selectedAssetId: string | null;
   selectedLocationId: string | null;
   selectedPlacementId: string | null;
@@ -105,6 +119,14 @@ export interface BoardStore {
     patch: AccessoryPlacementPatch,
   ) => void;
   deleteSelectedPlacement: () => void;
+  setPawnCharacterCard: (placementId: string, assetId: string) => void;
+  addPawnHeldCard: (placementId: string, assetId: string) => void;
+  removePawnHeldCard: (placementId: string, index: number) => void;
+  adjustPawnCounter: (
+    placementId: string,
+    assetId: string,
+    delta: number,
+  ) => void;
   setBoardZoom: (zoom: number) => void;
   setBoardPan: (pan: BoardPan) => void;
   resetBoardView: () => void;
@@ -119,6 +141,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
   entityState: createEmptyEntityState(),
   assets: [],
   assetPlacements: [],
+  pawnSheets: {},
   selectedAssetId: null,
   selectedLocationId: null,
   selectedPlacementId: null,
@@ -144,6 +167,11 @@ export const useBoardStore = create<BoardStore>((set) => ({
   removeAsset: (assetId) =>
     set((state) => {
       const asset = state.assets.find((candidate) => candidate.id === assetId);
+      const removedPlacementIds = new Set(
+        state.assetPlacements
+          .filter((placement) => placement.assetId === assetId)
+          .map((placement) => placement.id),
+      );
       const removedEntityIds = new Set(
         state.assetPlacements
           .filter((placement) => placement.assetId === assetId)
@@ -168,6 +196,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
         assetPlacements: state.assetPlacements.filter(
           (placement) => placement.assetId !== assetId,
         ),
+        pawnSheets: removeAssetFromPawnSheets(
+          removePawnSheetsByPlacementId(state.pawnSheets, removedPlacementIds),
+          assetId,
+        ),
         selectedAssetId:
           state.selectedAssetId === assetId ? null : state.selectedAssetId,
         selectedPlacementId:
@@ -190,11 +222,20 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
 
-      const nextAssets = state.assets.map((asset) =>
-        asset.id === assetId
-          ? normalizeAsset({ ...asset, category })
-          : asset,
-      );
+      const nextAssets = state.assets.map((asset) => {
+        if (asset.id !== assetId) {
+          return asset;
+        }
+
+        return normalizeAsset({
+          ...asset,
+          category,
+          maxCopies:
+            category === "TOKEN" && asset.maxCopies === 1
+              ? DEFAULT_TOKEN_MAX_COPIES
+              : asset.maxCopies,
+        });
+      });
       const removedPlacements = canPlaceAssetForCategory(category)
         ? []
         : state.assetPlacements.filter(
@@ -224,6 +265,21 @@ export const useBoardStore = create<BoardStore>((set) => ({
           : state.assetPlacements.filter(
               (placement) => placement.assetId !== assetId,
             ),
+        pawnSheets: reconcilePawnSheets(
+          state.pawnSheets,
+          canPlaceAssetForCategory(category)
+            ? state.assetPlacements.map((placement) =>
+                placement.assetId === assetId
+                  ? {
+                      ...placement,
+                      category,
+                    }
+                  : placement,
+              )
+            : state.assetPlacements.filter(
+                (placement) => placement.assetId !== assetId,
+              ),
+        ),
         entityState: {
           entities: state.entityState.entities
             .filter((entity) => !removedEntityIds.has(entity.id))
@@ -565,6 +621,13 @@ export const useBoardStore = create<BoardStore>((set) => ({
               height: asset.placementHeight,
             },
           ],
+          pawnSheets:
+            asset.category === "PAWN"
+              ? {
+                  ...state.pawnSheets,
+                  [id]: createEmptyPawnSheet(),
+                }
+              : state.pawnSheets,
           selectedLocationId: null,
           selectedPlacementId: id,
           lastError: null,
@@ -626,7 +689,144 @@ export const useBoardStore = create<BoardStore>((set) => ({
         assetPlacements: state.assetPlacements.filter(
           (placement) => placement.id !== state.selectedPlacementId,
         ),
+        pawnSheets: removePawnSheetsByPlacementId(
+          state.pawnSheets,
+          new Set([state.selectedPlacementId]),
+        ),
         selectedPlacementId: null,
+        lastError: null,
+      };
+    }),
+  setPawnCharacterCard: (placementId, assetId) =>
+    set((state) => {
+      const validation = validatePawnSheetAsset(state, placementId, assetId, "CARD");
+
+      if (validation) {
+        return validation;
+      }
+
+      const currentSheet =
+        state.pawnSheets[placementId] ?? createEmptyPawnSheet();
+
+      if (
+        currentSheet.characterCardAssetId !== assetId &&
+        countAssetUsage(state, assetId) >= getAssetCopyLimit(state, assetId)
+      ) {
+        return {
+          lastError: getAssetLimitMessage(state, assetId),
+        };
+      }
+
+      return {
+        pawnSheets: {
+          ...state.pawnSheets,
+          [placementId]: {
+            ...currentSheet,
+            characterCardAssetId: assetId,
+          },
+        },
+        lastError: null,
+      };
+    }),
+  addPawnHeldCard: (placementId, assetId) =>
+    set((state) => {
+      const validation = validatePawnSheetAsset(state, placementId, assetId, "CARD");
+
+      if (validation) {
+        return validation;
+      }
+
+      if (countAssetUsage(state, assetId) >= getAssetCopyLimit(state, assetId)) {
+        return {
+          lastError: getAssetLimitMessage(state, assetId),
+        };
+      }
+
+      const currentSheet =
+        state.pawnSheets[placementId] ?? createEmptyPawnSheet();
+
+      return {
+        pawnSheets: {
+          ...state.pawnSheets,
+          [placementId]: {
+            ...currentSheet,
+            heldCardAssetIds: [...currentSheet.heldCardAssetIds, assetId],
+          },
+        },
+        lastError: null,
+      };
+    }),
+  removePawnHeldCard: (placementId, index) =>
+    set((state) => {
+      const currentSheet = state.pawnSheets[placementId];
+
+      if (!currentSheet) {
+        return state;
+      }
+
+      return {
+        pawnSheets: {
+          ...state.pawnSheets,
+          [placementId]: {
+            ...currentSheet,
+            heldCardAssetIds: currentSheet.heldCardAssetIds.filter(
+              (_assetId, candidateIndex) => candidateIndex !== index,
+            ),
+          },
+        },
+        lastError: null,
+      };
+    }),
+  adjustPawnCounter: (placementId, assetId, delta) =>
+    set((state) => {
+      const validation = validatePawnSheetAsset(state, placementId, assetId, "TOKEN");
+
+      if (validation) {
+        return validation;
+      }
+
+      const currentSheet =
+        state.pawnSheets[placementId] ?? createEmptyPawnSheet();
+      const existingCounter = currentSheet.counters.find(
+        (counter) => counter.assetId === assetId,
+      );
+      const currentCount = existingCounter?.count ?? 0;
+      const nextCount = Math.max(0, currentCount + Math.trunc(delta));
+
+      if (
+        nextCount > currentCount &&
+        countAssetUsage(state, assetId) >= getAssetCopyLimit(state, assetId)
+      ) {
+        return {
+          lastError: getAssetLimitMessage(state, assetId),
+        };
+      }
+
+      const nextCounters = existingCounter
+        ? currentSheet.counters.map((counter) =>
+            counter.assetId === assetId
+              ? {
+                  ...counter,
+                  count: nextCount,
+                }
+              : counter,
+          )
+        : [
+            ...currentSheet.counters,
+            {
+              assetId,
+              count: nextCount,
+            },
+          ];
+
+      return {
+        pawnSheets: {
+          ...state.pawnSheets,
+          [placementId]: {
+            ...currentSheet,
+            counters: nextCounters,
+          },
+        },
         lastError: null,
       };
     }),
@@ -679,6 +879,152 @@ export function getSelectedLocation(
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Board update failed.";
+}
+
+function createEmptyPawnSheet(): PawnSheet {
+  return {
+    heldCardAssetIds: [],
+    counters: [],
+  };
+}
+
+function validatePawnSheetAsset(
+  state: BoardStore,
+  placementId: string,
+  assetId: string,
+  expectedCategory: "CARD" | "TOKEN",
+) {
+  const placement = state.assetPlacements.find(
+    (candidate) => candidate.id === placementId,
+  );
+
+  if (!placement || placement.category !== "PAWN") {
+    return {
+      lastError: `Pawn '${placementId}' was not found.`,
+    };
+  }
+
+  if (!placement.locationId) {
+    return {
+      lastError: `Pawn '${placementId}' must be bound to a location first.`,
+    };
+  }
+
+  const asset = state.assets.find((candidate) => candidate.id === assetId);
+
+  if (!asset) {
+    return {
+      lastError: `Image asset '${assetId}' was not found.`,
+    };
+  }
+
+  if (asset.category !== expectedCategory) {
+    return {
+      lastError:
+        expectedCategory === "CARD"
+          ? `${asset.category} assets cannot be used as cards.`
+          : `${asset.category} assets cannot be used as tokens or dice.`,
+    };
+  }
+
+  return null;
+}
+
+function countAssetUsage(
+  state: Pick<BoardStore, "assetPlacements" | "pawnSheets">,
+  assetId: string,
+) {
+  let count = state.assetPlacements.filter(
+    (placement) => placement.assetId === assetId,
+  ).length;
+
+  for (const sheet of Object.values(state.pawnSheets)) {
+    if (sheet.characterCardAssetId === assetId) {
+      count += 1;
+    }
+
+    count += sheet.heldCardAssetIds.filter(
+      (heldAssetId) => heldAssetId === assetId,
+    ).length;
+    count +=
+      sheet.counters.find((counter) => counter.assetId === assetId)?.count ?? 0;
+  }
+
+  return count;
+}
+
+function getAssetCopyLimit(
+  state: Pick<BoardStore, "assets">,
+  assetId: string,
+) {
+  return (
+    state.assets.find((candidate) => candidate.id === assetId)?.maxCopies ?? 0
+  );
+}
+
+function getAssetLimitMessage(
+  state: Pick<BoardStore, "assets">,
+  assetId: string,
+) {
+  const asset = state.assets.find((candidate) => candidate.id === assetId);
+
+  return asset
+    ? `${asset.name} has reached its ${asset.maxCopies} copy limit.`
+    : `Image asset '${assetId}' was not found.`;
+}
+
+function reconcilePawnSheets(
+  pawnSheets: Record<string, PawnSheet>,
+  placements: AssetPlacement[],
+) {
+  return placements.reduce<Record<string, PawnSheet>>((nextSheets, placement) => {
+    if (placement.category !== "PAWN") {
+      return nextSheets;
+    }
+
+    return {
+      ...nextSheets,
+      [placement.id]: pawnSheets[placement.id] ?? createEmptyPawnSheet(),
+    };
+  }, {});
+}
+
+function removePawnSheetsByPlacementId(
+  pawnSheets: Record<string, PawnSheet>,
+  placementIds: Set<string>,
+) {
+  return Object.fromEntries(
+    Object.entries(pawnSheets).filter(
+      ([placementId]) => !placementIds.has(placementId),
+    ),
+  );
+}
+
+function removeAssetFromPawnSheets(
+  pawnSheets: Record<string, PawnSheet>,
+  assetId: string,
+) {
+  return Object.fromEntries(
+    Object.entries(pawnSheets).map(([placementId, sheet]) => [
+      placementId,
+      removeAssetFromPawnSheet(sheet, assetId),
+    ]),
+  );
+}
+
+function removeAssetFromPawnSheet(sheet: PawnSheet, assetId: string): PawnSheet {
+  const { characterCardAssetId, ...sheetWithoutCharacterCard } = sheet;
+
+  return {
+    ...sheetWithoutCharacterCard,
+    ...(characterCardAssetId && characterCardAssetId !== assetId
+      ? { characterCardAssetId }
+      : {}),
+    heldCardAssetIds: sheet.heldCardAssetIds.filter(
+      (heldAssetId) => heldAssetId !== assetId,
+    ),
+    counters: sheet.counters.filter((counter) => counter.assetId !== assetId),
+  };
 }
 
 function normalizeAsset(asset: UploadedImageAsset): UploadedImageAsset {

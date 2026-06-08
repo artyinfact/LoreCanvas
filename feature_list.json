@@ -100,9 +100,10 @@
           "In-app Browser confirmed mouse wheel zooms the map in Select drag mode; Browser zoom label changed from 100% to 246% after wheel input on the board canvas.",
           "Temporary Playwright/Chrome verified selected template-copy wheel scaling: map wheel zoom changed 100% to 172%, then after creating and selecting a placed template copy, wheel input changed the copy from 96 x 96 to 165 x 165 while map zoom remained 100%, with no console errors or warnings.",
           "Browser DOM check on http://localhost:5173/ confirmed Maker page loads, Image Assets is present, Template text is absent, and no Vite error overlay is rendered after the direct asset placement rework.",
-          "Temporary Playwright verification uploaded public/favicon.svg, changed its category to TILE, dragged the asset card directly onto .board-canvas, observed 1 / 1 copies and Entities1, attempted a second drag, and confirmed the copy-limit error while Entities stayed at 1."
+          "Temporary Playwright verification uploaded public/favicon.svg, changed its category to TILE, dragged the asset card directly onto .board-canvas, observed 1 / 1 copies and Entities1, attempted a second drag, and confirmed the copy-limit error while Entities stayed at 1.",
+          "Temporary Playwright verification created a bound PAWN, confirmed its inspector shows Character Card, Held Cards, and Tokens / Dice instead of Location and Edges, then verified CARD drops, repeated TOKEN drops, left-click increment, and right-click decrement."
         ],
-        "notes": "F-01 implements normalized Node-Graph Board state, arbitrary uploaded image background references, Location and Edge create/update/delete APIs, a neutral Maker UI, PixiJS/@pixi/react canvas interactions, Select as the default editing mode, empty-map hand cursor and drag panning, mouse-wheel map zoom in drag mode, mouse-wheel scaling for selected placed entity copies, full board view reset for zoom and pan, deletable image assets, direct asset-to-GraphBoard dragging for placed Entity copies, per-asset placement width/height and max copy count, editable/deletable placed copies, copy-limit guarded asset placements, scroll-contained sidebars, map zoom controls, collapsible left Creation toolbar, collapsible right Board inspector, and central board expansion when sidebars are hidden. The separate Entity Templates UI and Template button were removed on 2026-06-08. No grid, pathfinding, tactical distance, or game-specific branches were introduced."
+        "notes": "F-01 implements normalized Node-Graph Board state, arbitrary uploaded image background references, Location and Edge create/update/delete APIs, a neutral Maker UI, PixiJS/@pixi/react canvas interactions, Select as the default editing mode, empty-map hand cursor and drag panning, mouse-wheel map zoom in drag mode, mouse-wheel scaling for selected placed entity copies, full board view reset for zoom and pan, deletable image assets, direct asset-to-GraphBoard dragging for placed Entity copies, per-asset placement width/height and max copy count, editable/deletable placed copies, copy-limit guarded asset placements, scroll-contained sidebars, map zoom controls, collapsible left Creation toolbar, collapsible right Board inspector, and central board expansion when sidebars are hidden. The separate Entity Templates UI and Template button were removed on 2026-06-08. No grid, pathfinding, tactical distance, or game-specific branches were introduced. 2026-06-08 bound pawn inspector rework replaces the generic Location/Edges inspector with a pawn sheet for Location-bound PAWN placements."
       }
     },
     {
@@ -121,18 +122,19 @@
           "npm.cmd run check-types",
           "npm.cmd exec -- vitest run tests/engine/entity.test.ts",
           "npm.cmd run test",
-          "npm.cmd run build"
+          "npm.cmd run build",
+          "npm.cmd run harness"
         ],
         "coverage": [
           "src/engine/entity.ts implements generic EntityState, Entity { id, type, state, locationId? }, create/update/remove, Location bind/unbind, and clearLocationBindings for removed Locations.",
           "RESOURCE_CATEGORY_DEFINITIONS defines BOARD, PAWN, TOKEN, TILE, CARD, OTHER with layer, template, binding, and pathing metadata.",
-          "src/state/boardStore.ts maps categorized uploaded image assets to entity templates and creates/removes runtime Entities for placed template copies.",
-          "src/ui/App.tsx exposes category selection for uploaded assets and changes the sidebar from Piece Templates to Entity Templates.",
+          "src/state/boardStore.ts maps categorized uploaded image assets directly to placed Entity copies and now stores per-pawn sheets for optional character cards, held cards, and token/dice counters.",
+          "src/ui/App.tsx exposes category selection for uploaded assets, direct asset dragging, and a bound-pawn inspector for character card, held cards, and token/dice counters.",
           "src/ui/BoardCanvas.tsx layers TILE placements below graph nodes and requires PAWN/TOKEN drops to bind to a nearby Location.",
           "tests/engine/entity.test.ts covers arbitrary state, Location binding/unbinding, removed Location binding cleanup, missing Location rejection, and six resource category semantics.",
-          "tests/state/boardStore.test.ts covers categorized asset -> template -> placement -> Entity creation and deletion."
+          "tests/state/boardStore.test.ts covers categorized asset -> placement -> Entity creation/deletion plus pawn sheet cards and token counters."
         ],
-        "notes": "Browser plugin validation was attempted but the Node REPL browser bridge failed with a Windows sandbox spawn setup error in this environment. Dev server startup was also blocked across shell turns because background processes are cleaned up; tests and production build were used as the repeatable evidence for this pass. No grid/pathfinding/game-specific branches were introduced."
+        "notes": "Browser plugin validation was attempted but the Node REPL browser bridge failed with a Windows sandbox spawn setup error in this environment. Dev server startup was also blocked across shell turns because background processes are cleaned up; tests and production build were used as the repeatable evidence for this pass. No grid/pathfinding/game-specific branches were introduced. 2026-06-08 update: bound PAWN placements now expose optional character-card, held-card, and token/dice counter state in the Maker inspector."
       }
     },
     {

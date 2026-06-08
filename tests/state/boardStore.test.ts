@@ -10,6 +10,7 @@ describe("Maker image assets and entity placement", () => {
       entityState: createEmptyEntityState(),
       assets: [],
       assetPlacements: [],
+      pawnSheets: {},
       selectedAssetId: null,
       selectedLocationId: null,
       selectedPlacementId: null,
@@ -67,6 +68,10 @@ describe("Maker image assets and entity placement", () => {
         category: "PAWN",
         placementId: "pawn-copy-1",
       },
+    });
+    expect(nextState.pawnSheets["pawn-copy-1"]).toEqual({
+      heldCardAssetIds: [],
+      counters: [],
     });
   });
 
@@ -181,5 +186,98 @@ describe("Maker image assets and entity placement", () => {
     expect(useBoardStore.getState().assets).toHaveLength(0);
     expect(useBoardStore.getState().assetPlacements).toHaveLength(0);
     expect(useBoardStore.getState().entityState.entities).toHaveLength(0);
+  });
+
+  it("configures a bound pawn with one character card and held cards", () => {
+    const store = useBoardStore.getState();
+
+    store.addAsset({
+      id: "asset-pawn",
+      category: "PAWN",
+      name: "Hero.png",
+      url: "blob:hero",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 1,
+      placementWidth: 64,
+      placementHeight: 64,
+    });
+    store.addAsset({
+      id: "asset-card",
+      category: "CARD",
+      name: "Ally.png",
+      url: "blob:ally",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 2,
+      placementWidth: 64,
+      placementHeight: 90,
+    });
+    const locationId = useBoardStore.getState().createLocationAt(0.2, 0.2);
+    const pawnId = useBoardStore
+      .getState()
+      .createAssetPlacement("asset-pawn", 0.2, 0.2, locationId ?? "");
+
+    expect(pawnId).toBe("pawn-copy-1");
+
+    useBoardStore.getState().setPawnCharacterCard("pawn-copy-1", "asset-card");
+    useBoardStore.getState().addPawnHeldCard("pawn-copy-1", "asset-card");
+    useBoardStore.getState().addPawnHeldCard("pawn-copy-1", "asset-card");
+
+    const nextState = useBoardStore.getState();
+
+    expect(nextState.pawnSheets["pawn-copy-1"]).toMatchObject({
+      characterCardAssetId: "asset-card",
+      heldCardAssetIds: ["asset-card"],
+    });
+    expect(nextState.lastError).toContain("2 copy limit");
+  });
+
+  it("counts pawn token assets and allows default token assets to behave as unlimited", () => {
+    const store = useBoardStore.getState();
+
+    store.addAsset({
+      id: "asset-pawn",
+      category: "PAWN",
+      name: "Hero.png",
+      url: "blob:hero",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 1,
+      placementWidth: 64,
+      placementHeight: 64,
+    });
+    store.addAsset({
+      id: "asset-token",
+      category: "OTHER",
+      name: "Damage.png",
+      url: "blob:damage",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 1,
+      placementWidth: 32,
+      placementHeight: 32,
+    });
+    useBoardStore.getState().updateAssetCategory("asset-token", "TOKEN");
+    const locationId = useBoardStore.getState().createLocationAt(0.2, 0.2);
+    useBoardStore
+      .getState()
+      .createAssetPlacement("asset-pawn", 0.2, 0.2, locationId ?? "");
+
+    useBoardStore.getState().adjustPawnCounter("pawn-copy-1", "asset-token", 1);
+    useBoardStore.getState().adjustPawnCounter("pawn-copy-1", "asset-token", 1);
+    useBoardStore.getState().adjustPawnCounter("pawn-copy-1", "asset-token", -3);
+
+    const nextState = useBoardStore.getState();
+
+    expect(
+      nextState.assets.find((asset) => asset.id === "asset-token")?.maxCopies,
+    ).toBe(999);
+    expect(nextState.pawnSheets["pawn-copy-1"]?.counters).toEqual([
+      {
+        assetId: "asset-token",
+        count: 0,
+      },
+    ]);
   });
 });

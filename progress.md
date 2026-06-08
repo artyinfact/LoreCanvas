@@ -142,3 +142,12 @@
 - Verification: `npm.cmd run check-types`, `npm.cmd run test` (5 files / 20 tests), and `npm.cmd run build` all passed.
 - Browser verification: Browser DOM check at `http://localhost:5173/` confirmed the Maker page loads, Image Assets is present, `Template` text is absent, and no Vite error overlay is rendered. Browser screenshot capture timed out, so screenshot evidence came from temporary Playwright.
 - Temporary Playwright verification uploaded `public/favicon.svg`, changed its category to `TILE`, confirmed `Template` text was absent, dragged the asset card directly onto `.board-canvas`, observed `1 / 1 copies` and `Entities1`, then attempted a second drag and confirmed the copy-limit error while Entities stayed at 1. Only Chromium headless WebGL driver performance warnings were filtered; app console errors were not observed in that run.
+
+## 2026-06-08 F-01/F-02 Bound Pawn Inspector Rework
+
+- Reworked the inspector for selected bound `PAWN` placements. When a pawn is bound to a Location, the inspector now shows a pawn sheet instead of the generic Location and Edges sections.
+- Added per-pawn sheet state keyed by placement id: optional character card, held card list, and token/dice counters. Deleting a pawn placement or source asset cleans the related sheet references.
+- Character and held card slots accept `CARD` assets. The token/dice tray accepts `TOKEN` assets; repeated drops increase the count, left-click increases, right-click decreases, and the count clamps at 0.
+- Token assets now default to a high copy limit when an uploaded asset is categorized as `TOKEN`, matching the intended default-unlimited behavior while still respecting explicit asset copy limits.
+- Verification: `npm.cmd run check-types`, `npm.cmd run test` (5 files / 22 tests), `npm.cmd run build`, and `npm.cmd run harness` all passed.
+- Temporary Playwright verification uploaded four SVG assets, categorized them as `PAWN`, `CARD`, `CARD`, and `TOKEN`, created a Location, dropped the pawn onto that Location, confirmed the inspector showed `Character Card`, `Held Cards`, and `Tokens / Dice` while omitting `Location` and `Edges`, then verified card drops, repeated token drops, left-click increment, and right-click decrement. App console errors were not observed; Chromium headless WebGL driver performance warnings were filtered.

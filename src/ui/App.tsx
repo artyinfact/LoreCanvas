@@ -1,4 +1,5 @@
 import {
+  CreditCard,
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
@@ -10,6 +11,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Shield,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -28,7 +30,12 @@ import {
   RESOURCE_CATEGORIES,
   RESOURCE_CATEGORY_DEFINITIONS,
 } from "../engine/entity";
-import type { BoardTool, UploadedImageAsset } from "../state/boardStore";
+import type {
+  AssetPlacement,
+  BoardTool,
+  PawnSheet,
+  UploadedImageAsset,
+} from "../state/boardStore";
 import type { ResourceCategory } from "../engine/entity";
 
 const TOOL_OPTIONS: Array<{
@@ -50,6 +57,7 @@ export function App() {
   const entityState = useBoardStore((state) => state.entityState);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
+  const pawnSheets = useBoardStore((state) => state.pawnSheets);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const activeTool = useBoardStore((state) => state.activeTool);
@@ -92,12 +100,26 @@ export function App() {
   const deleteSelectedPlacement = useBoardStore(
     (state) => state.deleteSelectedPlacement,
   );
+  const setPawnCharacterCard = useBoardStore(
+    (state) => state.setPawnCharacterCard,
+  );
+  const addPawnHeldCard = useBoardStore((state) => state.addPawnHeldCard);
+  const removePawnHeldCard = useBoardStore((state) => state.removePawnHeldCard);
+  const adjustPawnCounter = useBoardStore((state) => state.adjustPawnCounter);
   const selectedLocation = getSelectedLocation(board, selectedLocationId);
   const selectedPlacement =
     assetPlacements.find((placement) => placement.id === selectedPlacementId) ??
     null;
   const selectedPlacementAsset = selectedPlacement
     ? assets.find((asset) => asset.id === selectedPlacement.assetId) ?? null
+    : null;
+  const isBoundPawnSelected = Boolean(
+    selectedPlacement?.category === "PAWN" &&
+      selectedPlacement.locationId &&
+      selectedPlacementAsset,
+  );
+  const selectedPawnSheet = selectedPlacement
+    ? pawnSheets[selectedPlacement.id] ?? createEmptyPawnSheet()
     : null;
   const connectedEdges = useMemo(
     () =>
@@ -348,162 +370,187 @@ export function App() {
           </button>
 
           <div className="inspector-content">
-            <CollapsibleSection
-              id="placement"
-              isCollapsed={collapsedSections.placement}
-              onToggle={toggleSection}
-              title="Placed Entity"
-              trailing={
-                selectedPlacement ? <span>{selectedPlacement.id}</span> : null
-              }
-            >
-              {selectedPlacement && selectedPlacementAsset ? (
-                <div className="inspector-stack">
-                  <div className="selected-piece-card">
-                    <img alt="" src={selectedPlacementAsset.url} />
-                    <div>
-                      <strong>{selectedPlacementAsset.name}</strong>
-                      <span>
-                        {selectedPlacement.category} / {selectedPlacement.entityId}
-                      </span>
-                    </div>
-                  </div>
-                  {selectedPlacement.locationId ? (
-                    <p className="binding-pill">
-                      Bound to {selectedPlacement.locationId}
-                    </p>
-                  ) : null}
-                  <div className="coordinate-row">
-                    <span>X {formatCoordinate(selectedPlacement.x)}</span>
-                    <span>Y {formatCoordinate(selectedPlacement.y)}</span>
-                  </div>
-                  <div className="piece-controls piece-controls--wide">
-                    <label>
-                      <span>W</span>
-                      <input
-                        min={12}
-                        max={640}
-                        onChange={(event) =>
-                          updateAssetPlacement(selectedPlacement.id, {
-                            width: toNumber(
-                              event.currentTarget.value,
-                              selectedPlacement.width,
-                            ),
-                          })
-                        }
-                        type="number"
-                        value={selectedPlacement.width}
-                      />
-                    </label>
-                    <label>
-                      <span>H</span>
-                      <input
-                        min={12}
-                        max={640}
-                        onChange={(event) =>
-                          updateAssetPlacement(selectedPlacement.id, {
-                            height: toNumber(
-                              event.currentTarget.value,
-                              selectedPlacement.height,
-                            ),
-                          })
-                        }
-                        type="number"
-                        value={selectedPlacement.height}
-                      />
-                    </label>
-                  </div>
-                  <button
-                    className="danger-button"
-                    onClick={deleteSelectedPlacement}
-                    type="button"
-                  >
-                    <Trash2 aria-hidden="true" size={15} />
-                    <span>Delete placed entity</span>
-                  </button>
-                </div>
-              ) : (
-                <p className="empty-state">No placed entity selected</p>
-              )}
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              id="location"
-              isCollapsed={collapsedSections.location}
-              onToggle={toggleSection}
-              title="Location"
-              trailing={selectedLocation ? <span>{selectedLocation.id}</span> : null}
-            >
-            {selectedLocation ? (
-              <div className="inspector-stack">
-                <label className="field">
-                  <span>Name</span>
-                  <input
-                    onChange={(event) =>
-                      updateSelectedLocationName(event.currentTarget.value)
-                    }
-                    value={selectedLocation.name}
-                  />
-                </label>
-                <div className="coordinate-row">
-                  <span>X {formatCoordinate(selectedLocation.x)}</span>
-                  <span>Y {formatCoordinate(selectedLocation.y)}</span>
-                </div>
-                <button
-                  className="danger-button"
-                  onClick={deleteSelectedLocation}
-                  type="button"
-                >
-                  <Trash2 aria-hidden="true" size={15} />
-                  <span>Delete location</span>
-                </button>
-              </div>
+            {isBoundPawnSelected &&
+            selectedPlacement &&
+            selectedPlacementAsset &&
+            selectedPawnSheet ? (
+              <PawnSheetInspector
+                adjustPawnCounter={adjustPawnCounter}
+                addPawnHeldCard={addPawnHeldCard}
+                assets={assets}
+                assetPlacements={assetPlacements}
+                deleteSelectedPlacement={deleteSelectedPlacement}
+                pawnSheets={pawnSheets}
+                placement={selectedPlacement}
+                placementAsset={selectedPlacementAsset}
+                removePawnHeldCard={removePawnHeldCard}
+                setPawnCharacterCard={setPawnCharacterCard}
+                sheet={selectedPawnSheet}
+                updateAssetPlacement={updateAssetPlacement}
+              />
             ) : (
-              <p className="empty-state">No location selected</p>
-            )}
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              id="edges"
-              isCollapsed={collapsedSections.edges}
-              onToggle={toggleSection}
-              title="Edges"
-              trailing={<span>{connectedEdges.length}</span>}
-            >
-            <div className="edge-list">
-              {connectedEdges.length === 0 ? (
-                <p className="empty-state">No connected edges</p>
-              ) : (
-                connectedEdges.map((edge) => (
-                  <article className="edge-item" key={edge.id}>
-                    <div>
-                      <strong>{edge.id}</strong>
-                      <span>
-                        {edge.fromId} / {edge.toId}
-                      </span>
+              <>
+                <CollapsibleSection
+                  id="placement"
+                  isCollapsed={collapsedSections.placement}
+                  onToggle={toggleSection}
+                  title="Placed Entity"
+                  trailing={
+                    selectedPlacement ? <span>{selectedPlacement.id}</span> : null
+                  }
+                >
+                  {selectedPlacement && selectedPlacementAsset ? (
+                    <div className="inspector-stack">
+                      <div className="selected-piece-card">
+                        <img alt="" src={selectedPlacementAsset.url} />
+                        <div>
+                          <strong>{selectedPlacementAsset.name}</strong>
+                          <span>
+                            {selectedPlacement.category} /{" "}
+                            {selectedPlacement.entityId}
+                          </span>
+                        </div>
+                      </div>
+                      {selectedPlacement.locationId ? (
+                        <p className="binding-pill">
+                          Bound to {selectedPlacement.locationId}
+                        </p>
+                      ) : null}
+                      <div className="coordinate-row">
+                        <span>X {formatCoordinate(selectedPlacement.x)}</span>
+                        <span>Y {formatCoordinate(selectedPlacement.y)}</span>
+                      </div>
+                      <div className="piece-controls piece-controls--wide">
+                        <label>
+                          <span>W</span>
+                          <input
+                            min={12}
+                            max={640}
+                            onChange={(event) =>
+                              updateAssetPlacement(selectedPlacement.id, {
+                                width: toNumber(
+                                  event.currentTarget.value,
+                                  selectedPlacement.width,
+                                ),
+                              })
+                            }
+                            type="number"
+                            value={selectedPlacement.width}
+                          />
+                        </label>
+                        <label>
+                          <span>H</span>
+                          <input
+                            min={12}
+                            max={640}
+                            onChange={(event) =>
+                              updateAssetPlacement(selectedPlacement.id, {
+                                height: toNumber(
+                                  event.currentTarget.value,
+                                  selectedPlacement.height,
+                                ),
+                              })
+                            }
+                            type="number"
+                            value={selectedPlacement.height}
+                          />
+                        </label>
+                      </div>
+                      <button
+                        className="danger-button"
+                        onClick={deleteSelectedPlacement}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={15} />
+                        <span>Delete placed entity</span>
+                      </button>
                     </div>
-                    <input
-                      aria-label={`${edge.id} label`}
-                      onChange={(event) =>
-                        updateEdgeLabel(edge.id, event.currentTarget.value)
-                      }
-                      placeholder="Label"
-                      value={edge.label ?? ""}
-                    />
-                    <button
-                      aria-label={`Delete ${edge.id}`}
-                      className="icon-only"
-                      onClick={() => deleteEdge(edge.id)}
-                      title="Delete edge"
-                      type="button"
-                    >
-                      <Trash2 aria-hidden="true" size={15} />
-                    </button>
-                  </article>
-                ))
-              )}
-            </div>
-            </CollapsibleSection>
+                  ) : (
+                    <p className="empty-state">No placed entity selected</p>
+                  )}
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                  id="location"
+                  isCollapsed={collapsedSections.location}
+                  onToggle={toggleSection}
+                  title="Location"
+                  trailing={
+                    selectedLocation ? <span>{selectedLocation.id}</span> : null
+                  }
+                >
+                  {selectedLocation ? (
+                    <div className="inspector-stack">
+                      <label className="field">
+                        <span>Name</span>
+                        <input
+                          onChange={(event) =>
+                            updateSelectedLocationName(event.currentTarget.value)
+                          }
+                          value={selectedLocation.name}
+                        />
+                      </label>
+                      <div className="coordinate-row">
+                        <span>X {formatCoordinate(selectedLocation.x)}</span>
+                        <span>Y {formatCoordinate(selectedLocation.y)}</span>
+                      </div>
+                      <button
+                        className="danger-button"
+                        onClick={deleteSelectedLocation}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={15} />
+                        <span>Delete location</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="empty-state">No location selected</p>
+                  )}
+                </CollapsibleSection>
+
+                <CollapsibleSection
+                  id="edges"
+                  isCollapsed={collapsedSections.edges}
+                  onToggle={toggleSection}
+                  title="Edges"
+                  trailing={<span>{connectedEdges.length}</span>}
+                >
+                  <div className="edge-list">
+                    {connectedEdges.length === 0 ? (
+                      <p className="empty-state">No connected edges</p>
+                    ) : (
+                      connectedEdges.map((edge) => (
+                        <article className="edge-item" key={edge.id}>
+                          <div>
+                            <strong>{edge.id}</strong>
+                            <span>
+                              {edge.fromId} / {edge.toId}
+                            </span>
+                          </div>
+                          <input
+                            aria-label={`${edge.id} label`}
+                            onChange={(event) =>
+                              updateEdgeLabel(edge.id, event.currentTarget.value)
+                            }
+                            placeholder="Label"
+                            value={edge.label ?? ""}
+                          />
+                          <button
+                            aria-label={`Delete ${edge.id}`}
+                            className="icon-only"
+                            onClick={() => deleteEdge(edge.id)}
+                            title="Delete edge"
+                            type="button"
+                          >
+                            <Trash2 aria-hidden="true" size={15} />
+                          </button>
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </CollapsibleSection>
+              </>
+            )}
           </div>
         </aside>
 
@@ -554,6 +601,250 @@ function CollapsibleSection({
         </span>
       </button>
       {!isCollapsed ? children : null}
+    </section>
+  );
+}
+
+interface PawnSheetInspectorProps {
+  adjustPawnCounter: (
+    placementId: string,
+    assetId: string,
+    delta: number,
+  ) => void;
+  addPawnHeldCard: (placementId: string, assetId: string) => void;
+  assets: UploadedImageAsset[];
+  assetPlacements: AssetPlacement[];
+  deleteSelectedPlacement: () => void;
+  pawnSheets: Record<string, PawnSheet>;
+  placement: AssetPlacement;
+  placementAsset: UploadedImageAsset;
+  removePawnHeldCard: (placementId: string, index: number) => void;
+  setPawnCharacterCard: (placementId: string, assetId: string) => void;
+  sheet: PawnSheet;
+  updateAssetPlacement: (
+    placementId: string,
+    patch: Partial<Pick<AssetPlacement, "width" | "height">>,
+  ) => void;
+}
+
+function PawnSheetInspector({
+  adjustPawnCounter,
+  addPawnHeldCard,
+  assets,
+  assetPlacements,
+  deleteSelectedPlacement,
+  pawnSheets,
+  placement,
+  placementAsset,
+  removePawnHeldCard,
+  setPawnCharacterCard,
+  sheet,
+  updateAssetPlacement,
+}: PawnSheetInspectorProps) {
+  const characterCard = sheet.characterCardAssetId
+    ? findAsset(assets, sheet.characterCardAssetId)
+    : null;
+  const heldCards = sheet.heldCardAssetIds
+    .map((assetId, index) => ({
+      asset: findAsset(assets, assetId),
+      index,
+    }))
+    .filter(
+      (card): card is { asset: UploadedImageAsset; index: number } =>
+        Boolean(card.asset),
+    );
+  const counters = sheet.counters
+    .map((counter) => ({
+      asset: findAsset(assets, counter.assetId),
+      count: counter.count,
+    }))
+    .filter(
+      (counter): counter is { asset: UploadedImageAsset; count: number } =>
+        Boolean(counter.asset),
+    );
+  const handleDrop = useCallback(
+    (
+      event: DragEvent<HTMLElement>,
+      target: "character" | "held" | "counter",
+    ) => {
+      const assetId = getDraggedAssetId(event);
+
+      if (!assetId) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (target === "character") {
+        setPawnCharacterCard(placement.id, assetId);
+        return;
+      }
+
+      if (target === "held") {
+        addPawnHeldCard(placement.id, assetId);
+        return;
+      }
+
+      adjustPawnCounter(placement.id, assetId, 1);
+    },
+    [
+      addPawnHeldCard,
+      adjustPawnCounter,
+      placement.id,
+      setPawnCharacterCard,
+    ],
+  );
+  const handleDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (event.dataTransfer.types.includes("application/x-lorecanvas-asset")) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    }
+  }, []);
+
+  return (
+    <section className="pawn-sheet" aria-label="Pawn inspector">
+      <div className="selected-piece-card selected-piece-card--pawn">
+        <img alt="" src={placementAsset.url} />
+        <div>
+          <strong>{placementAsset.name}</strong>
+          <span>
+            {placement.entityId} / {placement.locationId}
+          </span>
+        </div>
+      </div>
+
+      <div className="piece-controls piece-controls--wide">
+        <label>
+          <span>W</span>
+          <input
+            min={12}
+            max={640}
+            onChange={(event) =>
+              updateAssetPlacement(placement.id, {
+                width: toNumber(event.currentTarget.value, placement.width),
+              })
+            }
+            type="number"
+            value={placement.width}
+          />
+        </label>
+        <label>
+          <span>H</span>
+          <input
+            min={12}
+            max={640}
+            onChange={(event) =>
+              updateAssetPlacement(placement.id, {
+                height: toNumber(event.currentTarget.value, placement.height),
+              })
+            }
+            type="number"
+            value={placement.height}
+          />
+        </label>
+      </div>
+
+      <section
+        className="pawn-sheet-zone pawn-sheet-zone--card"
+        onDragOver={handleDragOver}
+        onDrop={(event) => handleDrop(event, "character")}
+      >
+        <h2>
+          <CreditCard aria-hidden="true" size={15} />
+          Character Card
+        </h2>
+        {characterCard ? (
+          <div className="sheet-card-slot">
+            <img alt="" src={characterCard.url} />
+            <strong title={characterCard.name}>{characterCard.name}</strong>
+          </div>
+        ) : (
+          <p className="empty-state">No character card</p>
+        )}
+      </section>
+
+      <section
+        className="pawn-sheet-zone"
+        onDragOver={handleDragOver}
+        onDrop={(event) => handleDrop(event, "held")}
+      >
+        <h2>
+          <CreditCard aria-hidden="true" size={15} />
+          Held Cards
+        </h2>
+        {heldCards.length > 0 ? (
+          <div className="held-card-grid">
+            {heldCards.map(({ asset, index }) => (
+              <article className="held-card" key={`${asset.id}-${index}`}>
+                <img alt="" src={asset.url} />
+                <strong title={asset.name}>{asset.name}</strong>
+                <button
+                  aria-label={`Remove ${asset.name}`}
+                  className="icon-only"
+                  onClick={() => removePawnHeldCard(placement.id, index)}
+                  title="Remove card"
+                  type="button"
+                >
+                  <Trash2 aria-hidden="true" size={14} />
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-state">No held cards</p>
+        )}
+      </section>
+
+      <section
+        className="pawn-sheet-zone"
+        onDragOver={handleDragOver}
+        onDrop={(event) => handleDrop(event, "counter")}
+      >
+        <h2>
+          <Shield aria-hidden="true" size={15} />
+          Tokens / Dice
+        </h2>
+        {counters.length > 0 ? (
+          <div className="token-counter-grid">
+            {counters.map(({ asset, count }) => (
+              <button
+                className="token-counter"
+                key={asset.id}
+                onClick={() => adjustPawnCounter(placement.id, asset.id, 1)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  adjustPawnCounter(placement.id, asset.id, -1);
+                }}
+                type="button"
+              >
+                <img alt="" src={asset.url} />
+                <span>{count}</span>
+                <small>
+                  {formatRemainingCopies(
+                    getAssetRemainingCopies(
+                      assets,
+                      assetPlacements,
+                      pawnSheets,
+                      asset.id,
+                    ),
+                  )}
+                </small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-state">No tokens</p>
+        )}
+      </section>
+
+      <button
+        className="danger-button"
+        onClick={deleteSelectedPlacement}
+        type="button"
+      >
+        <Trash2 aria-hidden="true" size={15} />
+        <span>Delete pawn</span>
+      </button>
     </section>
   );
 }
@@ -710,6 +1001,69 @@ function AssetItem({
       </div>
     </article>
   );
+}
+
+function createEmptyPawnSheet(): PawnSheet {
+  return {
+    heldCardAssetIds: [],
+    counters: [],
+  };
+}
+
+function findAsset(assets: UploadedImageAsset[], assetId: string) {
+  return assets.find((asset) => asset.id === assetId) ?? null;
+}
+
+function getDraggedAssetId(event: DragEvent<HTMLElement>) {
+  return event.dataTransfer.types.includes("application/x-lorecanvas-asset")
+    ? event.dataTransfer.getData("application/x-lorecanvas-asset")
+    : "";
+}
+
+function getAssetRemainingCopies(
+  assets: UploadedImageAsset[],
+  assetPlacements: AssetPlacement[],
+  pawnSheets: Record<string, PawnSheet>,
+  assetId: string,
+) {
+  const asset = findAsset(assets, assetId);
+
+  if (!asset) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    asset.maxCopies - countAssetUsage(assetPlacements, pawnSheets, assetId),
+  );
+}
+
+function countAssetUsage(
+  assetPlacements: AssetPlacement[],
+  pawnSheets: Record<string, PawnSheet>,
+  assetId: string,
+) {
+  let count = assetPlacements.filter(
+    (placement) => placement.assetId === assetId,
+  ).length;
+
+  for (const sheet of Object.values(pawnSheets)) {
+    if (sheet.characterCardAssetId === assetId) {
+      count += 1;
+    }
+
+    count += sheet.heldCardAssetIds.filter(
+      (heldAssetId) => heldAssetId === assetId,
+    ).length;
+    count +=
+      sheet.counters.find((counter) => counter.assetId === assetId)?.count ?? 0;
+  }
+
+  return count;
+}
+
+function formatRemainingCopies(remaining: number) {
+  return remaining >= 900 ? "unlimited" : `${remaining} left`;
 }
 
 function readImageDimensions(url: string): Promise<{
