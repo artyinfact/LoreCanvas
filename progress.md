@@ -54,9 +54,9 @@
 
 - `F-00-EnvironmentAndVercel` 已完成并可复查。
 - `F-01-GraphBoard` 已完成并写入 `feature_list.json` evidence。
-- 当前最高优先级 pending 任务为 `F-02-EntitySystem`。
+- 当前最高优先级 pending 任务为 `F-03-MovementValidation`。
 - Board 模型使用 normalized 坐标，规则层不依赖图片尺寸或画布像素。
-- F-01 UI 中的 Piece Templates 和拖放到 Board 的 copy 只是通用素材/配件模板占位，不是 Entity 运行时模型；真正的 `{ id, type, state }`、模板与 Entity 的对应关系、以及 Location 绑定应在 F-02 实现。
+- F-01 UI 中的 Entity Templates 和拖放到 Board 的 copy 已在 F-02 映射为运行时 Entity；F-03 应基于 Location 绑定实现图移动校验。
 - F-01 Maker UI 当前采用左侧创作工具栏和右侧折叠检查器；后续 F-02 应沿用这一布局，不要把模板拖放入口重新放回远离地图的位置。
 - 本轮没有执行 `git add`、`git commit` 或 `git push`。
 
@@ -79,7 +79,7 @@
 - Completed the latest F-01 rework requested from browser feedback: scroll-contained sidebars for large image/template sets, map zoom controls, central board expansion when sidebars collapse, and editable/deletable placed piece copies.
 - Browser verification used temporary Playwright with local Chrome against `http://127.0.0.1:5173`: bulk-uploaded 28 SVG assets, confirmed `document.body.scrollHeight` stayed at the `920px` viewport height while `.asset-list` scrolled internally (`386px` client height / `3910px` scroll height), and console error/warning count was 0.
 - Browser verification confirmed collapsing both sidebars expanded the GraphBoard canvas from `752px` to `1312px`, zoom controls changed the board zoom from `100%` to `120%`, and a dragged placed piece could be edited to `144 x 96`, selected again from the canvas, and deleted back to `0 / 1 copies`.
-- `F-00-EnvironmentAndVercel` and `F-01-GraphBoard` are marked `completed` in `feature_list.json`. The next pending task remains `F-02-EntitySystem`; F-01 template placements are still Maker placeholders, not runtime Entities.
+- `F-00-EnvironmentAndVercel`, `F-01-GraphBoard`, and `F-02-EntitySystem` are marked `completed` in `feature_list.json`. The next pending task is `F-03-MovementValidation`.
 
 ## 2026-06-04 F-01 Collapsed Sidebar Canvas Fix
 
@@ -100,3 +100,20 @@
 - Updated the Reset zoom button to reset the full board view, not only the zoom value. Board pan is now stored in `boardStore`, and `resetBoardView()` restores `boardZoom` to `1` and `boardPan` to `{ x: 0, y: 0 }`.
 - `BoardCanvas` now reads and updates pan through the store, so toolbar controls can reset pan created by Select-mode background dragging.
 - In-app Browser verification: starting from default `100%`, zoomed to `120%`, dragged the board background to pan, then clicked `Reset zoom`; the zoom label returned to `100%` and the board framing visually returned to the initial view.
+
+## 2026-06-05 F-01 Mouse Wheel Zoom Addendum
+
+- Added mouse-wheel zoom for F-01: in Select drag mode with no selected object, wheel input over the board canvas zooms the map around the pointer and updates the toolbar zoom label.
+- Added selected-copy wheel scaling: when a placed template copy is selected, wheel input over the board canvas scales that copy's width/height instead of changing map zoom.
+- Implementation detail: `BoardCanvas` uses a native non-passive `wheel` listener on the canvas host so `preventDefault()` works without passive-listener console errors.
+- In-app Browser verification: default Select mode on `http://127.0.0.1:5173/`, wheel input on the board canvas changed the zoom label from `100%` to `246%`.
+- Supplemental temporary Playwright/Chrome verification was used because the Browser API does not expose file upload. It uploaded `public/favicon.svg`, created a template and placed copy, confirmed map wheel zoom changed `100%` to `172%`, then confirmed selected copy wheel scaling changed the copy from `96 x 96` to `165 x 165` while map zoom stayed `100%`; console error/warning count was 0.
+## 2026-06-08 F-02 Entity System And Asset Categories
+
+- Completed `F-02-EntitySystem`: added `src/engine/entity.ts` with generic `Entity { id, type, state, locationId? }`, `EntityState`, arbitrary state patching, create/remove, Location bind/unbind, and `clearLocationBindings` for deleted Locations.
+- Added six resource categories for Maker assets: `BOARD`, `PAWN`, `TOKEN`, `TILE`, `CARD`, `OTHER`. Category metadata now records layer order, template eligibility, Location binding support, and pathing rights; only `PAWN` is marked path-capable for future F-03/F-05 movement logic.
+- Updated F-01 toolbar/store integration: uploaded image assets have a category selector; board backgrounds are `BOARD`; graph templates are created only for placeable categories; placed template copies now create runtime Entities and delete their Entities when the copy/template/asset is removed.
+- Updated GraphBoard placement behavior: `TILE` renders above the Board and below graph nodes, while other placed entities render above nodes; `PAWN` and `TOKEN` drops must land near a Location and create a Location-bound Entity.
+- Added `tests/engine/entity.test.ts` and `tests/state/boardStore.test.ts`. Verification passed with `npm.cmd run check-types`, `npm.cmd exec -- vitest run tests/engine/entity.test.ts`, `npm.cmd run test` (5 files / 19 tests), and `npm.cmd run build`.
+- `bash ./init.sh` could not complete in this Windows session because `bash` resolves to the WSL shim and WSL is unavailable; Git Bash ran harness validation but its `npm` step hit the same WSL shim. Equivalent implementation checks were run directly through `npm.cmd`.
+- Browser/plugin verification was attempted but blocked by the Browser Node REPL bridge failing with `windows sandbox failed: spawn setup refresh`; no browser evidence was recorded for this F-02 pass. Next pending feature is `F-03-MovementValidation`.

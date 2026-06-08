@@ -19,7 +19,10 @@ import type {
 import type { DragEvent, RefObject } from "react";
 import type { BoardImageRef, BoardLocation } from "../engine/board";
 import { useBoardStore } from "../state/boardStore";
-import type { AccessoryTemplate } from "../state/boardStore";
+import type {
+  AccessoryTemplate,
+  AccessoryTemplatePlacement,
+} from "../state/boardStore";
 
 extend({
   Container,
@@ -50,6 +53,10 @@ const FALLBACK_VIEWPORT: ViewportSize = {
   height: 640,
 };
 
+const MIN_BOARD_ZOOM = 0.5;
+const MAX_BOARD_ZOOM = 4;
+const WHEEL_ZOOM_SENSITIVITY = 0.0015;
+
 export function BoardCanvas() {
   const hostRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<ApplicationRef>(null);
@@ -71,6 +78,7 @@ export function BoardCanvas() {
   const selectLocation = useBoardStore((state) => state.selectLocation);
   const selectPlacement = useBoardStore((state) => state.selectPlacement);
   const setBoardPan = useBoardStore((state) => state.setBoardPan);
+  const setBoardZoom = useBoardStore((state) => state.setBoardZoom);
   const setLastError = useBoardStore((state) => state.setLastError);
   const startOrCompleteEdge = useBoardStore((state) => state.startOrCompleteEdge);
   const updateTemplatePlacement = useBoardStore(
@@ -114,6 +122,23 @@ export function BoardCanvas() {
         accessoryTemplates.map((template) => [template.id, template] as const),
       ),
     [accessoryTemplates],
+  );
+  const selectedPlacement = useMemo(
+    () =>
+      selectedPlacementId
+        ? templatePlacements.find(
+            (placement) => placement.id === selectedPlacementId,
+          ) ?? null
+        : null,
+    [selectedPlacementId, templatePlacements],
+  );
+  const tilePlacements = useMemo(
+    () => templatePlacements.filter((placement) => placement.category === "TILE"),
+    [templatePlacements],
+  );
+  const upperPlacements = useMemo(
+    () => templatePlacements.filter((placement) => placement.category !== "TILE"),
+    [templatePlacements],
   );
   const canvasCursor = getCanvasCursor({
     activeTool,
@@ -317,10 +342,122 @@ export function BoardCanvas() {
         return;
       }
 
+      const template = templateById.get(templateId);
+
+      if (!template) {
+        setLastError(`Template '${templateId}' was not found.`);
+        return;
+      }
+
+      if (template.category === "PAWN" || template.category === "TOKEN") {
+        const nearestLocation = findNearestLocation(boardPoint, board.locations);
+
+        if (!nearestLocation) {
+          setLastError(`${template.category} templates must be dropped on a location.`);
+          return;
+        }
+
+        createTemplatePlacement(
+          templateId,
+          nearestLocation.x,
+          nearestLocation.y,
+          nearestLocation.id,
+        );
+        return;
+      }
+
       createTemplatePlacement(templateId, boardPoint.x, boardPoint.y);
     },
-    [activeTool, createTemplatePlacement, frame, setLastError],
+    [
+      activeTool,
+      board.locations,
+      createTemplatePlacement,
+      frame,
+      setLastError,
+      templateById,
+    ],
   );
+  const handleWheel = useCallback(
+    (event: WheelEvent) => {
+      if (activeTool !== "select") {
+        return;
+      }
+
+      event.preventDefault();
+
+      const scale = getWheelScale(event.deltaY);
+
+      if (selectedPlacement) {
+        updateTemplatePlacement(selectedPlacement.id, {
+          width: selectedPlacement.width * scale,
+          height: selectedPlacement.height * scale,
+        });
+        return;
+      }
+
+      if (selectedLocationId) {
+        return;
+      }
+
+      const nextZoom = clamp(boardZoom * scale, MIN_BOARD_ZOOM, MAX_BOARD_ZOOM);
+
+      if (nextZoom === boardZoom) {
+        return;
+      }
+
+      const hostRect = hostRef.current?.getBoundingClientRect();
+
+      if (!hostRect) {
+        return;
+      }
+
+      const pointer = {
+        x: event.clientX - hostRect.left,
+        y: event.clientY - hostRect.top,
+      };
+      const zoomRatio = nextZoom / boardZoom;
+      const nextFrameX = pointer.x + (frame.x - pointer.x) * zoomRatio;
+      const nextFrameY = pointer.y + (frame.y - pointer.y) * zoomRatio;
+      const nextBaseFrame = computeBoardFrame(
+        viewport,
+        board.background,
+        nextZoom,
+        { x: 0, y: 0 },
+      );
+
+      setBoardZoom(nextZoom);
+      setBoardPan({
+        x: nextFrameX - nextBaseFrame.x,
+        y: nextFrameY - nextBaseFrame.y,
+      });
+    },
+    [
+      activeTool,
+      board.background,
+      boardZoom,
+      frame.x,
+      frame.y,
+      selectedLocationId,
+      selectedPlacement,
+      setBoardPan,
+      setBoardZoom,
+      updateTemplatePlacement,
+      viewport,
+    ],
+  );
+  useEffect(() => {
+    const host = hostRef.current;
+
+    if (!host) {
+      return;
+    }
+
+    host.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      host.removeEventListener("wheel", handleWheel);
+    };
+  }, [handleWheel]);
 
   return (
     <div
@@ -351,28 +488,13 @@ export function BoardCanvas() {
         >
           <pixiGraphics draw={drawBoardFrame} />
           <BoardBackgroundSprite background={board.background} frame={frame} />
-          {templatePlacements.map((placement) => {
-            const template = templateById.get(placement.templateId);
-
-            if (!template) {
-              return null;
-            }
-
-            return (
-              <PiecePlacementSprite
-                frame={frame}
-                isSelected={selectedPlacementId === placement.id}
-                key={placement.id}
-                onPointerDown={handlePlacementPointerDown}
-                placementId={placement.id}
-                template={template}
-                height={placement.height}
-                x={placement.x}
-                y={placement.y}
-                width={placement.width}
-              />
-            );
-          })}
+          <PlacementSprites
+            frame={frame}
+            onPointerDown={handlePlacementPointerDown}
+            placements={tilePlacements}
+            selectedPlacementId={selectedPlacementId}
+            templateById={templateById}
+          />
           <pixiGraphics draw={drawEdges} />
           {board.locations.map((location, index) => (
             <LocationNode
@@ -385,9 +507,59 @@ export function BoardCanvas() {
               onPointerDown={handleLocationPointerDown}
             />
           ))}
+          <PlacementSprites
+            frame={frame}
+            onPointerDown={handlePlacementPointerDown}
+            placements={upperPlacements}
+            selectedPlacementId={selectedPlacementId}
+            templateById={templateById}
+          />
         </pixiContainer>
       </Application>
     </div>
+  );
+}
+
+interface PlacementSpritesProps {
+  frame: BoardFrame;
+  onPointerDown: (placementId: string, event: FederatedPointerEvent) => void;
+  placements: AccessoryTemplatePlacement[];
+  selectedPlacementId: string | null;
+  templateById: Map<string, AccessoryTemplate>;
+}
+
+function PlacementSprites({
+  frame,
+  onPointerDown,
+  placements,
+  selectedPlacementId,
+  templateById,
+}: PlacementSpritesProps) {
+  return (
+    <>
+      {placements.map((placement) => {
+        const template = templateById.get(placement.templateId);
+
+        if (!template) {
+          return null;
+        }
+
+        return (
+          <PiecePlacementSprite
+            frame={frame}
+            height={placement.height}
+            isSelected={selectedPlacementId === placement.id}
+            key={placement.id}
+            onPointerDown={onPointerDown}
+            placementId={placement.id}
+            template={template}
+            width={placement.width}
+            x={placement.x}
+            y={placement.y}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -759,8 +931,29 @@ function scenePointToClampedBoardPoint(point: PointData, frame: BoardFrame) {
   };
 }
 
-function clamp(value: number) {
-  return Math.min(1, Math.max(0, value));
+function findNearestLocation(point: PointData, locations: BoardLocation[]) {
+  const threshold = 0.08;
+  let nearest: BoardLocation | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const location of locations) {
+    const distance = Math.hypot(location.x - point.x, location.y - point.y);
+
+    if (distance < nearestDistance) {
+      nearest = location;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearestDistance <= threshold ? nearest : null;
+}
+
+function getWheelScale(deltaY: number) {
+  return Math.exp(-deltaY * WHEEL_ZOOM_SENSITIVITY);
+}
+
+function clamp(value: number, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getPixiImageParser(

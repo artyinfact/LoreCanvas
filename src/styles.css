@@ -510,6 +510,36 @@ button {
   gap: 6px;
 }
 
+.asset-category {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 4px;
+}
+
+.asset-category span {
+  color: #65707c;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.asset-category select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid #c8ced6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #20252b;
+  padding: 0 8px;
+  outline: none;
+}
+
+.asset-category select:focus {
+  border-color: #2f6f73;
+  box-shadow: 0 0 0 3px rgba(47, 111, 115, 0.16);
+}
+
 .mini-button {
   min-height: 30px;
   display: inline-flex;
@@ -773,6 +803,18 @@ button {
 .selected-piece-card span {
   color: #65707c;
   font-size: 0.77rem;
+}
+
+.binding-pill {
+  margin: 0;
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #e6f3f1;
+  color: #214f52;
+  font-size: 0.78rem;
+  font-weight: 840;
 }
 
 .zoom-control {

@@ -11,9 +11,18 @@ import {
   updateLocation,
 } from "../engine/board";
 import type { BoardLocation, BoardState } from "../engine/board";
+import {
+  canCreateTemplateForCategory,
+  clearLocationBindings,
+  createEmptyEntityState,
+  createEntity,
+  removeEntity,
+} from "../engine/entity";
+import type { EntityState, ResourceCategory } from "../engine/entity";
 
 export interface UploadedImageAsset {
   id: string;
+  category: ResourceCategory;
   name: string;
   url: string;
   mimeType: string;
@@ -25,6 +34,7 @@ export interface UploadedImageAsset {
 export interface AccessoryTemplate {
   id: string;
   assetId: string;
+  category: ResourceCategory;
   name: string;
   imageUrl: string;
   width: number;
@@ -35,6 +45,9 @@ export interface AccessoryTemplate {
 export interface AccessoryTemplatePlacement {
   id: string;
   templateId: string;
+  category: ResourceCategory;
+  entityId: string;
+  locationId?: string;
   x: number;
   y: number;
   width: number;
@@ -58,6 +71,7 @@ export type AccessoryPlacementPatch = Partial<
 
 export interface BoardStore {
   board: BoardState;
+  entityState: EntityState;
   assets: UploadedImageAsset[];
   accessoryTemplates: AccessoryTemplate[];
   templatePlacements: AccessoryTemplatePlacement[];
@@ -73,6 +87,7 @@ export interface BoardStore {
   lastError: string | null;
   addAsset: (asset: UploadedImageAsset) => void;
   removeAsset: (assetId: string) => void;
+  updateAssetCategory: (assetId: string, category: ResourceCategory) => void;
   setBackgroundAsset: (assetId: string) => void;
   setActiveTool: (tool: BoardTool) => void;
   selectLocation: (locationId: string | null) => void;
@@ -94,6 +109,7 @@ export interface BoardStore {
     templateId: string,
     x: number,
     y: number,
+    locationId?: string,
   ) => string | null;
   updateTemplatePlacement: (
     placementId: string,
@@ -111,6 +127,7 @@ export interface BoardStore {
 
 export const useBoardStore = create<BoardStore>((set) => ({
   board: createEmptyBoard(),
+  entityState: createEmptyEntityState(),
   assets: [],
   accessoryTemplates: [],
   templatePlacements: [],
@@ -140,6 +157,11 @@ export const useBoardStore = create<BoardStore>((set) => ({
           .filter((template) => template.assetId === assetId)
           .map((template) => template.id),
       );
+      const removedEntityIds = new Set(
+        state.templatePlacements
+          .filter((placement) => removedTemplateIds.has(placement.templateId))
+          .map((placement) => placement.entityId),
+      );
 
       if (asset) {
         URL.revokeObjectURL(asset.url);
@@ -154,6 +176,11 @@ export const useBoardStore = create<BoardStore>((set) => ({
         accessoryTemplates: state.accessoryTemplates.filter(
           (template) => template.assetId !== assetId,
         ),
+        entityState: {
+          entities: state.entityState.entities.filter(
+            (entity) => !removedEntityIds.has(entity.id),
+          ),
+        },
         templatePlacements: state.templatePlacements.filter(
           (placement) => !removedTemplateIds.has(placement.templateId),
         ),
@@ -168,6 +195,29 @@ export const useBoardStore = create<BoardStore>((set) => ({
           )
             ? null
             : state.selectedPlacementId,
+        lastError: null,
+      };
+    }),
+  updateAssetCategory: (assetId, category) =>
+    set((state) => {
+      if (!state.assets.some((asset) => asset.id === assetId)) {
+        return {
+          lastError: `Image asset '${assetId}' was not found.`,
+        };
+      }
+
+      const nextAssets = state.assets.map((asset) =>
+        asset.id === assetId ? { ...asset, category } : asset,
+      );
+
+      return {
+        assets: nextAssets,
+        board:
+          category === "BOARD"
+            ? state.board
+            : state.board.background?.assetId === assetId
+              ? setBoardBackground(state.board, null)
+              : state.board,
         lastError: null,
       };
     }),
@@ -190,6 +240,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
           width: asset.width,
           height: asset.height,
         }),
+        assets: state.assets.map((candidate) =>
+          candidate.id === asset.id ? { ...candidate, category: "BOARD" } : candidate,
+        ),
         selectedAssetId: asset.id,
         lastError: null,
       };
@@ -281,6 +334,18 @@ export const useBoardStore = create<BoardStore>((set) => ({
       try {
         return {
           board: removeLocation(state.board, state.selectedLocationId),
+          entityState: clearLocationBindings(
+            state.entityState,
+            state.selectedLocationId,
+          ),
+          templatePlacements: state.templatePlacements.map((placement) => {
+            if (placement.locationId !== state.selectedLocationId) {
+              return placement;
+            }
+
+            const { locationId: _locationId, ...unboundPlacement } = placement;
+            return unboundPlacement;
+          }),
           selectedLocationId: null,
           selectedPlacementId: null,
           edgeDraftFromId:
@@ -378,8 +443,14 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
 
+      if (!canCreateTemplateForCategory(asset.category)) {
+        return {
+          lastError: `${asset.category} assets are not placed on the graph board as templates.`,
+        };
+      }
+
       const id = createSequentialId(
-        "piece",
+        asset.category.toLowerCase(),
         state.accessoryTemplates.map((template) => template.id),
       );
       const defaultSize = getDefaultTemplateSize(asset);
@@ -390,6 +461,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           {
             id,
             assetId: asset.id,
+            category: asset.category,
             name: asset.name.replace(/\.[^.]+$/, ""),
             imageUrl: asset.url,
             width: defaultSize.width,
@@ -434,25 +506,38 @@ export const useBoardStore = create<BoardStore>((set) => ({
       };
     }),
   deleteAccessoryTemplate: (templateId) =>
-    set((state) => ({
-      accessoryTemplates: state.accessoryTemplates.filter(
-        (template) => template.id !== templateId,
-      ),
-      templatePlacements: state.templatePlacements.filter(
-        (placement) => placement.templateId !== templateId,
-      ),
-      selectedPlacementId:
-        state.selectedPlacementId &&
-        state.templatePlacements.some(
-          (placement) =>
-            placement.id === state.selectedPlacementId &&
-            placement.templateId === templateId,
-        )
-          ? null
-          : state.selectedPlacementId,
-      lastError: null,
-    })),
-  createTemplatePlacement: (templateId, x, y) => {
+    set((state) => {
+      const removedEntityIds = new Set(
+        state.templatePlacements
+          .filter((placement) => placement.templateId === templateId)
+          .map((placement) => placement.entityId),
+      );
+
+      return {
+        accessoryTemplates: state.accessoryTemplates.filter(
+          (template) => template.id !== templateId,
+        ),
+        entityState: {
+          entities: state.entityState.entities.filter(
+            (entity) => !removedEntityIds.has(entity.id),
+          ),
+        },
+        templatePlacements: state.templatePlacements.filter(
+          (placement) => placement.templateId !== templateId,
+        ),
+        selectedPlacementId:
+          state.selectedPlacementId &&
+          state.templatePlacements.some(
+            (placement) =>
+              placement.id === state.selectedPlacementId &&
+              placement.templateId === templateId,
+          )
+            ? null
+            : state.selectedPlacementId,
+        lastError: null,
+      };
+    }),
+  createTemplatePlacement: (templateId, x, y, locationId) => {
     let createdId: string | null = null;
 
     set((state) => {
@@ -480,24 +565,55 @@ export const useBoardStore = create<BoardStore>((set) => ({
         `${template.id}-copy`,
         state.templatePlacements.map((placement) => placement.id),
       );
+      const entityId = createSequentialId(
+        "entity",
+        state.entityState.entities.map((entity) => entity.id),
+      );
+
       createdId = id;
 
-      return {
-        templatePlacements: [
-          ...state.templatePlacements,
+      try {
+        const entityState = createEntity(
+          state.entityState,
           {
-            id,
-            templateId,
-            x: clampNumber(x, 0, 1),
-            y: clampNumber(y, 0, 1),
-            width: template.width,
-            height: template.height,
+            id: entityId,
+            type: template.category,
+            state: {
+              assetId: template.assetId,
+              category: template.category,
+              templateId,
+              placementId: id,
+            },
+            ...(locationId ? { locationId } : {}),
           },
-        ],
-        selectedLocationId: null,
-        selectedPlacementId: id,
-        lastError: null,
-      };
+          state.board,
+        );
+
+        return {
+          entityState,
+          templatePlacements: [
+            ...state.templatePlacements,
+            {
+              id,
+              templateId,
+              category: template.category,
+              entityId,
+              ...(locationId ? { locationId } : {}),
+              x: clampNumber(x, 0, 1),
+              y: clampNumber(y, 0, 1),
+              width: template.width,
+              height: template.height,
+            },
+          ],
+          selectedLocationId: null,
+          selectedPlacementId: id,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
     });
 
     return createdId;
@@ -538,7 +654,15 @@ export const useBoardStore = create<BoardStore>((set) => ({
         return state;
       }
 
+      const placement = state.templatePlacements.find(
+        (candidate) => candidate.id === state.selectedPlacementId,
+      );
+      const nextEntityState = placement
+        ? removeEntity(state.entityState, placement.entityId)
+        : state.entityState;
+
       return {
+        entityState: nextEntityState,
         templatePlacements: state.templatePlacements.filter(
           (placement) => placement.id !== state.selectedPlacementId,
         ),

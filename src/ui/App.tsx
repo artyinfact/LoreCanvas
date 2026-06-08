@@ -19,11 +19,17 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
 import { BoardCanvas } from "./BoardCanvas";
 import { getSelectedLocation, useBoardStore } from "../state/boardStore";
+import {
+  canCreateTemplateForCategory,
+  RESOURCE_CATEGORIES,
+  RESOURCE_CATEGORY_DEFINITIONS,
+} from "../engine/entity";
 import type {
   AccessoryTemplate,
   BoardTool,
   UploadedImageAsset,
 } from "../state/boardStore";
+import type { ResourceCategory } from "../engine/entity";
 
 const TOOL_OPTIONS: Array<{
   id: BoardTool;
@@ -37,6 +43,7 @@ const TOOL_OPTIONS: Array<{
 
 export function App() {
   const board = useBoardStore((state) => state.board);
+  const entityState = useBoardStore((state) => state.entityState);
   const assets = useBoardStore((state) => state.assets);
   const accessoryTemplates = useBoardStore((state) => state.accessoryTemplates);
   const templatePlacements = useBoardStore((state) => state.templatePlacements);
@@ -54,6 +61,7 @@ export function App() {
   const lastError = useBoardStore((state) => state.lastError);
   const addAsset = useBoardStore((state) => state.addAsset);
   const removeAsset = useBoardStore((state) => state.removeAsset);
+  const updateAssetCategory = useBoardStore((state) => state.updateAssetCategory);
   const setBackgroundAsset = useBoardStore((state) => state.setBackgroundAsset);
   const setActiveTool = useBoardStore((state) => state.setActiveTool);
   const setBoardZoom = useBoardStore((state) => state.setBoardZoom);
@@ -119,6 +127,7 @@ export function App() {
         const dimensions = await readImageDimensions(url);
         const asset: UploadedImageAsset = {
           id: createUploadId(file, index),
+          category: "OTHER",
           name: file.name,
           url,
           mimeType: file.type,
@@ -171,8 +180,8 @@ export function App() {
             <dd>{board.edges.length}</dd>
           </div>
           <div>
-            <dt>Pieces</dt>
-            <dd>{accessoryTemplates.length}</dd>
+            <dt>Entities</dt>
+            <dd>{entityState.entities.length}</dd>
           </div>
         </dl>
         <label className="icon-button icon-button--primary">
@@ -242,12 +251,12 @@ export function App() {
               id="pieces"
               isCollapsed={collapsedSections.pieces}
               onToggle={toggleSection}
-              title="Piece Templates"
+              title="Entity Templates"
               trailing={<span>{accessoryTemplates.length}</span>}
             >
               <div className="piece-list">
                 {accessoryTemplates.length === 0 ? (
-                  <p className="empty-state">No piece templates</p>
+                  <p className="empty-state">No entity templates</p>
                 ) : (
                   accessoryTemplates.map((template) => (
                     <PieceTemplateItem
@@ -284,6 +293,25 @@ export function App() {
                         <strong title={asset.name}>{asset.name}</strong>
                         <span>{formatAssetMeta(asset)}</span>
                         <div className="asset-actions">
+                          <label className="asset-category">
+                            <span>Category</span>
+                            <select
+                              aria-label={`${asset.name} category`}
+                              onChange={(event) =>
+                                updateAssetCategory(
+                                  asset.id,
+                                  event.currentTarget.value as ResourceCategory,
+                                )
+                              }
+                              value={asset.category}
+                            >
+                              {RESOURCE_CATEGORIES.map((category) => (
+                                <option key={category} value={category}>
+                                  {RESOURCE_CATEGORY_DEFINITIONS[category].label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <button
                             className="mini-button"
                             data-active={board.background?.assetId === asset.id}
@@ -293,18 +321,20 @@ export function App() {
                             <ImageIcon aria-hidden="true" size={14} />
                             <span>
                               {board.background?.assetId === asset.id
-                                ? "Background"
-                                : "Set"}
+                                ? "Board"
+                                : "Set Board"}
                             </span>
                           </button>
-                          <button
-                            className="mini-button"
-                            onClick={() => createAccessoryTemplate(asset.id)}
-                            type="button"
-                          >
-                            <Box aria-hidden="true" size={14} />
-                            <span>Piece</span>
-                          </button>
+                          {canCreateTemplateForCategory(asset.category) ? (
+                            <button
+                              className="mini-button"
+                              onClick={() => createAccessoryTemplate(asset.id)}
+                              type="button"
+                            >
+                              <Box aria-hidden="true" size={14} />
+                              <span>Template</span>
+                            </button>
+                          ) : null}
                           <button
                             aria-label={`Delete ${asset.name}`}
                             className="mini-button mini-button--danger"
@@ -393,7 +423,7 @@ export function App() {
               id="placement"
               isCollapsed={collapsedSections.placement}
               onToggle={toggleSection}
-              title="Placed Piece"
+              title="Placed Entity"
               trailing={
                 selectedPlacement ? <span>{selectedPlacement.id}</span> : null
               }
@@ -404,9 +434,16 @@ export function App() {
                     <img alt="" src={selectedPlacementTemplate.imageUrl} />
                     <div>
                       <strong>{selectedPlacementTemplate.name}</strong>
-                      <span>{selectedPlacement.id}</span>
+                      <span>
+                        {selectedPlacement.category} / {selectedPlacement.entityId}
+                      </span>
                     </div>
                   </div>
+                  {selectedPlacement.locationId ? (
+                    <p className="binding-pill">
+                      Bound to {selectedPlacement.locationId}
+                    </p>
+                  ) : null}
                   <div className="coordinate-row">
                     <span>X {formatCoordinate(selectedPlacement.x)}</span>
                     <span>Y {formatCoordinate(selectedPlacement.y)}</span>
@@ -453,11 +490,11 @@ export function App() {
                     type="button"
                   >
                     <Trash2 aria-hidden="true" size={15} />
-                    <span>Delete placed piece</span>
+                    <span>Delete placed entity</span>
                   </button>
                 </div>
               ) : (
-                <p className="empty-state">No placed piece selected</p>
+                <p className="empty-state">No placed entity selected</p>
               )}
             </CollapsibleSection>
 
@@ -647,7 +684,7 @@ function PieceTemplateItem({
             value={template.name}
           />
           <span>
-            {copyCount} / {template.maxCopies} copies
+            {template.category} / {copyCount} / {template.maxCopies} copies
           </span>
         </div>
         <button

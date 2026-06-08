@@ -8,6 +8,7 @@
     "node": ">=18.19.0"
   },
   "scripts": {
+    "harness": "node ./scripts/init.mjs",
     "dev": "node ./scripts/run-with-modern-node.mjs ./node_modules/vite/bin/vite.js --host 0.0.0.0",
     "build": "node ./scripts/run-with-modern-node.mjs ./node_modules/typescript/bin/tsc -b && node ./scripts/run-with-modern-node.mjs ./node_modules/vite/bin/vite.js build",
     "check-types": "node ./scripts/run-with-modern-node.mjs ./node_modules/typescript/bin/tsc -b --pretty false",

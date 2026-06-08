@@ -45,7 +45,9 @@
       "title": "核心图谱 Board",
       "description": "引擎层支持导入任意图片作为底图。实现点对点 Node-Graph 架构，提供创建/删除 Location 和连线的 API 与 UI，剔除任何 Grid 相关代码。",
       "status": "completed",
-      "dependencies": ["F-00-EnvironmentAndVercel"],
+      "dependencies": [
+        "F-00-EnvironmentAndVercel"
+      ],
       "verification": "npx vitest run tests/engine/board.test.ts",
       "evidence": {
         "completedAt": "2026-06-04",
@@ -74,9 +76,11 @@
           "Playwright/Chrome dragged a piece template onto the GraphBoard, confirmed the placed piece appeared in the inspector, edited the placed copy size to 144 x 96, selected it again from the canvas, and deleted it back to 0 / 1 copies.",
           "Playwright/Chrome reproduced the collapsed-sidebar canvas clipping bug, then confirmed the PixiJS canvas now resizes from 750 x 734 to the expanded 1310 x 734 content area when both sidebars are hidden.",
           "In-app Browser confirmed Select is the default tool, the empty board canvas reports a grab cursor in Select mode, and dragging the unselected map background pans the visible board.",
-          "In-app Browser confirmed Reset zoom now resets the full board view: after zooming to 120% and panning the canvas, clicking Reset zoom returned zoom to 100% and restored the board framing."
+          "In-app Browser confirmed Reset zoom now resets the full board view: after zooming to 120% and panning the canvas, clicking Reset zoom returned zoom to 100% and restored the board framing.",
+          "In-app Browser confirmed mouse wheel zooms the map in Select drag mode; Browser zoom label changed from 100% to 246% after wheel input on the board canvas.",
+          "Temporary Playwright/Chrome verified selected template-copy wheel scaling: map wheel zoom changed 100% to 172%, then after creating and selecting a placed template copy, wheel input changed the copy from 96 x 96 to 165 x 165 while map zoom remained 100%, with no console errors or warnings."
         ],
-        "notes": "F-01 implements normalized Node-Graph Board state, arbitrary uploaded image background references, Location and Edge create/update/delete APIs, a neutral Maker UI, PixiJS/@pixi/react canvas interactions, Select as the default editing mode, empty-map hand cursor and drag panning, full board view reset for zoom and pan, deletable image assets, configurable draggable piece templates, editable/deletable placed template copies, copy-limit guarded template placements, scroll-contained sidebars, map zoom controls, collapsible left Creation toolbar, collapsible right Board inspector, and central board expansion when sidebars are hidden. Template placements remain F-01 Maker placeholders; F-02 will map templates to real Entity instances. No grid, pathfinding, tactical distance, or game-specific branches were introduced."
+        "notes": "F-01 implements normalized Node-Graph Board state, arbitrary uploaded image background references, Location and Edge create/update/delete APIs, a neutral Maker UI, PixiJS/@pixi/react canvas interactions, Select as the default editing mode, empty-map hand cursor and drag panning, mouse-wheel map zoom in drag mode, mouse-wheel scaling for selected placed template copies, full board view reset for zoom and pan, deletable image assets, configurable draggable piece templates, editable/deletable placed template copies, copy-limit guarded template placements, scroll-contained sidebars, map zoom controls, collapsible left Creation toolbar, collapsible right Board inspector, and central board expansion when sidebars are hidden. Template placements remain F-01 Maker placeholders; F-02 will map templates to real Entity instances. No grid, pathfinding, tactical distance, or game-specific branches were introduced."
       }
     },
     {
@@ -84,10 +88,30 @@
       "priority": 2,
       "title": "通用 Entity 系统",
       "description": "实现通用 Entity 状态模型 `{ id, type, state: Record<string, any> }`。允许 GM 定义任意属性键值对，例如 hp、faction、stealth。提供在 Node 间绑定/解绑 Entity 的逻辑。",
-      "status": "pending",
-      "dependencies": ["F-01-GraphBoard"],
+      "status": "completed",
+      "dependencies": [
+        "F-01-GraphBoard"
+      ],
       "verification": "npx vitest run tests/engine/entity.test.ts",
-      "evidence": null
+      "evidence": {
+        "completedAt": "2026-06-08",
+        "localVerification": [
+          "npm.cmd run check-types",
+          "npm.cmd exec -- vitest run tests/engine/entity.test.ts",
+          "npm.cmd run test",
+          "npm.cmd run build"
+        ],
+        "coverage": [
+          "src/engine/entity.ts implements generic EntityState, Entity { id, type, state, locationId? }, create/update/remove, Location bind/unbind, and clearLocationBindings for removed Locations.",
+          "RESOURCE_CATEGORY_DEFINITIONS defines BOARD, PAWN, TOKEN, TILE, CARD, OTHER with layer, template, binding, and pathing metadata.",
+          "src/state/boardStore.ts maps categorized uploaded image assets to entity templates and creates/removes runtime Entities for placed template copies.",
+          "src/ui/App.tsx exposes category selection for uploaded assets and changes the sidebar from Piece Templates to Entity Templates.",
+          "src/ui/BoardCanvas.tsx layers TILE placements below graph nodes and requires PAWN/TOKEN drops to bind to a nearby Location.",
+          "tests/engine/entity.test.ts covers arbitrary state, Location binding/unbinding, removed Location binding cleanup, missing Location rejection, and six resource category semantics.",
+          "tests/state/boardStore.test.ts covers categorized asset -> template -> placement -> Entity creation and deletion."
+        ],
+        "notes": "Browser plugin validation was attempted but the Node REPL browser bridge failed with a Windows sandbox spawn setup error in this environment. Dev server startup was also blocked across shell turns because background processes are cleaned up; tests and production build were used as the repeatable evidence for this pass. No grid/pathfinding/game-specific branches were introduced."
+      }
     },
     {
       "id": "F-03-MovementValidation",
@@ -95,7 +119,10 @@
       "title": "图谱移动校验",
       "description": "实现通用的图谱移动校验算法。暴露 API 供外部调用，判断 Entity 能否合法移动到目标 Node，第一版仅基于连线连通性。",
       "status": "pending",
-      "dependencies": ["F-01-GraphBoard", "F-02-EntitySystem"],
+      "dependencies": [
+        "F-01-GraphBoard",
+        "F-02-EntitySystem"
+      ],
       "verification": "npx vitest run tests/engine/movement.test.ts",
       "evidence": null
     },
@@ -105,7 +132,9 @@
       "title": "全局追踪器与视觉映射",
       "description": "实现 Global Trackers 与视觉滤镜映射表。引擎允许配置任意全局变量，如 Time、Threat、Sanity，并允许通过映射字典将数值区间绑定到 PixiJS 滤镜组合。",
       "status": "pending",
-      "dependencies": ["F-01-GraphBoard"],
+      "dependencies": [
+        "F-01-GraphBoard"
+      ],
       "verification": "npx vitest run tests/engine/atmosphere.test.ts",
       "evidence": null
     },
@@ -115,7 +144,11 @@
       "title": "JSON 规则触发器引擎",
       "description": "实现泛用事件监听器。允许以 JSON 注入规则树，例如 `{ trigger: \"ENTITY_MOVE\", conditions: [{ attr: \"faction\", operator: \"!==\" }], actions: [\"DISPATCH_CUT_IN\"] }`。引擎负责解析并在条件命中时发射事件流。",
       "status": "pending",
-      "dependencies": ["F-02-EntitySystem", "F-03-MovementValidation", "F-04-GlobalTrackerAndVisuals"],
+      "dependencies": [
+        "F-02-EntitySystem",
+        "F-03-MovementValidation",
+        "F-04-GlobalTrackerAndVisuals"
+      ],
       "verification": "npx vitest run tests/engine/rules.test.ts",
       "evidence": null
     },
@@ -125,7 +158,9 @@
       "title": "Cut-in 演出渲染层",
       "description": "实现底层 Cut-in 渲染总线。当接收到 `DISPATCH_CUT_IN` 指令时，依据 payload 在前端渲染遮罩、图片滑入动画和打字机文本。",
       "status": "pending",
-      "dependencies": ["F-05-RuleTriggerEngine"],
+      "dependencies": [
+        "F-05-RuleTriggerEngine"
+      ],
       "verification": "npx vitest run tests/engine/theatrical.test.ts",
       "evidence": null
     },
@@ -135,7 +170,13 @@
       "title": ".lorecanvas 剧本包序列化",
       "description": "提供整个引擎 state 的深度序列化与反序列化 API，覆盖图谱、实体、追踪器映射、触发器 JSON 和演出资源引用，产出 `.lorecanvas` 剧本包。",
       "status": "pending",
-      "dependencies": ["F-01-GraphBoard", "F-02-EntitySystem", "F-04-GlobalTrackerAndVisuals", "F-05-RuleTriggerEngine", "F-06-TheatricalRenderer"],
+      "dependencies": [
+        "F-01-GraphBoard",
+        "F-02-EntitySystem",
+        "F-04-GlobalTrackerAndVisuals",
+        "F-05-RuleTriggerEngine",
+        "F-06-TheatricalRenderer"
+      ],
       "verification": "npx vitest run tests/engine/serialization.test.ts",
       "evidence": null
     },
@@ -145,7 +186,9 @@
       "title": "LOTR 本地端到端验收",
       "description": "不污染核心引擎，编写特定 E2E 测试脚本。通过调用 F-01 至 F-07 的引擎 API 并加载被 `.gitignore` 排除的 LOTR 专属 fixture，走通一次“戒灵拦截 -> 触发滤镜变深与演出”的测试闭环。",
       "status": "pending",
-      "dependencies": ["F-07-StateSerialization"],
+      "dependencies": [
+        "F-07-StateSerialization"
+      ],
       "verification": "npx vitest run tests/e2e/lotr-scenario.test.ts",
       "evidence": null
     }
