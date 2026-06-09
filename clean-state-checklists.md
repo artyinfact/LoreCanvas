@@ -86,3 +86,28 @@
 - 测试通过公开引擎 API 搭建场景，不访问内部私有状态。
 - 至少覆盖一次“戒灵拦截 -> 追踪器变化 -> 滤镜变深 -> Cut-in 演出”的完整链路。
 - 缺少本地 LOTR fixture 时，测试应明确 skip 或报告 fixture 缺失，而不是提交素材。
+
+## 2026-06-09 MVP Route Override
+
+The active feature route in `feature_list.json` now supersedes the older pending-feature order above.
+
+### F-03-ScenarioLoadSave Load and Save Scenario Packages
+
+- Export produces a complete generic `.lorecanvas` scenario package.
+- Export covers asset manifest entries for `BOARD`, `PAWN`, `TOKEN`, `TILE`, `CARD`, and `OTHER`.
+- Export covers Board background references, Locations, Edges, placed assets, runtime Entities, arbitrary Entity state, Location bindings, pawn sheets, held cards, token/dice counters, viewport state, and package metadata.
+- Import restores the same playable manual state without requiring rules, Cut-in actions, online services, or LOTR-specific branches.
+- The implementation stays generic even when using the ignored `local-fixtures/lotr/LotR-FotF` fixture for local validation.
+
+### F-04-ManualScenarioPrototype Manual Scenario Prototype
+
+- A user can open a saved scenario, inspect the restored Board, manually drag and edit assets/entities, adjust pawn sheet cards and token/dice counters, save, and reload.
+- Automatic event triggers, path validation, Cut-in rendering, visual filter automation, and game-specific rules are intentionally out of scope.
+
+### Deferred After Manual MVP
+
+- `F-05-MovementValidation`: graph adjacency/connectivity validation only, no grid/A*/distance assumptions.
+- `F-06-GlobalTrackerState`: manually editable trackers serialized through `.lorecanvas`, without visual automation.
+- `F-07-RuleTriggerEngine`: generic JSON rule triggers after manual MVP.
+- `F-08-TheatricalRenderer`: CCFOLIA-style Cut-in renderer after rule actions exist.
+- `F-09-LOTR-FotF-Validation`: local E2E validation using `local-fixtures/lotr/LotR-FotF`, including `LOTRRule.pdf` as future auto-setup/event-trigger test input.

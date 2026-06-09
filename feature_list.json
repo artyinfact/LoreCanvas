@@ -4,7 +4,7 @@
   "version": "0.4.0",
   "tagline": "A Theatrical VTT Engine tailored for Story-Driven Board Games.",
   "designBaseline": "美式/叙事驱动桌游的戏剧化 VTT 引擎：以 Node-Graph 表达地图与位置，以通用 Entity 表达配件与角色，以 JSON 规则树驱动事件流和 CCFOLIA 风格 Cut-in 自动演出。",
-  "validationScenario": "Local testing only: E2E validation via ignored LOTR Tabletop Simulator fixture.",
+  "validationScenario": "Local testing only: MVP and later E2E validation use ignored LOTR fixture at local-fixtures/lotr/LotR-FotF, including image-pack manifest, sliced cards, board assets, and LOTRRule.pdf.",
   "harnessDocs": [
     "docs/product.md",
     "clean-state-checklists.md",
@@ -138,83 +138,130 @@
       }
     },
     {
-      "id": "F-03-MovementValidation",
+      "id": "F-03-ScenarioLoadSave",
       "priority": 3,
-      "title": "图谱移动校验",
-      "description": "实现通用的图谱移动校验算法。暴露 API 供外部调用，判断 Entity 能否合法移动到目标 Node，第一版仅基于连线连通性。",
-      "status": "pending",
+      "title": "Load and Save Scenario Packages",
+      "description": "Implement the MVP .lorecanvas load/save boundary for a purely manual prototype. Export must preserve the complete current scenario state: asset manifest entries for BOARD, PAWN, TOKEN, TILE, CARD, and OTHER resources; Board background references; all Locations and Edges; all placed assets; all runtime Entities with arbitrary state and Location bindings; pawn sheets, held cards, token/dice counters, viewport state, and package metadata. Import must restore the same playable state without requiring rules, Cut-in actions, online services, or LOTR-specific branches. The LOTR local fixture LotR-FotF should be usable as future validation input, but the implementation must stay generic.",
+      "status": "completed",
       "dependencies": [
         "F-01-GraphBoard",
         "F-02-EntitySystem"
+      ],
+      "verification": "npx vitest run tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts",
+      "evidence": {
+        "completedAt": "2026-06-09",
+        "localVerification": [
+          "npm.cmd exec -- vitest run tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts",
+          "npm.cmd run check-types",
+          "npm.cmd run test",
+          "npm.cmd run build",
+          ".\\init.ps1"
+        ],
+        "coverage": [
+          "src/engine/serialization.ts defines the generic lorecanvas.scenario v1 JSON package boundary, serialization/parsing helpers, and validation for assets, Board background, Locations, Edges, placements, Entities, pawn sheets, and viewport state.",
+          "src/state/scenarioStore.ts exports a serializable subset of the Zustand board store and restores it while clearing transient UI selection/draft/error state.",
+          "tests/engine/serialization.test.ts covers complete round-trip serialization, arbitrary Entity state preservation, pawn sheet cards/counters, viewport preservation, malformed package rejection, and cross-reference validation.",
+          "tests/state/scenarioStore.test.ts covers store apply/export round-trip and a local LOTRRule setup snapshot built from local-fixtures/lotr/LotR-FotF/manifest.json and LOTRRule.pdf setup requirements."
+        ],
+        "lotrFixtureVerification": [
+          "The LOTR setup test imports all manifest entries from LotR-FotF across BOARD, PAWN, TOKEN, TILE, CARD, and OTHER categories.",
+          "The setup snapshot restores the board background, setup Locations and Edges, fixed friendly troop stacks, fixed shadow troop stacks, Nazgul stacks, Eye of Sauron, threat/hope markers, supply counts, shadow discard specials, objective display, player deck setup metadata, and unresolved random shadow deployment metadata.",
+          "No LOTR-specific branches were added to product engine or store code; LOTR semantics live only in the local test fixture."
+        ],
+        "notes": "F-03 is a JSON snapshot boundary, not a binary asset archive. Asset URLs/source paths are preserved as manifest references so a later importer can resolve files from an image pack or online storage."
+      }
+    },
+    {
+      "id": "F-04-ManualScenarioPrototype",
+      "priority": 4,
+      "title": "Manual Scenario Prototype",
+      "description": "Build the smallest playable manual flow on top of scenario load/save: open a saved scenario, inspect the restored board, manually drag and edit assets/entities, adjust pawn sheet cards and token/dice counters, then save and reload the changed state. This feature intentionally ignores automatic events, path validation, Cut-in rendering, and game-specific rules so the MVP can validate the core VTT authoring/runtime loop first.",
+      "status": "pending",
+      "dependencies": [
+        "F-03-ScenarioLoadSave"
+      ],
+      "verification": "npx vitest run tests/state/manualScenario.test.ts; browser verification of save -> reload -> restored board/entity state",
+      "evidence": null
+    },
+    {
+      "id": "F-05-MovementValidation",
+      "priority": 5,
+      "title": "Graph Movement Validation",
+      "description": "Implement generic graph movement validation after the manual scenario MVP is stable. Expose an engine API that determines whether a path-capable Entity can move from its current Location to a target Location using existing Edges. The first version is adjacency/connectivity only and must not introduce grid, distance, A*, or game-specific movement assumptions.",
+      "status": "pending",
+      "dependencies": [
+        "F-01-GraphBoard",
+        "F-02-EntitySystem",
+        "F-03-ScenarioLoadSave"
       ],
       "verification": "npx vitest run tests/engine/movement.test.ts",
       "evidence": null
     },
     {
-      "id": "F-04-GlobalTrackerAndVisuals",
-      "priority": 4,
-      "title": "全局追踪器与视觉映射",
-      "description": "实现 Global Trackers 与视觉滤镜映射表。引擎允许配置任意全局变量，如 Time、Threat、Sanity，并允许通过映射字典将数值区间绑定到 PixiJS 滤镜组合。",
+      "id": "F-06-GlobalTrackerState",
+      "priority": 6,
+      "title": "Manual Global Tracker State",
+      "description": "Add generic Global Trackers as manually editable scenario state. Trackers represent values such as Threat, Time, Sanity, Doom, or any scenario-defined counter, and must serialize through .lorecanvas packages. This MVP-stage tracker feature should not yet drive automatic visual filters or rule triggers.",
       "status": "pending",
       "dependencies": [
-        "F-01-GraphBoard"
+        "F-03-ScenarioLoadSave"
       ],
-      "verification": "npx vitest run tests/engine/atmosphere.test.ts",
+      "verification": "npx vitest run tests/engine/tracker.test.ts tests/engine/serialization.test.ts",
       "evidence": null
     },
     {
-      "id": "F-05-RuleTriggerEngine",
-      "priority": 5,
-      "title": "JSON 规则触发器引擎",
-      "description": "实现泛用事件监听器。允许以 JSON 注入规则树，例如 `{ trigger: \"ENTITY_MOVE\", conditions: [{ attr: \"faction\", operator: \"!==\" }], actions: [\"DISPATCH_CUT_IN\"] }`。引擎负责解析并在条件命中时发射事件流。",
+      "id": "F-07-RuleTriggerEngine",
+      "priority": 7,
+      "title": "Deferred JSON Rule Trigger Engine",
+      "description": "After the manual MVP and serialization boundary are stable, implement the generic event listener and JSON rule tree engine. It should accept triggers such as ENTITY_MOVE, ENTITY_STATE_CHANGE, TRACKER_CHANGE, and MANUAL_TRIGGER, evaluate conditions, and emit actions without hard-coding LOTR or any other specific game.",
       "status": "pending",
       "dependencies": [
-        "F-02-EntitySystem",
-        "F-03-MovementValidation",
-        "F-04-GlobalTrackerAndVisuals"
+        "F-05-MovementValidation",
+        "F-06-GlobalTrackerState"
       ],
       "verification": "npx vitest run tests/engine/rules.test.ts",
       "evidence": null
     },
     {
-      "id": "F-06-TheatricalRenderer",
-      "priority": 6,
-      "title": "Cut-in 演出渲染层",
-      "description": "实现底层 Cut-in 渲染总线。当接收到 `DISPATCH_CUT_IN` 指令时，依据 payload 在前端渲染遮罩、图片滑入动画和打字机文本。",
-      "status": "pending",
-      "dependencies": [
-        "F-05-RuleTriggerEngine"
-      ],
-      "verification": "npx vitest run tests/engine/theatrical.test.ts",
-      "evidence": null
-    },
-    {
-      "id": "F-07-StateSerialization",
-      "priority": 7,
-      "title": ".lorecanvas 剧本包序列化",
-      "description": "提供整个引擎 state 的深度序列化与反序列化 API，覆盖图谱、实体、追踪器映射、触发器 JSON 和演出资源引用，产出 `.lorecanvas` 剧本包。",
-      "status": "pending",
-      "dependencies": [
-        "F-01-GraphBoard",
-        "F-02-EntitySystem",
-        "F-04-GlobalTrackerAndVisuals",
-        "F-05-RuleTriggerEngine",
-        "F-06-TheatricalRenderer"
-      ],
-      "verification": "npx vitest run tests/engine/serialization.test.ts",
-      "evidence": null
-    },
-    {
-      "id": "F-08-E2E-LOTR-Validation",
+      "id": "F-08-TheatricalRenderer",
       "priority": 8,
-      "title": "LOTR 本地端到端验收",
-      "description": "不污染核心引擎，编写特定 E2E 测试脚本。通过调用 F-01 至 F-07 的引擎 API 并加载被 `.gitignore` 排除的 LOTR 专属 fixture，走通一次“戒灵拦截 -> 触发滤镜变深与演出”的测试闭环。",
+      "title": "Deferred Cut-in Renderer",
+      "description": "Implement the CCFOLIA-style theatrical rendering lane after the rule engine exists. Cut-in payloads should support overlays, image references, slide-in presentation, typewriter text, and rule hint panels. The renderer consumes commands only and must not decide game rules.",
       "status": "pending",
       "dependencies": [
-        "F-07-StateSerialization"
+        "F-07-RuleTriggerEngine"
+      ],
+      "verification": "npx vitest run tests/engine/theatrical.test.ts; browser verification for any PixiJS or animation behavior",
+      "evidence": null
+    },
+    {
+      "id": "F-09-LOTR-FotF-Validation",
+      "priority": 9,
+      "title": "LOTR FotF Local Validation Fixture",
+      "description": "Use the ignored local fixture local-fixtures/lotr/LotR-FotF for end-to-end validation. The fixture includes renamed component image assets, sliced cards, dice faces, the complete game board artwork, and LOTRRule.pdf as a simplified player rule summary for future auto-setup and event-trigger tests. Initial validation should prove that a generic .lorecanvas package can import the asset pack, restore a Board with Locations and Edges, restore Entities and current state, and round-trip through save/load. Later validation may add auto-setup, movement, tracker, rule-trigger, and Cut-in coverage without polluting the generic engine with LOTR-specific branches.",
+      "status": "pending",
+      "dependencies": [
+        "F-03-ScenarioLoadSave",
+        "F-04-ManualScenarioPrototype"
       ],
       "verification": "npx vitest run tests/e2e/lotr-scenario.test.ts",
       "evidence": null
     }
-  ]
+  ],
+  "mvpFocus": {
+    "updatedAt": "2026-06-09",
+    "phase": "Manual scenario MVP",
+    "summary": "After F-01 GraphBoard and F-02 EntitySystem, prioritize load/save of a complete .lorecanvas scenario package before movement validation, rule triggers, global visual automation, or Cut-in rendering.",
+    "deferredForMvp": [
+      "automatic rule trigger resolution",
+      "Cut-in theatrical rendering",
+      "visual filter automation",
+      "game-specific LOTR rules"
+    ],
+    "fixtureNotes": [
+      "local-fixtures/lotr/LotR-FotF is ignored local validation data, not product assets.",
+      "LOTRRule.pdf is a player-written simplified rule summary reserved for future auto-setup and event-trigger tests.",
+      "Load/save must remain generic and must not hard-code LOTR semantics."
+    ]
+  }
 }

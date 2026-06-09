@@ -151,3 +151,21 @@
 - Token assets now default to a high copy limit when an uploaded asset is categorized as `TOKEN`, matching the intended default-unlimited behavior while still respecting explicit asset copy limits.
 - Verification: `npm.cmd run check-types`, `npm.cmd run test` (5 files / 22 tests), `npm.cmd run build`, and `npm.cmd run harness` all passed.
 - Temporary Playwright verification uploaded four SVG assets, categorized them as `PAWN`, `CARD`, `CARD`, and `TOKEN`, created a Location, dropped the pawn onto that Location, confirmed the inspector showed `Character Card`, `Held Cards`, and `Tokens / Dice` while omitting `Location` and `Edges`, then verified card drops, repeated token drops, left-click increment, and right-click decrement. App console errors were not observed; Chromium headless WebGL driver performance warnings were filtered.
+
+## 2026-06-09 MVP Feature Route Update
+
+- Updated `feature_list.json` to prioritize a manual scenario MVP after completed `F-01-GraphBoard` and `F-02-EntitySystem`.
+- The next pending feature is now `F-03-ScenarioLoadSave`, not movement validation. It must implement generic `.lorecanvas` import/export for the complete current scenario state: asset manifest, Board background, Locations, Edges, placed assets, runtime Entities, arbitrary Entity state, Location bindings, pawn sheets, held cards, token/dice counters, viewport state, and package metadata.
+- Movement validation moved to `F-05-MovementValidation`; global tracker state moved to `F-06-GlobalTrackerState`; rule triggers and Cut-in rendering are explicitly deferred until after the manual MVP.
+- The ignored local validation fixture is now `local-fixtures/lotr/LotR-FotF`, including renamed image assets, sliced cards, dice faces, the complete board artwork, and `LOTRRule.pdf`. This fixture is future test input for auto-setup and event-trigger work, but implementation must remain generic and must not hard-code LOTR semantics.
+- Baseline before the feature-list update: `.\init.ps1` passed with 5 test files / 22 tests.
+
+## 2026-06-09 F-03 Scenario Load/Save
+
+- Completed `F-03-ScenarioLoadSave`: added a generic `lorecanvas.scenario` v1 JSON snapshot boundary in `src/engine/serialization.ts`.
+- Scenario packages now preserve package metadata, all six image asset categories, Board background references, Locations, Edges, placed assets, runtime Entities with arbitrary JSON state and Location bindings, pawn sheets with held cards and token/dice counters, and viewport zoom/pan state.
+- Added `src/state/scenarioStore.ts` to export the serializable subset of the Zustand board store and apply/import a scenario while clearing transient UI state such as selected asset, selected Location, selected placement, edge draft, active tool, and last error.
+- Added `tests/engine/serialization.test.ts` for scenario round-trip, malformed package rejection, cross-reference validation, arbitrary Entity state preservation, pawn sheet cards/counters, and viewport preservation.
+- Added `tests/state/scenarioStore.test.ts` for store apply/export round-trip plus a local LOTRRule setup snapshot. The LOTR test reads all entries from `local-fixtures/lotr/LotR-FotF/manifest.json` and validates setup state from `LOTRRule.pdf`: friendly troops, shadow troops, Nazgul, Eye of Sauron, threat/hope markers, supplies, shadow discard specials, objective display, player deck metadata, and unresolved random shadow deployment metadata.
+- Verification passed: `npm.cmd exec -- vitest run tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts`, `npm.cmd run check-types`, `npm.cmd run test` (7 files / 27 tests), `npm.cmd run build`, and `.\init.ps1`.
+- `feature_list.json` now marks `F-03-ScenarioLoadSave` as completed with evidence. The next pending task is `F-04-ManualScenarioPrototype`.
