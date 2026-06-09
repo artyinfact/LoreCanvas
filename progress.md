@@ -169,3 +169,12 @@
 - Added `tests/state/scenarioStore.test.ts` for store apply/export round-trip plus a local LOTRRule setup snapshot. The LOTR test reads all entries from `local-fixtures/lotr/LotR-FotF/manifest.json` and validates setup state from `LOTRRule.pdf`: friendly troops, shadow troops, Nazgul, Eye of Sauron, threat/hope markers, supplies, shadow discard specials, objective display, player deck metadata, and unresolved random shadow deployment metadata.
 - Verification passed: `npm.cmd exec -- vitest run tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts`, `npm.cmd run check-types`, `npm.cmd run test` (7 files / 27 tests), `npm.cmd run build`, and `.\init.ps1`.
 - `feature_list.json` now marks `F-03-ScenarioLoadSave` as completed with evidence. The next pending task is `F-04-ManualScenarioPrototype`.
+
+## 2026-06-09 F-04 Route Clarification: Edit/Run Manual Board MVP
+
+- Updated the active harness route before starting F-04. The project mode split is now explicit: Edit mode edits setup definition; Run mode consumes a finalized setup and produces runtime state.
+- Edit mode scope: asset manifest, Board Template, background, Locations, Edges, region/area membership, board zones, default placement slots, and Setup Preset entities/cards/tokens/counters. Edit mode should not create or mutate runtime scenario state.
+- Run mode scope: freeze Board Template and Setup Preset, derive the initial runtime snapshot, then support manual semantic operations such as moving Location-bound Entities between Locations, adjusting troop/token/dice stacks, moving cards between deck/discard/hand/display zones, inspecting current runtime state, saving, and reloading.
+- F-04 should not optimize for manually dragging every card/token/pawn to raw board coordinates. Runtime state should prefer `locationId` and zone semantics; exact `x/y` placement is a rendering/default-slot concern unless deliberately overridden.
+- `feature_list.json` and `clean-state-checklists.md` now reflect this F-04 target. F-09 LOTR validation was also clarified to validate an Edit-mode Board Template + Setup Preset opened as a frozen Run-mode board.
+- Deferred remains unchanged: automatic setup parsing, event triggers, path validation, Cut-in rendering, online services, and game-specific rules stay out of F-04.

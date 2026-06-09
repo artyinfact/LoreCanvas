@@ -101,7 +101,11 @@ The active feature route in `feature_list.json` now supersedes the older pending
 
 ### F-04-ManualScenarioPrototype Manual Scenario Prototype
 
-- A user can open a saved scenario, inspect the restored Board, manually drag and edit assets/entities, adjust pawn sheet cards and token/dice counters, save, and reload.
+- Edit mode edits setup definition only: asset manifest, Board Template, background, Locations, Edges, region/area membership, board zones, default placement slots, and Setup Preset entities/cards/tokens/counters.
+- Edit mode does not create or mutate runtime scenario state.
+- Run mode opens a finalized scenario, freezes the Board Template and Setup Preset, and derives an initial runtime snapshot from setup.
+- Run mode supports semantic manual board operations instead of pixel-level setup labor: move Location-bound Entities between Locations, adjust stacked troop/token/dice counters, move cards between deck/discard/hand/display zones, inspect current runtime state, save, and reload.
+- Run mode must not mutate Board Template or Setup Preset.
 - Automatic event triggers, path validation, Cut-in rendering, visual filter automation, and game-specific rules are intentionally out of scope.
 
 ### Deferred After Manual MVP
