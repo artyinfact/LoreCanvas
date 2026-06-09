@@ -3,6 +3,9 @@ import {
   ChevronDown,
   ChevronsLeft,
   ChevronsRight,
+  Database,
+  Download,
+  FileInput,
   ImageIcon,
   Link2,
   MapPinPlus,
@@ -10,6 +13,8 @@ import {
   Network,
   Minus,
   Plus,
+  Play,
+  Pencil,
   RotateCcw,
   Shield,
   Trash2,
@@ -20,6 +25,7 @@ import {
   type ReactNode,
   Suspense,
   useCallback,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -30,13 +36,24 @@ import {
   RESOURCE_CATEGORIES,
   RESOURCE_CATEGORY_DEFINITIONS,
 } from "../engine/entity";
+import type { BoardEdge, BoardLocation } from "../engine/board";
 import type {
   AssetPlacement,
   BoardTool,
+  FrozenSetupSnapshot,
   PawnSheet,
+  ScenarioMode,
   UploadedImageAsset,
 } from "../state/boardStore";
-import type { ResourceCategory } from "../engine/entity";
+import type { Entity, JsonRecord, ResourceCategory } from "../engine/entity";
+import { serializeScenarioPackage } from "../engine/serialization";
+import {
+  applyScenarioPackageToBoardStore,
+  exportBoardStoreScenario,
+} from "../state/scenarioStore";
+
+const LOCAL_SCENARIO_STORAGE_KEY = "lorecanvas:last-scenario";
+const EMPTY_JSON_STATE: JsonRecord = {};
 
 const TOOL_OPTIONS: Array<{
   id: BoardTool;
@@ -53,11 +70,16 @@ const BoardCanvas = lazy(() =>
 );
 
 export function App() {
+  const mode = useBoardStore((state) => state.mode);
   const board = useBoardStore((state) => state.board);
   const entityState = useBoardStore((state) => state.entityState);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const pawnSheets = useBoardStore((state) => state.pawnSheets);
+  const boardState = useBoardStore((state) => state.boardState);
+  const locationStates = useBoardStore((state) => state.locationStates);
+  const edgeStates = useBoardStore((state) => state.edgeStates);
+  const frozenSetup = useBoardStore((state) => state.frozenSetup);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const activeTool = useBoardStore((state) => state.activeTool);
@@ -106,12 +128,29 @@ export function App() {
   const addPawnHeldCard = useBoardStore((state) => state.addPawnHeldCard);
   const removePawnHeldCard = useBoardStore((state) => state.removePawnHeldCard);
   const adjustPawnCounter = useBoardStore((state) => state.adjustPawnCounter);
+  const updateBoardState = useBoardStore((state) => state.updateBoardState);
+  const updateEntityObjectState = useBoardStore(
+    (state) => state.updateEntityObjectState,
+  );
+  const updateLocationState = useBoardStore((state) => state.updateLocationState);
+  const updateEdgeState = useBoardStore((state) => state.updateEdgeState);
+  const enterRunMode = useBoardStore((state) => state.enterRunMode);
+  const returnToEditMode = useBoardStore((state) => state.returnToEditMode);
+  const moveEntityToLocation = useBoardStore((state) => state.moveEntityToLocation);
+  const adjustEntityCounter = useBoardStore((state) => state.adjustEntityCounter);
+  const moveCardToZone = useBoardStore((state) => state.moveCardToZone);
+  const setLastError = useBoardStore((state) => state.setLastError);
   const selectedLocation = getSelectedLocation(board, selectedLocationId);
   const selectedPlacement =
     assetPlacements.find((placement) => placement.id === selectedPlacementId) ??
     null;
   const selectedPlacementAsset = selectedPlacement
     ? assets.find((asset) => asset.id === selectedPlacement.assetId) ?? null
+    : null;
+  const selectedEntity = selectedPlacement
+    ? entityState.entities.find(
+        (entity) => entity.id === selectedPlacement.entityId,
+      ) ?? null
     : null;
   const isBoundPawnSelected = Boolean(
     selectedPlacement?.category === "PAWN" &&
@@ -167,6 +206,33 @@ export function App() {
     },
     [addAsset, setBackgroundAsset],
   );
+  const handleSaveScenario = useCallback(() => {
+    try {
+      const scenario = exportBoardStoreScenario(useBoardStore.getState(), {
+        savedAt: new Date().toISOString(),
+      });
+      localStorage.setItem(
+        LOCAL_SCENARIO_STORAGE_KEY,
+        serializeScenarioPackage(scenario),
+      );
+    } catch (error) {
+      setLastError(getErrorMessage(error));
+    }
+  }, [setLastError]);
+  const handleLoadScenario = useCallback(() => {
+    const source = localStorage.getItem(LOCAL_SCENARIO_STORAGE_KEY);
+
+    if (!source) {
+      setLastError("No saved scenario found in this browser.");
+      return;
+    }
+
+    try {
+      applyScenarioPackageToBoardStore(source);
+    } catch (error) {
+      setLastError(getErrorMessage(error));
+    }
+  }, [setLastError]);
   const [collapsedSections, setCollapsedSections] = useState<
     Record<string, boolean>
   >({});
@@ -189,6 +255,10 @@ export function App() {
         </div>
         <dl className="board-metrics" aria-label="Board metrics">
           <div>
+            <dt>Mode</dt>
+            <dd>{mode === "edit" ? "Edit" : "Run"}</dd>
+          </div>
+          <div>
             <dt>Images</dt>
             <dd>{assets.length}</dd>
           </div>
@@ -205,16 +275,56 @@ export function App() {
             <dd>{entityState.entities.length}</dd>
           </div>
         </dl>
-        <label className="icon-button icon-button--primary">
-          <Upload aria-hidden="true" size={18} />
-          <span>Import images</span>
-          <input
-            accept="image/*"
-            multiple
-            onChange={handleImageUpload}
-            type="file"
-          />
-        </label>
+        <div className="scenario-actions">
+          <div className="mode-switch" role="group" aria-label="Scenario mode">
+            <button
+              aria-pressed={mode === "edit"}
+              className="mode-button"
+              data-active={mode === "edit"}
+              onClick={returnToEditMode}
+              type="button"
+            >
+              <Pencil aria-hidden="true" size={16} />
+              <span>Edit</span>
+            </button>
+            <button
+              aria-pressed={mode === "run"}
+              className="mode-button"
+              data-active={mode === "run"}
+              onClick={enterRunMode}
+              type="button"
+            >
+              <Play aria-hidden="true" size={16} />
+              <span>Run</span>
+            </button>
+          </div>
+          <button
+            className="icon-button"
+            onClick={handleSaveScenario}
+            type="button"
+          >
+            <Download aria-hidden="true" size={17} />
+            <span>Save</span>
+          </button>
+          <button
+            className="icon-button"
+            onClick={handleLoadScenario}
+            type="button"
+          >
+            <FileInput aria-hidden="true" size={17} />
+            <span>Load</span>
+          </button>
+          <label className="icon-button icon-button--primary">
+            <Upload aria-hidden="true" size={18} />
+            <span>Import images</span>
+            <input
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              type="file"
+            />
+          </label>
+        </div>
       </header>
 
       <section
@@ -370,6 +480,30 @@ export function App() {
           </button>
 
           <div className="inspector-content">
+            <ModeStatus mode={mode} frozenSetup={frozenSetup} />
+            <ScenarioStatePanels
+              boardState={boardState}
+              connectedEdges={connectedEdges}
+              edgeStates={edgeStates}
+              mode={mode}
+              selectedEntity={selectedEntity}
+              selectedLocation={selectedLocation}
+              selectedPlacement={selectedPlacement}
+              locationStates={locationStates}
+              updateBoardState={updateBoardState}
+              updateEdgeState={updateEdgeState}
+              updateEntityObjectState={updateEntityObjectState}
+              updateLocationState={updateLocationState}
+            />
+            {mode === "run" && selectedEntity ? (
+              <RuntimeObjectControls
+                adjustEntityCounter={adjustEntityCounter}
+                entity={selectedEntity}
+                locations={board.locations}
+                moveCardToZone={moveCardToZone}
+                moveEntityToLocation={moveEntityToLocation}
+              />
+            ) : null}
             {isBoundPawnSelected &&
             selectedPlacement &&
             selectedPlacementAsset &&
@@ -601,6 +735,276 @@ function CollapsibleSection({
         </span>
       </button>
       {!isCollapsed ? children : null}
+    </section>
+  );
+}
+
+interface ModeStatusProps {
+  mode: ScenarioMode;
+  frozenSetup: FrozenSetupSnapshot | null;
+}
+
+function ModeStatus({ mode, frozenSetup }: ModeStatusProps) {
+  return (
+    <section className="mode-status" data-mode={mode}>
+      <Database aria-hidden="true" size={17} />
+      <div>
+        <strong>{mode === "edit" ? "Editing setup" : "Running scenario"}</strong>
+        <span>
+          {mode === "edit"
+            ? "Board Template and Setup Preset are mutable."
+            : `Setup frozen: ${frozenSetup?.board.locations.length ?? 0} Locations / ${
+                frozenSetup?.entityState.entities.length ?? 0
+              } Objects`}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+interface ScenarioStatePanelsProps {
+  boardState: JsonRecord;
+  connectedEdges: BoardEdge[];
+  edgeStates: Record<string, JsonRecord>;
+  mode: ScenarioMode;
+  selectedEntity: Entity | null;
+  selectedLocation: BoardLocation | null;
+  selectedPlacement: AssetPlacement | null;
+  locationStates: Record<string, JsonRecord>;
+  updateBoardState: (patch: JsonRecord) => void;
+  updateEdgeState: (edgeId: string, patch: JsonRecord) => void;
+  updateEntityObjectState: (entityId: string, patch: JsonRecord) => void;
+  updateLocationState: (locationId: string, patch: JsonRecord) => void;
+}
+
+function ScenarioStatePanels({
+  boardState,
+  connectedEdges,
+  edgeStates,
+  mode,
+  selectedEntity,
+  selectedLocation,
+  selectedPlacement,
+  locationStates,
+  updateBoardState,
+  updateEdgeState,
+  updateEntityObjectState,
+  updateLocationState,
+}: ScenarioStatePanelsProps) {
+  return (
+    <section className="state-panel-stack" aria-label="Scenario state panels">
+      <JsonStateEditor
+        description={
+          mode === "edit"
+            ? "Global setup state"
+            : "Current global runtime state"
+        }
+        title="Board State"
+        value={boardState}
+        onApply={updateBoardState}
+      />
+      <JsonStateEditor
+        description={
+          selectedEntity
+            ? `${selectedEntity.id} / ${selectedPlacement?.category ?? selectedEntity.type}`
+            : "Select an object"
+        }
+        isDisabled={!selectedEntity}
+        title="Object State"
+        value={selectedEntity?.state ?? EMPTY_JSON_STATE}
+        onApply={(patch) => {
+          if (selectedEntity) {
+            updateEntityObjectState(selectedEntity.id, patch);
+          }
+        }}
+      />
+      <JsonStateEditor
+        description={
+          selectedLocation ? selectedLocation.id : "Select a Location"
+        }
+        isDisabled={!selectedLocation}
+        title="Location State"
+        value={
+          selectedLocation
+            ? locationStates[selectedLocation.id] ?? {}
+            : EMPTY_JSON_STATE
+        }
+        onApply={(patch) => {
+          if (selectedLocation) {
+            updateLocationState(selectedLocation.id, patch);
+          }
+        }}
+      />
+      <section className="state-panel">
+        <div className="state-panel__heading">
+          <h2>Edge State</h2>
+          <span>{connectedEdges.length} connected</span>
+        </div>
+        {connectedEdges.length === 0 ? (
+          <p className="empty-state">Select a Location with connected Edges</p>
+        ) : (
+          <div className="edge-state-list">
+            {connectedEdges.map((edge) => (
+              <JsonStateEditor
+                description={`${edge.fromId} / ${edge.toId}`}
+                key={edge.id}
+                title={edge.id}
+                value={edgeStates[edge.id] ?? {}}
+                onApply={(patch) => updateEdgeState(edge.id, patch)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+interface RuntimeObjectControlsProps {
+  adjustEntityCounter: (entityId: string, key: string, delta: number) => void;
+  entity: Entity;
+  locations: BoardLocation[];
+  moveCardToZone: (entityId: string, zoneId: string) => void;
+  moveEntityToLocation: (entityId: string, locationId: string) => void;
+}
+
+function RuntimeObjectControls({
+  adjustEntityCounter,
+  entity,
+  locations,
+  moveCardToZone,
+  moveEntityToLocation,
+}: RuntimeObjectControlsProps) {
+  const [zoneDraft, setZoneDraft] = useState(String(entity.state.zoneId ?? ""));
+
+  useEffect(() => {
+    setZoneDraft(String(entity.state.zoneId ?? ""));
+  }, [entity.id, entity.state.zoneId]);
+
+  return (
+    <section className="runtime-controls" aria-label="Runtime object controls">
+      <div className="state-panel__heading">
+        <h2>Run Controls</h2>
+        <span>{entity.id}</span>
+      </div>
+      <label className="field">
+        <span>Move to Location</span>
+        <select
+          onChange={(event) =>
+            moveEntityToLocation(entity.id, event.currentTarget.value)
+          }
+          value={entity.locationId ?? ""}
+        >
+          <option value="" disabled>
+            Unbound
+          </option>
+          {locations.map((location) => (
+            <option key={location.id} value={location.id}>
+              {location.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="counter-adjust">
+        <span>Count</span>
+        <button
+          className="icon-only icon-only--neutral"
+          onClick={() => adjustEntityCounter(entity.id, "count", -1)}
+          type="button"
+        >
+          <Minus aria-hidden="true" size={15} />
+        </button>
+        <strong>{Number(entity.state.count ?? 0)}</strong>
+        <button
+          className="icon-only icon-only--neutral"
+          onClick={() => adjustEntityCounter(entity.id, "count", 1)}
+          type="button"
+        >
+          <Plus aria-hidden="true" size={15} />
+        </button>
+      </div>
+      <label className="field">
+        <span>Card / Zone Id</span>
+        <div className="inline-apply">
+          <input
+            onChange={(event) => setZoneDraft(event.currentTarget.value)}
+            value={zoneDraft}
+          />
+          <button
+            className="mini-button"
+            onClick={() => moveCardToZone(entity.id, zoneDraft)}
+            type="button"
+          >
+            Apply
+          </button>
+        </div>
+      </label>
+    </section>
+  );
+}
+
+interface JsonStateEditorProps {
+  description: string;
+  isDisabled?: boolean;
+  onApply: (patch: JsonRecord) => void;
+  title: string;
+  value: JsonRecord;
+}
+
+function JsonStateEditor({
+  description,
+  isDisabled = false,
+  onApply,
+  title,
+  value,
+}: JsonStateEditorProps) {
+  const [draft, setDraft] = useState(formatJson(value));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(formatJson(value));
+    setError(null);
+  }, [value]);
+
+  const handleApply = useCallback(() => {
+    try {
+      const parsed = JSON.parse(draft) as unknown;
+
+      if (!isPlainObject(parsed)) {
+        setError("State must be a JSON object.");
+        return;
+      }
+
+      onApply(parsed);
+      setError(null);
+    } catch (parseError) {
+      setError(getErrorMessage(parseError));
+    }
+  }, [draft, onApply]);
+
+  return (
+    <section className="state-panel" data-disabled={isDisabled}>
+      <div className="state-panel__heading">
+        <h2>{title}</h2>
+        <span>{description}</span>
+      </div>
+      <textarea
+        disabled={isDisabled}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        spellCheck={false}
+        value={draft}
+      />
+      <div className="state-panel__footer">
+        {error ? <span className="state-error">{error}</span> : <span />}
+        <button
+          className="mini-button"
+          disabled={isDisabled}
+          onClick={handleApply}
+          type="button"
+        >
+          Apply
+        </button>
+      </div>
     </section>
   );
 }
@@ -1155,4 +1559,16 @@ function toNumber(value: string, fallback: number) {
   const parsed = Number(value);
 
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatJson(value: JsonRecord) {
+  return JSON.stringify(value, null, 2);
+}
+
+function isPlainObject(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Action failed.";
 }

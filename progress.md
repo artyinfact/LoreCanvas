@@ -187,3 +187,16 @@
 - `Location State` covers each Location's semantic state: display name, region/area membership, recruitment availability, terrain/tile binding, haven/stronghold flags, default slots, and notes.
 - `Edge State` covers each graph connection's semantic state: directed/undirected traversal, traversal cost, labels, locks, and notes.
 - These state panels remain generic JSON/state editors. LOTR examples are fixture guidance only, not product-specific branches.
+
+## 2026-06-09 F-04 Edit/Run Manual Board Prototype
+
+- Completed `F-04-ManualScenarioPrototype`, now titled `Edit/Run Manual Board Prototype` in `feature_list.json`.
+- Added mode-aware store state in `src/state/boardStore.ts`: `mode`, `boardState`, `locationStates`, `edgeStates`, `frozenSetup`, and actions for entering Run mode, returning to Edit mode, editing the four state surfaces, moving runtime Entities by Location, adjusting numeric counters, and moving card-like objects between zones.
+- Edit mode remains the only mode that can mutate setup structure: assets, background, Locations, Edges, setup placements, and raw placement coordinates. Run mode keeps selection and board panning but blocks structural setup edits and raw coordinate dragging.
+- Run mode freezes the current setup snapshot before deriving runtime state. Runtime actions mutate only current state; `frozenSetup` remains a copy of the original Board Template and Setup Preset.
+- Updated `src/engine/serialization.ts` and `src/state/scenarioStore.ts` so `.lorecanvas` packages preserve mode, Board State, Location State, Edge State, and frozen setup snapshots while remaining backward-compatible with F-03 packages that lack those fields.
+- Updated `src/ui/App.tsx` and `src/styles.css` to expose Edit/Run buttons, local Save/Load, mode status, Board/Object/Location/Edge JSON state panels, and Run Controls for semantic Location movement, count adjustment, and card/zone changes.
+- Added `tests/state/editRunMode.test.ts` and `tests/state/manualScenario.test.ts`. F-04 verification passed with `npm.cmd exec -- vitest run tests/state/manualScenario.test.ts tests/state/editRunMode.test.ts`.
+- Full verification passed: `npm.cmd run check-types`, `npm.cmd run test` (9 files / 31 tests), `npm.cmd run build`, and `.\init.ps1`.
+- Browser verification used Playwright through Node REPL fallback because the Browser plugin did not expose direct browser-control tools. It loaded a prepared scenario through the UI, entered Run mode, selected a pawn on the PixiJS board, moved it from `loc-haven` to `loc-road`, incremented its count, selected a card, moved it to `discard-zone`, saved, and parsed the saved JSON. Evidence confirmed runtime state changed while `frozenSetup` preserved the original setup.
+- `feature_list.json` now marks `F-04-ManualScenarioPrototype` as completed. The next pending feature is `F-05-MovementValidation`.

@@ -1,6 +1,6 @@
 import type { BoardState } from "./board";
 import { validateBoard } from "./board";
-import type { EntityState, ResourceCategory } from "./entity";
+import type { EntityState, JsonRecord, ResourceCategory } from "./entity";
 import { isResourceCategory } from "./entity";
 
 export const SCENARIO_PACKAGE_FORMAT = "lorecanvas.scenario";
@@ -61,15 +61,34 @@ export interface ScenarioViewport {
   };
 }
 
+export type ScenarioMode = "edit" | "run";
+
+export interface ScenarioFrozenSetup {
+  assets: ScenarioAsset[];
+  board: BoardState;
+  assetPlacements: ScenarioAssetPlacement[];
+  entityState: EntityState;
+  pawnSheets: Record<string, ScenarioPawnSheet>;
+  boardState: JsonRecord;
+  locationStates: Record<string, JsonRecord>;
+  edgeStates: Record<string, JsonRecord>;
+  viewport: ScenarioViewport;
+}
+
 export interface ScenarioPackage {
   format: typeof SCENARIO_PACKAGE_FORMAT;
   version: typeof SCENARIO_PACKAGE_VERSION;
+  mode: ScenarioMode;
   metadata: ScenarioMetadata;
   assets: ScenarioAsset[];
   board: BoardState;
   assetPlacements: ScenarioAssetPlacement[];
   entityState: EntityState;
   pawnSheets: Record<string, ScenarioPawnSheet>;
+  boardState: JsonRecord;
+  locationStates: Record<string, JsonRecord>;
+  edgeStates: Record<string, JsonRecord>;
+  frozenSetup: ScenarioFrozenSetup | null;
   viewport: ScenarioViewport;
 }
 
@@ -101,7 +120,14 @@ export type ScenarioValidationCode =
   | "pawn_sheet_placement_category"
   | "pawn_sheet_asset_not_found"
   | "pawn_sheet_asset_category"
-  | "invalid_viewport";
+  | "invalid_viewport"
+  | "invalid_mode"
+  | "invalid_board_state"
+  | "invalid_location_states"
+  | "invalid_edge_states"
+  | "location_state_location_not_found"
+  | "edge_state_edge_not_found"
+  | "invalid_frozen_setup";
 
 export interface ScenarioValidationIssue {
   code: ScenarioValidationCode;
@@ -121,22 +147,40 @@ export class ScenarioValidationError extends Error {
 
 export type ScenarioPackageInput = Omit<
   ScenarioPackage,
-  "format" | "version" | "metadata" | "viewport"
+  | "format"
+  | "version"
+  | "metadata"
+  | "viewport"
+  | "mode"
+  | "boardState"
+  | "locationStates"
+  | "edgeStates"
+  | "frozenSetup"
 > & {
   metadata?: ScenarioMetadata;
   viewport?: Partial<ScenarioViewport>;
+  mode?: ScenarioMode;
+  boardState?: JsonRecord;
+  locationStates?: Record<string, JsonRecord>;
+  edgeStates?: Record<string, JsonRecord>;
+  frozenSetup?: ScenarioFrozenSetup | null;
 };
 
 export function createScenarioPackage(input: ScenarioPackageInput): ScenarioPackage {
   const scenario: ScenarioPackage = {
     format: SCENARIO_PACKAGE_FORMAT,
     version: SCENARIO_PACKAGE_VERSION,
+    mode: input.mode ?? "edit",
     metadata: cloneJson(input.metadata ?? {}),
     assets: cloneJson(input.assets),
     board: cloneJson(input.board),
     assetPlacements: cloneJson(input.assetPlacements),
     entityState: cloneJson(input.entityState),
     pawnSheets: cloneJson(input.pawnSheets),
+    boardState: cloneJson(input.boardState ?? {}),
+    locationStates: cloneJson(input.locationStates ?? {}),
+    edgeStates: cloneJson(input.edgeStates ?? {}),
+    frozenSetup: input.frozenSetup ? cloneJson(input.frozenSetup) : null,
     viewport: {
       boardZoom: input.viewport?.boardZoom ?? 1,
       boardPan: {
@@ -160,17 +204,19 @@ export function parseScenarioPackage(source: string): ScenarioPackage {
 }
 
 export function assertValidScenarioPackage(value: unknown): ScenarioPackage {
-  const issues = validateScenarioPackage(value);
+  const normalized = normalizeScenarioPackage(value);
+  const issues = validateScenarioPackage(normalized);
 
   if (issues[0]) {
     throw new ScenarioValidationError(issues[0].code, issues[0].message);
   }
 
-  return cloneJson(value as ScenarioPackage);
+  return cloneJson(normalized as ScenarioPackage);
 }
 
 export function validateScenarioPackage(value: unknown): ScenarioValidationIssue[] {
   const issues: ScenarioValidationIssue[] = [];
+  value = normalizeScenarioPackage(value);
 
   if (!isRecord(value)) {
     return [
@@ -192,6 +238,13 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     issues.push({
       code: "invalid_version",
       message: `Scenario package version must be ${SCENARIO_PACKAGE_VERSION}.`,
+    });
+  }
+
+  if (value.mode !== "edit" && value.mode !== "run") {
+    issues.push({
+      code: "invalid_mode",
+      message: "Scenario mode must be 'edit' or 'run'.",
     });
   }
 
@@ -252,6 +305,27 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     });
   }
 
+  if (!isRecord(value.boardState)) {
+    issues.push({
+      code: "invalid_board_state",
+      message: "Scenario boardState must be a JSON object.",
+    });
+  }
+
+  if (!isRecord(value.locationStates)) {
+    issues.push({
+      code: "invalid_location_states",
+      message: "Scenario locationStates must be a JSON object.",
+    });
+  }
+
+  if (!isRecord(value.edgeStates)) {
+    issues.push({
+      code: "invalid_edge_states",
+      message: "Scenario edgeStates must be a JSON object.",
+    });
+  }
+
   if (!assets || !board || !entityState || !assetPlacements || !pawnSheets) {
     return issues;
   }
@@ -262,8 +336,127 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
   const entityIds = validateEntities(entityState, locationIds, issues);
   validatePlacements(assetPlacements, assets, assetIds, entityState, entityIds, locationIds, issues);
   validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
+  validateStateSurfaces(
+    value.locationStates as Record<string, unknown>,
+    value.edgeStates as Record<string, unknown>,
+    locationIds,
+    new Set(board.edges.map((edge) => edge.id)),
+    issues,
+  );
+  validateFrozenSetup(value.frozenSetup, issues);
 
   return issues;
+}
+
+function validateStateSurfaces(
+  locationStates: Record<string, unknown>,
+  edgeStates: Record<string, unknown>,
+  locationIds: Set<string>,
+  edgeIds: Set<string>,
+  issues: ScenarioValidationIssue[],
+) {
+  for (const [locationId, state] of Object.entries(locationStates)) {
+    if (!isRecord(state)) {
+      issues.push({
+        code: "invalid_location_states",
+        message: `Location state '${locationId}' must be a JSON object.`,
+        id: locationId,
+      });
+      continue;
+    }
+
+    if (!locationIds.has(locationId)) {
+      issues.push({
+        code: "location_state_location_not_found",
+        message: `Location state '${locationId}' references a missing Location.`,
+        id: locationId,
+      });
+    }
+  }
+
+  for (const [edgeId, state] of Object.entries(edgeStates)) {
+    if (!isRecord(state)) {
+      issues.push({
+        code: "invalid_edge_states",
+        message: `Edge state '${edgeId}' must be a JSON object.`,
+        id: edgeId,
+      });
+      continue;
+    }
+
+    if (!edgeIds.has(edgeId)) {
+      issues.push({
+        code: "edge_state_edge_not_found",
+        message: `Edge state '${edgeId}' references a missing Edge.`,
+        id: edgeId,
+      });
+    }
+  }
+}
+
+function validateFrozenSetup(
+  value: unknown,
+  issues: ScenarioValidationIssue[],
+) {
+  if (value === null || value === undefined) {
+    return;
+  }
+
+  if (!isRecord(value)) {
+    issues.push({
+      code: "invalid_frozen_setup",
+      message: "Scenario frozenSetup must be null or a setup snapshot object.",
+    });
+    return;
+  }
+
+  const assets = getArray<ScenarioAsset>(value.assets);
+  const board = isBoardState(value.board) ? value.board : null;
+  const entityState = isEntityState(value.entityState) ? value.entityState : null;
+  const assetPlacements = getArray<ScenarioAssetPlacement>(value.assetPlacements);
+  const pawnSheets = isRecord(value.pawnSheets)
+    ? (value.pawnSheets as Record<string, unknown>)
+    : null;
+
+  if (
+    !assets ||
+    !board ||
+    !entityState ||
+    !assetPlacements ||
+    !pawnSheets ||
+    !isRecord(value.boardState) ||
+    !isRecord(value.locationStates) ||
+    !isRecord(value.edgeStates) ||
+    !isViewport(value.viewport)
+  ) {
+    issues.push({
+      code: "invalid_frozen_setup",
+      message: "Scenario frozenSetup is missing required setup snapshot fields.",
+    });
+    return;
+  }
+
+  const assetIds = validateAssets(assets, issues);
+  validateBoardState(board, assetIds, assets, issues);
+  const locationIds = new Set(board.locations.map((location) => location.id));
+  const entityIds = validateEntities(entityState, locationIds, issues);
+  validatePlacements(
+    assetPlacements,
+    assets,
+    assetIds,
+    entityState,
+    entityIds,
+    locationIds,
+    issues,
+  );
+  validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
+  validateStateSurfaces(
+    value.locationStates as Record<string, unknown>,
+    value.edgeStates as Record<string, unknown>,
+    locationIds,
+    new Set(board.edges.map((edge) => edge.id)),
+    issues,
+  );
 }
 
 function validateAssets(
@@ -598,6 +791,41 @@ function isViewport(value: unknown): value is ScenarioViewport {
     isFiniteNumber(value.boardPan.x) &&
     isFiniteNumber(value.boardPan.y)
   );
+}
+
+function normalizeScenarioPackage(value: unknown): unknown {
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    mode: value.mode ?? "edit",
+    boardState: value.boardState ?? {},
+    locationStates: value.locationStates ?? {},
+    edgeStates: value.edgeStates ?? {},
+    frozenSetup: normalizeFrozenSetup(value.frozenSetup),
+  };
+}
+
+function normalizeFrozenSetup(value: unknown): unknown {
+  if (value === undefined || value === null || !isRecord(value)) {
+    return null;
+  }
+
+  return {
+    ...value,
+    boardState: value.boardState ?? {},
+    locationStates: value.locationStates ?? {},
+    edgeStates: value.edgeStates ?? {},
+    viewport: value.viewport ?? {
+      boardZoom: 1,
+      boardPan: {
+        x: 0,
+        y: 0,
+      },
+    },
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

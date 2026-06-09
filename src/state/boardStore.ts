@@ -18,9 +18,11 @@ import {
   createEntity,
   removeEntity,
 } from "../engine/entity";
-import type { EntityState, ResourceCategory } from "../engine/entity";
+import type { EntityState, JsonRecord, ResourceCategory } from "../engine/entity";
 
 const DEFAULT_TOKEN_MAX_COPIES = 999;
+const RUN_MODE_LOCK_MESSAGE =
+  "Run mode freezes the Board Template and Setup Preset. Switch to Edit to change setup.";
 
 export interface UploadedImageAsset {
   id: string;
@@ -64,6 +66,7 @@ export interface BoardPan {
   y: number;
 }
 
+export type ScenarioMode = "edit" | "run";
 export type BoardTool = "select" | "location" | "edge";
 
 export type AssetPlacementConfigPatch = Partial<
@@ -75,11 +78,16 @@ export type AccessoryPlacementPatch = Partial<
 >;
 
 export interface BoardStore {
+  mode: ScenarioMode;
   board: BoardState;
   entityState: EntityState;
   assets: UploadedImageAsset[];
   assetPlacements: AssetPlacement[];
   pawnSheets: Record<string, PawnSheet>;
+  boardState: JsonRecord;
+  locationStates: Record<string, JsonRecord>;
+  edgeStates: Record<string, JsonRecord>;
+  frozenSetup: FrozenSetupSnapshot | null;
   selectedAssetId: string | null;
   selectedLocationId: string | null;
   selectedPlacementId: string | null;
@@ -134,14 +142,45 @@ export interface BoardStore {
   setInspectorCollapsed: (isCollapsed: boolean) => void;
   setLastError: (message: string) => void;
   clearError: () => void;
+  updateBoardState: (patch: JsonRecord) => void;
+  updateEntityObjectState: (entityId: string, patch: JsonRecord) => void;
+  updateLocationState: (locationId: string, patch: JsonRecord) => void;
+  updateEdgeState: (edgeId: string, patch: JsonRecord) => void;
+  enterRunMode: () => void;
+  returnToEditMode: () => void;
+  moveEntityToLocation: (entityId: string, locationId: string) => void;
+  adjustEntityCounter: (
+    entityId: string,
+    key: string,
+    delta: number,
+  ) => void;
+  moveCardToZone: (entityId: string, zoneId: string) => void;
+}
+
+export interface FrozenSetupSnapshot {
+  board: BoardState;
+  entityState: EntityState;
+  assets: UploadedImageAsset[];
+  assetPlacements: AssetPlacement[];
+  pawnSheets: Record<string, PawnSheet>;
+  boardState: JsonRecord;
+  locationStates: Record<string, JsonRecord>;
+  edgeStates: Record<string, JsonRecord>;
+  boardZoom: number;
+  boardPan: BoardPan;
 }
 
 export const useBoardStore = create<BoardStore>((set) => ({
+  mode: "edit",
   board: createEmptyBoard(),
   entityState: createEmptyEntityState(),
   assets: [],
   assetPlacements: [],
   pawnSheets: {},
+  boardState: {},
+  locationStates: {},
+  edgeStates: {},
+  frozenSetup: null,
   selectedAssetId: null,
   selectedLocationId: null,
   selectedPlacementId: null,
@@ -154,6 +193,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
   lastError: null,
   addAsset: (asset) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       if (state.assets.some((candidate) => candidate.id === asset.id)) {
         return state;
       }
@@ -166,6 +211,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   removeAsset: (assetId) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       const asset = state.assets.find((candidate) => candidate.id === assetId);
       const removedPlacementIds = new Set(
         state.assetPlacements
@@ -216,6 +267,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   updateAssetCategory: (assetId, category) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       if (!state.assets.some((asset) => asset.id === assetId)) {
         return {
           lastError: `Image asset '${assetId}' was not found.`,
@@ -308,6 +365,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   updateAssetPlacementConfig: (assetId, patch) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       const asset = state.assets.find((candidate) => candidate.id === assetId);
 
       if (!asset) {
@@ -340,6 +403,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   setBackgroundAsset: (assetId) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       const asset = state.assets.find((candidate) => candidate.id === assetId);
 
       if (!asset) {
@@ -386,6 +455,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     let createdId: string | null = null;
 
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       try {
         const id = createSequentialId(
           "loc",
@@ -412,6 +487,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
   },
   moveLocation: (locationId, x, y) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       try {
         return {
           board: updateLocation(state.board, locationId, { x, y }),
@@ -427,6 +508,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   updateSelectedLocationName: (name) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       if (!state.selectedLocationId) {
         return state;
       }
@@ -444,6 +531,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   deleteSelectedLocation: () =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       if (!state.selectedLocationId) {
         return state;
       }
@@ -451,6 +544,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
       try {
         return {
           board: removeLocation(state.board, state.selectedLocationId),
+          locationStates: omitRecordKey(
+            state.locationStates,
+            state.selectedLocationId,
+          ),
           entityState: clearLocationBindings(
             state.entityState,
             state.selectedLocationId,
@@ -479,6 +576,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   startOrCompleteEdge: (locationId) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       if (!state.edgeDraftFromId) {
         return {
           edgeDraftFromId: locationId,
@@ -526,6 +629,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   updateEdgeLabel: (edgeId, label) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       try {
         return {
           board: updateEdge(state.board, edgeId, { label }),
@@ -539,9 +648,16 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   deleteEdge: (edgeId) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       try {
         return {
           board: removeEdge(state.board, edgeId),
+          edgeStates: omitRecordKey(state.edgeStates, edgeId),
           lastError: null,
         };
       } catch (error) {
@@ -554,6 +670,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     let createdId: string | null = null;
 
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       const asset = state.assets.find((candidate) => candidate.id === assetId);
 
       if (!asset) {
@@ -643,6 +765,13 @@ export const useBoardStore = create<BoardStore>((set) => ({
   },
   updateAssetPlacement: (placementId, patch) =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError:
+            "Run mode moves objects by Location. Use Move to Location instead.",
+        };
+      }
+
       const placement = state.assetPlacements.find(
         (candidate) => candidate.id === placementId,
       );
@@ -673,6 +802,12 @@ export const useBoardStore = create<BoardStore>((set) => ({
     }),
   deleteSelectedPlacement: () =>
     set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
       if (!state.selectedPlacementId) {
         return state;
       }
@@ -862,6 +997,212 @@ export const useBoardStore = create<BoardStore>((set) => ({
     set({
       lastError: null,
     }),
+  updateBoardState: (patch) =>
+    set((state) => ({
+      boardState: {
+        ...state.boardState,
+        ...patch,
+      },
+      lastError: null,
+    })),
+  updateEntityObjectState: (entityId, patch) =>
+    set((state) => {
+      if (!state.entityState.entities.some((entity) => entity.id === entityId)) {
+        return {
+          lastError: `Entity '${entityId}' was not found.`,
+        };
+      }
+
+      return {
+        entityState: {
+          entities: state.entityState.entities.map((entity) =>
+            entity.id === entityId
+              ? {
+                  ...entity,
+                  state: {
+                    ...entity.state,
+                    ...patch,
+                  },
+                }
+              : entity,
+          ),
+        },
+        lastError: null,
+      };
+    }),
+  updateLocationState: (locationId, patch) =>
+    set((state) => {
+      if (!state.board.locations.some((location) => location.id === locationId)) {
+        return {
+          lastError: `Location '${locationId}' was not found.`,
+        };
+      }
+
+      return {
+        locationStates: {
+          ...state.locationStates,
+          [locationId]: {
+            ...(state.locationStates[locationId] ?? {}),
+            ...patch,
+          },
+        },
+        lastError: null,
+      };
+    }),
+  updateEdgeState: (edgeId, patch) =>
+    set((state) => {
+      if (!state.board.edges.some((edge) => edge.id === edgeId)) {
+        return {
+          lastError: `Edge '${edgeId}' was not found.`,
+        };
+      }
+
+      return {
+        edgeStates: {
+          ...state.edgeStates,
+          [edgeId]: {
+            ...(state.edgeStates[edgeId] ?? {}),
+            ...patch,
+          },
+        },
+        lastError: null,
+      };
+    }),
+  enterRunMode: () =>
+    set((state) => {
+      if (state.mode === "run") {
+        return state;
+      }
+
+      return {
+        mode: "run",
+        frozenSetup: createFrozenSetupSnapshot(state),
+        selectedAssetId: null,
+        selectedLocationId: null,
+        selectedPlacementId: null,
+        edgeDraftFromId: null,
+        activeTool: "select",
+        lastError: null,
+      };
+    }),
+  returnToEditMode: () =>
+    set((state) => {
+      if (!state.frozenSetup) {
+        return {
+          mode: "edit",
+          lastError: null,
+        };
+      }
+
+      return {
+        ...cloneJson(state.frozenSetup),
+        mode: "edit",
+        frozenSetup: null,
+        selectedAssetId: null,
+        selectedLocationId: null,
+        selectedPlacementId: null,
+        edgeDraftFromId: null,
+        activeTool: "select",
+        lastError: null,
+      };
+    }),
+  moveEntityToLocation: (entityId, locationId) =>
+    set((state) => {
+      const location = state.board.locations.find(
+        (candidate) => candidate.id === locationId,
+      );
+
+      if (!location) {
+        return {
+          lastError: `Location '${locationId}' was not found.`,
+        };
+      }
+
+      if (!state.entityState.entities.some((entity) => entity.id === entityId)) {
+        return {
+          lastError: `Entity '${entityId}' was not found.`,
+        };
+      }
+
+      return {
+        entityState: {
+          entities: state.entityState.entities.map((entity) =>
+            entity.id === entityId ? { ...entity, locationId } : entity,
+          ),
+        },
+        assetPlacements: state.assetPlacements.map((placement) =>
+          placement.entityId === entityId
+            ? {
+                ...placement,
+                locationId,
+                x: location.x,
+                y: location.y,
+              }
+            : placement,
+        ),
+        lastError: null,
+      };
+    }),
+  adjustEntityCounter: (entityId, key, delta) =>
+    set((state) => {
+      const entity = state.entityState.entities.find(
+        (candidate) => candidate.id === entityId,
+      );
+
+      if (!entity) {
+        return {
+          lastError: `Entity '${entityId}' was not found.`,
+        };
+      }
+
+      const currentValue = entity.state[key];
+      const currentCount =
+        typeof currentValue === "number" && Number.isFinite(currentValue)
+          ? currentValue
+          : 0;
+
+      return {
+        entityState: {
+          entities: state.entityState.entities.map((candidate) =>
+            candidate.id === entityId
+              ? {
+                  ...candidate,
+                  state: {
+                    ...candidate.state,
+                    [key]: Math.max(0, currentCount + Math.trunc(delta)),
+                  },
+                }
+              : candidate,
+          ),
+        },
+        lastError: null,
+      };
+    }),
+  moveCardToZone: (entityId, zoneId) =>
+    set((state) => {
+      if (!state.entityState.entities.some((entity) => entity.id === entityId)) {
+        return {
+          lastError: `Entity '${entityId}' was not found.`,
+        };
+      }
+
+      return {
+        entityState: {
+          entities: state.entityState.entities.map((entity) =>
+            entity.id === entityId
+              ? {
+                  ...entity,
+                  state: {
+                    ...entity.state,
+                    zoneId,
+                  },
+                }
+              : entity,
+          ),
+        },
+        lastError: null,
+      };
+    }),
 }));
 
 export function getSelectedLocation(
@@ -1025,6 +1366,48 @@ function removeAssetFromPawnSheet(sheet: PawnSheet, assetId: string): PawnSheet 
     ),
     counters: sheet.counters.filter((counter) => counter.assetId !== assetId),
   };
+}
+
+function createFrozenSetupSnapshot(
+  state: Pick<
+    BoardStore,
+    | "board"
+    | "entityState"
+    | "assets"
+    | "assetPlacements"
+    | "pawnSheets"
+    | "boardState"
+    | "locationStates"
+    | "edgeStates"
+    | "boardZoom"
+    | "boardPan"
+  >,
+): FrozenSetupSnapshot {
+  return cloneJson({
+    board: state.board,
+    entityState: state.entityState,
+    assets: state.assets,
+    assetPlacements: state.assetPlacements,
+    pawnSheets: state.pawnSheets,
+    boardState: state.boardState,
+    locationStates: state.locationStates,
+    edgeStates: state.edgeStates,
+    boardZoom: state.boardZoom,
+    boardPan: state.boardPan,
+  });
+}
+
+function omitRecordKey<T>(
+  record: Record<string, T>,
+  removedKey: string,
+): Record<string, T> {
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => key !== removedKey),
+  );
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function normalizeAsset(asset: UploadedImageAsset): UploadedImageAsset {

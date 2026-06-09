@@ -176,12 +176,36 @@
       "priority": 4,
       "title": "Edit/Run Manual Board Prototype",
       "description": "Build the smallest usable Edit/Run split on top of scenario load/save. Edit mode edits the scenario definition only and exposes four editable state panels: Board State for scenario-wide/global state such as trackers, decks, event piles, setup variables, and metadata; Object State for any Entity/Object such as character pawns, troop stacks, cards, tokens, dice, and their sheet/counter state; Location State for each Location's semantic state such as name, region/area membership, recruitment availability, terrain/tile bindings, haven/stronghold flags, slots, and notes; and Edge State for graph connection semantics such as directed/undirected movement, traversal cost, labels, locks, and notes. Edit mode also manages asset manifest, Board Template, background, Locations, Edges, board zones, default placement slots, and Setup Preset entities/cards/tokens/counters. Edit mode does not create or mutate runtime scenario state. Run mode opens a finalized scenario, freezes the Board Template and Setup Preset, derives the initial runtime snapshot from that setup, and supports semantic manual board operations: move Location-bound Entities between Locations, adjust stacked troop/token/dice counters, move cards between deck/discard/hand/display zones, inspect current state, save the runtime snapshot, and reload it. This feature intentionally ignores automatic setup parsing, event triggers, path validation, Cut-in rendering, online services, and game-specific rules.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "F-03-ScenarioLoadSave"
       ],
       "verification": "npx vitest run tests/state/manualScenario.test.ts tests/state/editRunMode.test.ts; browser verification of edit Board/Object/Location/Edge State -> run -> semantic move/adjust -> save -> reload restored runtime state, while run mode cannot mutate Board Template or Setup Preset",
-      "evidence": null
+      "evidence": {
+        "completedAt": "2026-06-09",
+        "localVerification": [
+          "npm.cmd exec -- vitest run tests/state/manualScenario.test.ts tests/state/editRunMode.test.ts",
+          "npm.cmd run check-types",
+          "npm.cmd run test",
+          "npm.cmd run build",
+          ".\\init.ps1"
+        ],
+        "coverage": [
+          "src/state/boardStore.ts now tracks mode: edit/run, Board State, Location State, Edge State, frozen setup snapshots, and semantic runtime actions for moving Entity objects by Location, adjusting numeric counters, and moving cards to zones.",
+          "src/engine/serialization.ts and src/state/scenarioStore.ts now serialize and restore mode, Board/Object/Location/Edge state, and frozen setup while staying backward-compatible with F-03 packages.",
+          "src/ui/App.tsx exposes Edit/Run controls, local save/load, four state editor panels, Run controls for Location movement, count adjustment, and card/zone updates.",
+          "src/ui/BoardCanvas.tsx keeps selection and panning in Run mode but blocks setup-structure interactions such as adding Locations, drawing Edges, dropping new setup assets, and raw coordinate dragging."
+        ],
+        "browserVerification": [
+          "Started Vite dev server at http://127.0.0.1:5173 and used Playwright via Node REPL fallback because the Browser plugin did not expose direct browser-control tools.",
+          "Loaded a prepared .lorecanvas scenario from localStorage through the UI Load button.",
+          "Clicked Run and confirmed the page showed Running scenario with mode Run.",
+          "Selected a pawn object on the PixiJS board, moved it from loc-haven to loc-road using the Run Controls Location selector, incremented its count, selected a card object, moved it to discard-zone, then saved through the UI Save button.",
+          "Parsed the saved JSON from localStorage and confirmed mode=run, boardState.hope=4, locationStates.loc-haven.tile=haven, edgeStates.edge-haven-road.cost=1, runtime hero location=loc-road, runtime hero count=3, runtime card zone=discard-zone, while frozenSetup preserved hero location=loc-haven and count=2.",
+          "No app console errors were observed; only Vite debug messages and the React DevTools info message appeared."
+        ],
+        "notes": "F-04 implements the manual semantic board runtime MVP, not automatic setup parsing, movement rules, online synchronization, game-specific LOTR branches, or Cut-in rendering."
+      }
     },
     {
       "id": "F-05-MovementValidation",

@@ -59,6 +59,7 @@ export function BoardCanvas() {
   const appRef = useRef<ApplicationRef>(null);
   const viewport = useElementSize(hostRef, FALLBACK_VIEWPORT);
   const board = useBoardStore((state) => state.board);
+  const mode = useBoardStore((state) => state.mode);
   const activeTool = useBoardStore((state) => state.activeTool);
   const boardZoom = useBoardStore((state) => state.boardZoom);
   const boardPan = useBoardStore((state) => state.boardPan);
@@ -211,6 +212,10 @@ export function BoardCanvas() {
         return;
       }
 
+      if (mode === "run") {
+        return;
+      }
+
       if (activeTool !== "location") {
         return;
       }
@@ -231,6 +236,7 @@ export function BoardCanvas() {
       selectPlacement,
       selectedLocationId,
       selectedPlacementId,
+      mode,
     ],
   );
   const handleGlobalPointerMove = useCallback(
@@ -278,14 +284,21 @@ export function BoardCanvas() {
       event.stopPropagation();
 
       if (activeTool === "edge") {
+        if (mode === "run") {
+          selectLocation(locationId);
+          return;
+        }
+
         startOrCompleteEdge(locationId);
         return;
       }
 
       selectLocation(locationId);
-      setDraggingLocationId(locationId);
+      if (mode === "edit") {
+        setDraggingLocationId(locationId);
+      }
     },
-    [activeTool, selectLocation, startOrCompleteEdge],
+    [activeTool, mode, selectLocation, startOrCompleteEdge],
   );
   const handlePlacementPointerDown = useCallback(
     (placementId: string, event: FederatedPointerEvent) => {
@@ -293,20 +306,24 @@ export function BoardCanvas() {
 
       selectPlacement(placementId);
 
-      if (activeTool === "select") {
+      if (activeTool === "select" && mode === "edit") {
         setDraggingPlacementId(placementId);
       }
     },
-    [activeTool, selectPlacement],
+    [activeTool, mode, selectPlacement],
   );
   const handleDragOver = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
+      if (mode === "run") {
+        return;
+      }
+
       if (event.dataTransfer.types.includes("application/x-lorecanvas-asset")) {
         event.preventDefault();
         event.dataTransfer.dropEffect = activeTool === "select" ? "copy" : "none";
       }
     },
-    [activeTool],
+    [activeTool, mode],
   );
   const handleAssetDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -319,6 +336,11 @@ export function BoardCanvas() {
       }
 
       event.preventDefault();
+
+      if (mode === "run") {
+        setLastError("Run mode cannot add setup assets. Switch to Edit.");
+        return;
+      }
 
       if (activeTool !== "select") {
         setLastError("Switch to Select before placing an asset.");
@@ -371,6 +393,7 @@ export function BoardCanvas() {
       board.locations,
       createAssetPlacement,
       frame,
+      mode,
       setLastError,
     ],
   );
@@ -385,6 +408,10 @@ export function BoardCanvas() {
       const scale = getWheelScale(event.deltaY);
 
       if (selectedPlacement) {
+        if (mode === "run") {
+          return;
+        }
+
         updateAssetPlacement(selectedPlacement.id, {
           width: selectedPlacement.width * scale,
           height: selectedPlacement.height * scale,
@@ -434,6 +461,7 @@ export function BoardCanvas() {
       boardZoom,
       frame.x,
       frame.y,
+      mode,
       selectedLocationId,
       selectedPlacement,
       setBoardPan,
