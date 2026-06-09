@@ -101,7 +101,12 @@ The active feature route in `feature_list.json` now supersedes the older pending
 
 ### F-04-ManualScenarioPrototype Manual Scenario Prototype
 
-- Edit mode edits setup definition only: asset manifest, Board Template, background, Locations, Edges, region/area membership, board zones, default placement slots, and Setup Preset entities/cards/tokens/counters.
+- Edit mode edits setup definition only and exposes four state panels:
+- `Board State`: scenario-wide/global state such as trackers, decks, event piles, setup variables, and metadata. For LOTR-like fixtures this includes hope, threat/danger level, event deck state, shadow deck state, player deck setup, and objective display state.
+- `Object State`: any Entity/Object state such as character pawns, troop stacks, cards, tokens, dice, pawn sheets, held cards, counters, visibility, and notes.
+- `Location State`: per-Location semantic state such as display name, region/area membership, recruitment availability, terrain/tile binding, haven/stronghold flags, default slots, and notes.
+- `Edge State`: per-connection semantic state such as directed/undirected traversal, traversal cost, labels, locks, and notes.
+- Edit mode also manages asset manifest, Board Template, background, Locations, Edges, board zones, default placement slots, and Setup Preset entities/cards/tokens/counters.
 - Edit mode does not create or mutate runtime scenario state.
 - Run mode opens a finalized scenario, freezes the Board Template and Setup Preset, and derives an initial runtime snapshot from setup.
 - Run mode supports semantic manual board operations instead of pixel-level setup labor: move Location-bound Entities between Locations, adjust stacked troop/token/dice counters, move cards between deck/discard/hand/display zones, inspect current runtime state, save, and reload.

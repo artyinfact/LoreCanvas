@@ -175,12 +175,12 @@
       "id": "F-04-ManualScenarioPrototype",
       "priority": 4,
       "title": "Edit/Run Manual Board Prototype",
-      "description": "Build the smallest usable Edit/Run split on top of scenario load/save. Edit mode edits the scenario definition only: asset manifest, Board Template, background, Locations, Edges, region/area membership, board zones, default placement slots, and Setup Preset entities/cards/tokens/counters. Edit mode does not create or mutate runtime scenario state. Run mode opens a finalized scenario, freezes the Board Template and Setup Preset, derives the initial runtime snapshot from that setup, and supports semantic manual board operations: move Location-bound Entities between Locations, adjust stacked troop/token/dice counters, move cards between deck/discard/hand/display zones, inspect current state, save the runtime snapshot, and reload it. This feature intentionally ignores automatic setup parsing, event triggers, path validation, Cut-in rendering, online services, and game-specific rules.",
+      "description": "Build the smallest usable Edit/Run split on top of scenario load/save. Edit mode edits the scenario definition only and exposes four editable state panels: Board State for scenario-wide/global state such as trackers, decks, event piles, setup variables, and metadata; Object State for any Entity/Object such as character pawns, troop stacks, cards, tokens, dice, and their sheet/counter state; Location State for each Location's semantic state such as name, region/area membership, recruitment availability, terrain/tile bindings, haven/stronghold flags, slots, and notes; and Edge State for graph connection semantics such as directed/undirected movement, traversal cost, labels, locks, and notes. Edit mode also manages asset manifest, Board Template, background, Locations, Edges, board zones, default placement slots, and Setup Preset entities/cards/tokens/counters. Edit mode does not create or mutate runtime scenario state. Run mode opens a finalized scenario, freezes the Board Template and Setup Preset, derives the initial runtime snapshot from that setup, and supports semantic manual board operations: move Location-bound Entities between Locations, adjust stacked troop/token/dice counters, move cards between deck/discard/hand/display zones, inspect current state, save the runtime snapshot, and reload it. This feature intentionally ignores automatic setup parsing, event triggers, path validation, Cut-in rendering, online services, and game-specific rules.",
       "status": "pending",
       "dependencies": [
         "F-03-ScenarioLoadSave"
       ],
-      "verification": "npx vitest run tests/state/manualScenario.test.ts tests/state/editRunMode.test.ts; browser verification of edit setup -> run -> semantic move/adjust -> save -> reload restored runtime state, while run mode cannot mutate Board Template or Setup Preset",
+      "verification": "npx vitest run tests/state/manualScenario.test.ts tests/state/editRunMode.test.ts; browser verification of edit Board/Object/Location/Edge State -> run -> semantic move/adjust -> save -> reload restored runtime state, while run mode cannot mutate Board Template or Setup Preset",
       "evidence": null
     },
     {
@@ -253,7 +253,7 @@
     "phase": "Edit/Run manual board MVP",
     "summary": "After F-03 scenario load/save, prioritize a split between Edit mode and Run mode. Edit mode defines Board Template and Setup Preset. Run mode freezes those definitions, derives runtime state, and supports manual semantic board operations before movement validation, rule triggers, global visual automation, or Cut-in rendering.",
     "modeModel": {
-      "editMode": "Edits setup definition only: asset manifest, Board Template, background, Locations, Edges, region/area membership, zones, default placement slots, and Setup Preset entities/cards/tokens/counters. It does not create runtime scenario state.",
+      "editMode": "Edits setup definition only through four state surfaces plus structural assets: Board State for global scenario state, Object State for Entity/Object state, Location State for per-Location semantic state, and Edge State for per-connection semantic state. It also edits asset manifest, Board Template, background, Locations, Edges, zones, default placement slots, and Setup Preset entities/cards/tokens/counters. It does not create runtime scenario state.",
       "runMode": "Consumes a finalized scenario definition, freezes Board Template and Setup Preset, derives an initial runtime snapshot, then allows manual runtime operations such as moving Location-bound Entities, adjusting stacks/counters, moving cards between zones, and saving/reloading current runtime state."
     },
     "deferredForMvp": [

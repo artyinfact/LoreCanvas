@@ -178,3 +178,12 @@
 - F-04 should not optimize for manually dragging every card/token/pawn to raw board coordinates. Runtime state should prefer `locationId` and zone semantics; exact `x/y` placement is a rendering/default-slot concern unless deliberately overridden.
 - `feature_list.json` and `clean-state-checklists.md` now reflect this F-04 target. F-09 LOTR validation was also clarified to validate an Edit-mode Board Template + Setup Preset opened as a frozen Run-mode board.
 - Deferred remains unchanged: automatic setup parsing, event triggers, path validation, Cut-in rendering, online services, and game-specific rules stay out of F-04.
+
+## 2026-06-09 F-04 Edit State Panel Clarification
+
+- Updated the harness again so Edit mode has four explicit editable state surfaces rather than a single generic setup inspector.
+- `Board State` covers scenario-wide/global state: trackers, decks, event piles, setup variables, and metadata. For LOTR-like validation this includes hope, threat/danger level, event deck state, shadow deck state, player deck setup, and objective display state.
+- `Object State` covers any Entity/Object: character pawns, troop stacks, cards, tokens, dice, pawn sheets, held cards, counters, visibility, and notes.
+- `Location State` covers each Location's semantic state: display name, region/area membership, recruitment availability, terrain/tile binding, haven/stronghold flags, default slots, and notes.
+- `Edge State` covers each graph connection's semantic state: directed/undirected traversal, traversal cost, labels, locks, and notes.
+- These state panels remain generic JSON/state editors. LOTR examples are fixture guidance only, not product-specific branches.
