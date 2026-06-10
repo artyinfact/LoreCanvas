@@ -204,7 +204,23 @@
           "Parsed the saved JSON from localStorage and confirmed mode=run, boardState.hope=4, locationStates.loc-haven.tile=haven, edgeStates.edge-haven-road.cost=1, runtime hero location=loc-road, runtime hero count=3, runtime card zone=discard-zone, while frozenSetup preserved hero location=loc-haven and count=2.",
           "No app console errors were observed; only Vite debug messages and the React DevTools info message appeared."
         ],
-        "notes": "F-04 implements the manual semantic board runtime MVP, not automatic setup parsing, movement rules, online synchronization, game-specific LOTR branches, or Cut-in rendering."
+        "notes": "F-04 implements the manual semantic board runtime MVP, not automatic setup parsing, movement rules, online synchronization, game-specific LOTR branches, or Cut-in rendering.",
+        "assetImportPolish": {
+          "updatedAt": "2026-06-10",
+          "summary": "Removed the topbar Import images action so topbar actions remain scenario-level Save/Load controls. Added left Creation toolbar image import controls for the whole assets folder, category subfolders, and category-specific single-image imports.",
+          "coverage": [
+            "src/ui/assetImport.ts infers BOARD, PAWN, TOKEN, TILE, CARD, and OTHER categories from imported folder paths such as assets/token or token.",
+            "src/ui/App.tsx imports assets from the Image Assets panel, groups imported assets by category, auto-sets only BOARD imports as the board background, and disables setup import controls in Run mode.",
+            "tests/ui/assetImport.test.ts covers folder-path category inference, category subfolder inference, TOKEN default high copy limits, and placement-size defaults."
+          ],
+          "verification": [
+            "npm.cmd exec -- vitest run tests/ui/assetImport.test.ts",
+            "npm.cmd run check-types",
+            "npm.cmd run test",
+            "npm.cmd run build"
+          ],
+          "notes": "This is a manual MVP import-entry refinement only. It does not implement .lorecanvas ZIP archive import, automatic setup parsing, online asset storage, or LOTR-specific import rules."
+        }
       }
     },
     {

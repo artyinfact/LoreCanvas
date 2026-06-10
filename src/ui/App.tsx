@@ -6,6 +6,7 @@ import {
   Database,
   Download,
   FileInput,
+  FolderOpen,
   ImageIcon,
   Link2,
   MapPinPlus,
@@ -51,6 +52,11 @@ import {
   applyScenarioPackageToBoardStore,
   exportBoardStoreScenario,
 } from "../state/scenarioStore";
+import {
+  createImportBatchId,
+  createImportedImageAsset,
+  inferResourceCategoryFromPath,
+} from "./assetImport";
 
 const LOCAL_SCENARIO_STORAGE_KEY = "lorecanvas:last-scenario";
 const EMPTY_JSON_STATE: JsonRecord = {};
@@ -68,6 +74,11 @@ const TOOL_OPTIONS: Array<{
 const BoardCanvas = lazy(() =>
   import("./BoardCanvas").then((module) => ({ default: module.BoardCanvas })),
 );
+
+interface ImageImportOptions {
+  category?: ResourceCategory;
+  inferCategoryFromPath?: boolean;
+}
 
 export function App() {
   const mode = useBoardStore((state) => state.mode);
@@ -171,33 +182,41 @@ export function App() {
         : [],
     [board.edges, selectedLocation],
   );
-  const handleImageUpload = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleImageImport = useCallback(
+    async (
+      event: ChangeEvent<HTMLInputElement>,
+      options: ImageImportOptions = {},
+    ) => {
       const input = event.currentTarget;
       const files = Array.from(input.files ?? []).filter((file) =>
         file.type.startsWith("image/"),
       );
+      const batchId = createImportBatchId();
 
       for (const [index, file] of files.entries()) {
         const url = URL.createObjectURL(file);
         const dimensions = await readImageDimensions(url);
-        const placementSize = getDefaultPlacementSize(dimensions);
-        const asset: UploadedImageAsset = {
-          id: createUploadId(file, index),
-          category: "OTHER",
-          name: file.name,
+        const relativePath = getFileRelativePath(file);
+        const category =
+          options.category ??
+          (options.inferCategoryFromPath
+            ? inferResourceCategoryFromPath(relativePath || file.name)
+            : "OTHER");
+        const asset = createImportedImageAsset({
+          batchId,
+          category,
+          dimensions,
+          file,
+          index,
           url,
-          mimeType: file.type,
-          size: file.size,
-          ...dimensions,
-          maxCopies: 1,
-          placementWidth: placementSize.width,
-          placementHeight: placementSize.height,
-        };
+        });
 
         addAsset(asset);
 
-        if (!useBoardStore.getState().board.background) {
+        if (
+          asset.category === "BOARD" &&
+          !useBoardStore.getState().board.background
+        ) {
           setBackgroundAsset(asset.id);
         }
       }
@@ -314,16 +333,6 @@ export function App() {
             <FileInput aria-hidden="true" size={17} />
             <span>Load</span>
           </button>
-          <label className="icon-button icon-button--primary">
-            <Upload aria-hidden="true" size={18} />
-            <span>Import images</span>
-            <input
-              accept="image/*"
-              multiple
-              onChange={handleImageUpload}
-              type="file"
-            />
-          </label>
         </div>
       </header>
 
@@ -385,26 +394,54 @@ export function App() {
               title="Image Assets"
               trailing={<span>{formatBytes(totalBytes(assets))}</span>}
             >
+              <AssetImportPanel
+                isDisabled={mode === "run"}
+                onImport={handleImageImport}
+              />
               <div className="asset-list">
                 {assets.length === 0 ? (
                   <p className="empty-state">No images imported</p>
                 ) : (
-                  assets.map((asset) => (
-                    <AssetItem
-                      asset={asset}
-                      copyCount={
-                        assetPlacements.filter(
-                          (placement) => placement.assetId === asset.id,
-                        ).length
-                      }
-                      isBoardBackground={board.background?.assetId === asset.id}
-                      key={asset.id}
-                      onDelete={removeAsset}
-                      onSetBoard={setBackgroundAsset}
-                      onUpdateCategory={updateAssetCategory}
-                      onUpdatePlacementConfig={updateAssetPlacementConfig}
-                    />
-                  ))
+                  RESOURCE_CATEGORIES.map((category) => {
+                    const categoryAssets = assets.filter(
+                      (asset) => asset.category === category,
+                    );
+
+                    if (categoryAssets.length === 0) {
+                      return null;
+                    }
+
+                    return (
+                      <section className="asset-category-group" key={category}>
+                        <div className="asset-category-group__heading">
+                          <strong>
+                            {RESOURCE_CATEGORY_DEFINITIONS[category].label}
+                          </strong>
+                          <span>{categoryAssets.length}</span>
+                        </div>
+                        {categoryAssets.map((asset) => (
+                          <AssetItem
+                            asset={asset}
+                            copyCount={
+                              assetPlacements.filter(
+                                (placement) => placement.assetId === asset.id,
+                              ).length
+                            }
+                            isBoardBackground={
+                              board.background?.assetId === asset.id
+                            }
+                            key={asset.id}
+                            onDelete={removeAsset}
+                            onSetBoard={setBackgroundAsset}
+                            onUpdateCategory={updateAssetCategory}
+                            onUpdatePlacementConfig={
+                              updateAssetPlacementConfig
+                            }
+                          />
+                        ))}
+                      </section>
+                    );
+                  })
                 )}
               </div>
             </CollapsibleSection>
@@ -1009,6 +1046,85 @@ function JsonStateEditor({
   );
 }
 
+interface AssetImportPanelProps {
+  isDisabled: boolean;
+  onImport: (
+    event: ChangeEvent<HTMLInputElement>,
+    options?: ImageImportOptions,
+  ) => void | Promise<void>;
+}
+
+const DIRECTORY_INPUT_PROPS = {
+  directory: "",
+  webkitdirectory: "",
+} as Record<string, string>;
+
+function AssetImportPanel({ isDisabled, onImport }: AssetImportPanelProps) {
+  return (
+    <div className="asset-import-panel" data-disabled={isDisabled}>
+      <label
+        aria-disabled={isDisabled}
+        className="mini-button asset-import-root"
+        data-disabled={isDisabled}
+      >
+        <FolderOpen aria-hidden="true" size={14} />
+        <span>Assets folder</span>
+        <input
+          {...DIRECTORY_INPUT_PROPS}
+          accept="image/*"
+          disabled={isDisabled}
+          multiple
+          onChange={(event) =>
+            onImport(event, { inferCategoryFromPath: true })
+          }
+          type="file"
+        />
+      </label>
+
+      <div className="asset-import-category-list">
+        {RESOURCE_CATEGORIES.map((category) => (
+          <div className="asset-import-category" key={category}>
+            <strong>{RESOURCE_CATEGORY_DEFINITIONS[category].label}</strong>
+            <div className="asset-import-category__actions">
+              <label
+                aria-disabled={isDisabled}
+                className="mini-button"
+                data-disabled={isDisabled}
+              >
+                <FolderOpen aria-hidden="true" size={13} />
+                <span>Folder</span>
+                <input
+                  {...DIRECTORY_INPUT_PROPS}
+                  accept="image/*"
+                  disabled={isDisabled}
+                  multiple
+                  onChange={(event) => onImport(event, { category })}
+                  type="file"
+                />
+              </label>
+              <label
+                aria-disabled={isDisabled}
+                className="mini-button"
+                data-disabled={isDisabled}
+              >
+                <Upload aria-hidden="true" size={13} />
+                <span>Image</span>
+                <input
+                  accept="image/*"
+                  disabled={isDisabled}
+                  multiple
+                  onChange={(event) => onImport(event, { category })}
+                  type="file"
+                />
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface PawnSheetInspectorProps {
   adjustPawnCounter: (
     placementId: string,
@@ -1490,33 +1606,8 @@ function readImageDimensions(url: string): Promise<{
   });
 }
 
-function getDefaultPlacementSize(dimensions: { width?: number; height?: number }) {
-  if (!dimensions.width || !dimensions.height) {
-    return {
-      width: 64,
-      height: 64,
-    };
-  }
-
-  const scale = Math.min(96 / dimensions.width, 96 / dimensions.height, 1);
-
-  return {
-    width: Math.max(24, Math.round(dimensions.width * scale)),
-    height: Math.max(24, Math.round(dimensions.height * scale)),
-  };
-}
-
-function createUploadId(file: File, index: number) {
-  const randomId =
-    globalThis.crypto?.randomUUID?.() ??
-    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const safeName = file.name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 36);
-
-  return `asset-${index + 1}-${safeName || "image"}-${randomId}`;
+function getFileRelativePath(file: File) {
+  return (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
 }
 
 function totalBytes(assets: UploadedImageAsset[]) {

@@ -200,3 +200,12 @@
 - Full verification passed: `npm.cmd run check-types`, `npm.cmd run test` (9 files / 31 tests), `npm.cmd run build`, and `.\init.ps1`.
 - Browser verification used Playwright through Node REPL fallback because the Browser plugin did not expose direct browser-control tools. It loaded a prepared scenario through the UI, entered Run mode, selected a pawn on the PixiJS board, moved it from `loc-haven` to `loc-road`, incremented its count, selected a card, moved it to `discard-zone`, saved, and parsed the saved JSON. Evidence confirmed runtime state changed while `frozenSetup` preserved the original setup.
 - `feature_list.json` now marks `F-04-ManualScenarioPrototype` as completed. The next pending feature is `F-05-MovementValidation`.
+
+## 2026-06-10 F-04 Asset Import UX Polish
+
+- Removed the topbar `Import images` action so the topbar remains focused on scenario-level Save/Load and Edit/Run mode controls.
+- Added left Creation toolbar import controls inside `Image Assets`: one `Assets folder` directory import that infers categories from paths such as `assets/token/...`, plus per-category `Folder` and `Image` imports for BOARD, PAWN, TOKEN, TILE, CARD, and OTHER.
+- Imported assets are now grouped by category in the asset list. Category-specific imports assign the selected category immediately; whole-folder imports infer from folder names; only BOARD imports auto-set the board background when none exists.
+- Added `src/ui/assetImport.ts` and `tests/ui/assetImport.test.ts` for path inference, default TOKEN copy limits, and placement-size defaults.
+- Verification passed: `npm.cmd exec -- vitest run tests/ui/assetImport.test.ts`, `npm.cmd run check-types`, `npm.cmd run test` (10 files / 34 tests), and `npm.cmd run build`.
+- Browser plugin direct controls were not exposed in this session; per Product Design browser constraints, no Playwright fallback was run without explicit user approval. Final harness verification is still required after this progress entry.
