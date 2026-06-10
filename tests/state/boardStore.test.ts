@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyBoard } from "../../src/engine/board";
 import { createEmptyEntityState } from "../../src/engine/entity";
 import { useBoardStore } from "../../src/state/boardStore";
@@ -115,6 +115,158 @@ describe("Maker image assets and entity placement", () => {
       height: 80,
     });
     expect(nextState.lastError).toContain("2 copy limit");
+  });
+
+  it("adds imported image assets in one batch and ignores duplicate ids", () => {
+    const store = useBoardStore.getState();
+
+    store.addAssets([
+      {
+        id: "asset-board",
+        category: "BOARD",
+        name: "Board.png",
+        url: "blob:board",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 1,
+        placementWidth: 64,
+        placementHeight: 64,
+      },
+      {
+        id: "asset-token",
+        category: "TOKEN",
+        name: "Token.png",
+        url: "blob:token",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 999,
+        placementWidth: 64,
+        placementHeight: 64,
+      },
+      {
+        id: "asset-token",
+        category: "TOKEN",
+        name: "Duplicate Token.png",
+        url: "blob:duplicate",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 999,
+        placementWidth: 64,
+        placementHeight: 64,
+      },
+    ]);
+
+    const nextState = useBoardStore.getState();
+
+    expect(nextState.assets.map((asset) => asset.id)).toEqual([
+      "asset-board",
+      "asset-token",
+    ]);
+    expect(nextState.selectedAssetId).toBe("asset-token");
+  });
+
+  it("applies background media patches in one batch and syncs the board background", () => {
+    const store = useBoardStore.getState();
+
+    store.addAssets([
+      {
+        id: "asset-board",
+        category: "BOARD",
+        name: "Board.png",
+        url: "blob:board",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 1,
+        placementWidth: 64,
+        placementHeight: 64,
+      },
+      {
+        id: "asset-card",
+        category: "CARD",
+        name: "Card.png",
+        url: "blob:card",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 1,
+        placementWidth: 64,
+        placementHeight: 64,
+      },
+    ]);
+    useBoardStore.getState().setBackgroundAsset("asset-board");
+
+    expect(useBoardStore.getState().board.background?.width).toBeUndefined();
+
+    useBoardStore.getState().applyAssetMediaPatches([
+      {
+        assetId: "asset-board",
+        width: 4000,
+        height: 3000,
+        thumbnailUrl: "blob:board-thumb",
+      },
+      {
+        assetId: "asset-card",
+        width: 600,
+        height: 800,
+        thumbnailUrl: "blob:card-thumb",
+      },
+    ]);
+
+    const nextState = useBoardStore.getState();
+    const boardAsset = nextState.assets.find((asset) => asset.id === "asset-board");
+    const cardAsset = nextState.assets.find((asset) => asset.id === "asset-card");
+
+    expect(boardAsset).toMatchObject({
+      width: 4000,
+      height: 3000,
+      thumbnailUrl: "blob:board-thumb",
+    });
+    expect(cardAsset).toMatchObject({
+      width: 600,
+      height: 800,
+      thumbnailUrl: "blob:card-thumb",
+    });
+    expect(nextState.board.background).toMatchObject({
+      assetId: "asset-board",
+      width: 4000,
+      height: 3000,
+    });
+  });
+
+  it("revokes thumbnails for media patches whose asset was already deleted", () => {
+    const revokeSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
+    const store = useBoardStore.getState();
+
+    store.addAsset({
+      id: "asset-kept",
+      category: "TOKEN",
+      name: "Kept.png",
+      url: "blob:kept",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 999,
+      placementWidth: 64,
+      placementHeight: 64,
+    });
+
+    useBoardStore.getState().applyAssetMediaPatches([
+      { assetId: "asset-kept", thumbnailUrl: "blob:kept-thumb" },
+      { assetId: "asset-deleted", thumbnailUrl: "blob:orphan-thumb" },
+    ]);
+
+    expect(revokeSpy).toHaveBeenCalledWith("blob:orphan-thumb");
+    expect(
+      useBoardStore.getState().assets.find((asset) => asset.id === "asset-kept")
+        ?.thumbnailUrl,
+    ).toBe("blob:kept-thumb");
+
+    useBoardStore.getState().removeAsset("asset-kept");
+
+    expect(revokeSpy).toHaveBeenCalledWith("blob:kept");
+    expect(revokeSpy).toHaveBeenCalledWith("blob:kept-thumb");
+
+    revokeSpy.mockRestore();
   });
 
   it("does not place board or other assets as entities", () => {

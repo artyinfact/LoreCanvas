@@ -29,6 +29,12 @@ export interface UploadedImageAsset {
   category: ResourceCategory;
   name: string;
   url: string;
+  /**
+   * Small downscaled preview generated off the import path. List UI must
+   * render this instead of `url` so large imports never decode full-size
+   * images.
+   */
+  thumbnailUrl?: string;
   mimeType: string;
   size: number;
   width?: number;
@@ -36,6 +42,13 @@ export interface UploadedImageAsset {
   maxCopies: number;
   placementWidth: number;
   placementHeight: number;
+}
+
+export interface AssetMediaPatch {
+  assetId: string;
+  width?: number;
+  height?: number;
+  thumbnailUrl?: string;
 }
 
 export interface AssetPlacement {
@@ -99,6 +112,8 @@ export interface BoardStore {
   isInspectorCollapsed: boolean;
   lastError: string | null;
   addAsset: (asset: UploadedImageAsset) => void;
+  addAssets: (assets: UploadedImageAsset[]) => void;
+  applyAssetMediaPatches: (patches: AssetMediaPatch[]) => void;
   removeAsset: (assetId: string) => void;
   updateAssetCategory: (assetId: string, category: ResourceCategory) => void;
   updateAssetPlacementConfig: (
@@ -209,6 +224,90 @@ export const useBoardStore = create<BoardStore>((set) => ({
         lastError: null,
       };
     }),
+  addAssets: (assets) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const existingIds = new Set(state.assets.map((asset) => asset.id));
+      const nextAssets = assets.reduce<UploadedImageAsset[]>((result, asset) => {
+        if (existingIds.has(asset.id)) {
+          return result;
+        }
+
+        existingIds.add(asset.id);
+        result.push(normalizeAsset(asset));
+        return result;
+      }, []);
+
+      if (nextAssets.length === 0) {
+        return state;
+      }
+
+      return {
+        assets: [...state.assets, ...nextAssets],
+        selectedAssetId: nextAssets[nextAssets.length - 1]?.id ?? state.selectedAssetId,
+        lastError: null,
+      };
+    }),
+  applyAssetMediaPatches: (patches) =>
+    set((state) => {
+      if (patches.length === 0) {
+        return state;
+      }
+
+      const patchByAssetId = new Map(patches.map((patch) => [patch.assetId, patch]));
+      const knownAssetIds = new Set(state.assets.map((asset) => asset.id));
+
+      // Assets removed while their media was still decoding must not leak
+      // freshly created thumbnail object URLs.
+      for (const patch of patches) {
+        if (patch.thumbnailUrl && !knownAssetIds.has(patch.assetId)) {
+          URL.revokeObjectURL(patch.thumbnailUrl);
+        }
+      }
+
+      let didChange = false;
+      const nextAssets = state.assets.map((asset) => {
+        const patch = patchByAssetId.get(asset.id);
+
+        if (!patch) {
+          return asset;
+        }
+
+        didChange = true;
+
+        return normalizeAsset({
+          ...asset,
+          width: patch.width ?? asset.width,
+          height: patch.height ?? asset.height,
+          thumbnailUrl: patch.thumbnailUrl ?? asset.thumbnailUrl,
+        });
+      });
+
+      if (!didChange) {
+        return state;
+      }
+
+      const background = state.board.background;
+      const backgroundPatch = background
+        ? patchByAssetId.get(background.assetId)
+        : undefined;
+
+      return {
+        assets: nextAssets,
+        board: backgroundPatch
+          ? setBoardBackground(state.board, {
+              ...background!,
+              width: backgroundPatch.width ?? background!.width,
+              height: backgroundPatch.height ?? background!.height,
+            })
+          : state.board,
+      };
+    }),
   removeAsset: (assetId) =>
     set((state) => {
       if (state.mode === "run") {
@@ -231,6 +330,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
 
       if (asset) {
         URL.revokeObjectURL(asset.url);
+
+        if (asset.thumbnailUrl) {
+          URL.revokeObjectURL(asset.thumbnailUrl);
+        }
       }
 
       return {

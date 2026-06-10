@@ -15,6 +15,8 @@ export interface ScenarioAsset {
   category: ResourceCategory;
   name: string;
   url: string;
+  /** Transient downscaled preview reference; regenerated when files are re-imported. */
+  thumbnailUrl?: string;
   mimeType: string;
   size: number;
   width?: number;

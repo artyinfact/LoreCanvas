@@ -28,6 +28,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { ChangeEvent, DragEvent } from "react";
@@ -57,9 +58,13 @@ import {
   createImportedImageAsset,
   inferResourceCategoryFromPath,
 } from "./assetImport";
+import { processAssetMedia } from "./assetMedia";
+import type { AssetMediaTask } from "./assetMedia";
 
 const LOCAL_SCENARIO_STORAGE_KEY = "lorecanvas:last-scenario";
 const EMPTY_JSON_STATE: JsonRecord = {};
+const ASSET_CATEGORY_VISIBLE_INCREMENT = 32;
+const MEDIA_PROGRESS_UPDATE_INTERVAL = 8;
 
 const TOOL_OPTIONS: Array<{
   id: BoardTool;
@@ -78,6 +83,11 @@ const BoardCanvas = lazy(() =>
 interface ImageImportOptions {
   category?: ResourceCategory;
   inferCategoryFromPath?: boolean;
+}
+
+interface MediaProgress {
+  done: number;
+  total: number;
 }
 
 export function App() {
@@ -103,7 +113,7 @@ export function App() {
   );
   const edgeDraftFromId = useBoardStore((state) => state.edgeDraftFromId);
   const lastError = useBoardStore((state) => state.lastError);
-  const addAsset = useBoardStore((state) => state.addAsset);
+  const addAssets = useBoardStore((state) => state.addAssets);
   const removeAsset = useBoardStore((state) => state.removeAsset);
   const updateAssetCategory = useBoardStore((state) => state.updateAssetCategory);
   const updateAssetPlacementConfig = useBoardStore(
@@ -182,20 +192,81 @@ export function App() {
         : [],
     [board.edges, selectedLocation],
   );
+  const [mediaProgress, setMediaProgress] = useState<MediaProgress | null>(null);
+  const mediaCountsRef = useRef<MediaProgress>({ done: 0, total: 0 });
+  const isUnmountedRef = useRef(false);
+
+  useEffect(() => {
+    // Reset on every mount so the StrictMode dev double-mount cleanup does not
+    // leave the pipeline permanently cancelled.
+    isUnmountedRef.current = false;
+
+    return () => {
+      isUnmountedRef.current = true;
+    };
+  }, []);
+
+  const runMediaPipeline = useCallback((tasks: AssetMediaTask[]) => {
+    if (tasks.length === 0) {
+      return;
+    }
+
+    mediaCountsRef.current.total += tasks.length;
+    setMediaProgress({ ...mediaCountsRef.current });
+
+    void processAssetMedia(
+      tasks,
+      (patches) => {
+        useBoardStore.getState().applyAssetMediaPatches(patches);
+      },
+      {
+        isCancelled: () => isUnmountedRef.current,
+        onProgress: () => {
+          const counts = mediaCountsRef.current;
+
+          counts.done += 1;
+
+          if (counts.done >= counts.total) {
+            mediaCountsRef.current = { done: 0, total: 0 };
+
+            if (!isUnmountedRef.current) {
+              setMediaProgress(null);
+            }
+            return;
+          }
+
+          if (
+            counts.done % MEDIA_PROGRESS_UPDATE_INTERVAL === 0 &&
+            !isUnmountedRef.current
+          ) {
+            setMediaProgress({ ...counts });
+          }
+        },
+      },
+    );
+  }, []);
   const handleImageImport = useCallback(
-    async (
-      event: ChangeEvent<HTMLInputElement>,
-      options: ImageImportOptions = {},
-    ) => {
+    (event: ChangeEvent<HTMLInputElement>, options: ImageImportOptions = {}) => {
       const input = event.currentTarget;
       const files = Array.from(input.files ?? []).filter((file) =>
         file.type.startsWith("image/"),
       );
-      const batchId = createImportBatchId();
 
-      for (const [index, file] of files.entries()) {
+      input.value = "";
+
+      if (files.length === 0) {
+        return;
+      }
+
+      const batchId = createImportBatchId();
+      const importedAssets: UploadedImageAsset[] = [];
+      const mediaTasks: AssetMediaTask[] = [];
+
+      files.forEach((file, index) => {
+        // Import never decodes image data: every file only gets an object URL
+        // here, while dimensions and thumbnails are produced later by the
+        // bounded background media pipeline.
         const url = URL.createObjectURL(file);
-        const dimensions = await readImageDimensions(url);
         const relativePath = getFileRelativePath(file);
         const category =
           options.category ??
@@ -205,25 +276,29 @@ export function App() {
         const asset = createImportedImageAsset({
           batchId,
           category,
-          dimensions,
           file,
           index,
           url,
         });
 
-        addAsset(asset);
+        importedAssets.push(asset);
+        mediaTasks.push({ assetId: asset.id, file, url });
+      });
 
-        if (
-          asset.category === "BOARD" &&
-          !useBoardStore.getState().board.background
-        ) {
-          setBackgroundAsset(asset.id);
-        }
+      const shouldSetBackground = !useBoardStore.getState().board.background;
+      const backgroundAssetId = importedAssets.find(
+        (asset) => asset.category === "BOARD",
+      )?.id;
+
+      addAssets(importedAssets);
+
+      if (shouldSetBackground && backgroundAssetId) {
+        setBackgroundAsset(backgroundAssetId);
       }
 
-      input.value = "";
+      runMediaPipeline(mediaTasks);
     },
-    [addAsset, setBackgroundAsset],
+    [addAssets, runMediaPipeline, setBackgroundAsset],
   );
   const handleSaveScenario = useCallback(() => {
     try {
@@ -254,6 +329,9 @@ export function App() {
   }, [setLastError]);
   const [collapsedSections, setCollapsedSections] = useState<
     Record<string, boolean>
+  >({});
+  const [visibleAssetCounts, setVisibleAssetCounts] = useState<
+    Partial<Record<ResourceCategory, number>>
   >({});
   const toggleSection = useCallback((id: string) => {
     setCollapsedSections((current) => ({
@@ -397,6 +475,7 @@ export function App() {
               <AssetImportPanel
                 isDisabled={mode === "run"}
                 onImport={handleImageImport}
+                progress={mediaProgress}
               />
               <div className="asset-list">
                 {assets.length === 0 ? (
@@ -406,6 +485,12 @@ export function App() {
                     const categoryAssets = assets.filter(
                       (asset) => asset.category === category,
                     );
+                    const visibleCount =
+                      visibleAssetCounts[category] ??
+                      ASSET_CATEGORY_VISIBLE_INCREMENT;
+                    const visibleAssets = categoryAssets.slice(0, visibleCount);
+                    const hiddenCount =
+                      categoryAssets.length - visibleAssets.length;
 
                     if (categoryAssets.length === 0) {
                       return null;
@@ -419,7 +504,7 @@ export function App() {
                           </strong>
                           <span>{categoryAssets.length}</span>
                         </div>
-                        {categoryAssets.map((asset) => (
+                        {visibleAssets.map((asset) => (
                           <AssetItem
                             asset={asset}
                             copyCount={
@@ -439,6 +524,23 @@ export function App() {
                             }
                           />
                         ))}
+                        {hiddenCount > 0 ? (
+                          <button
+                            className="mini-button asset-show-more"
+                            onClick={() =>
+                              setVisibleAssetCounts((current) => ({
+                                ...current,
+                                [category]:
+                                  visibleCount +
+                                  ASSET_CATEGORY_VISIBLE_INCREMENT,
+                              }))
+                            }
+                            type="button"
+                          >
+                            Show {Math.min(hiddenCount, ASSET_CATEGORY_VISIBLE_INCREMENT)} more
+                            <span>{hiddenCount} hidden</span>
+                          </button>
+                        ) : null}
                       </section>
                     );
                   })
@@ -573,7 +675,10 @@ export function App() {
                   {selectedPlacement && selectedPlacementAsset ? (
                     <div className="inspector-stack">
                       <div className="selected-piece-card">
-                        <img alt="" src={selectedPlacementAsset.url} />
+                        <img
+                          alt=""
+                          src={getAssetPreviewUrl(selectedPlacementAsset)}
+                        />
                         <div>
                           <strong>{selectedPlacementAsset.name}</strong>
                           <span>
@@ -1051,7 +1156,8 @@ interface AssetImportPanelProps {
   onImport: (
     event: ChangeEvent<HTMLInputElement>,
     options?: ImageImportOptions,
-  ) => void | Promise<void>;
+  ) => void;
+  progress: MediaProgress | null;
 }
 
 const DIRECTORY_INPUT_PROPS = {
@@ -1059,9 +1165,18 @@ const DIRECTORY_INPUT_PROPS = {
   webkitdirectory: "",
 } as Record<string, string>;
 
-function AssetImportPanel({ isDisabled, onImport }: AssetImportPanelProps) {
+function AssetImportPanel({ isDisabled, onImport, progress }: AssetImportPanelProps) {
   return (
     <div className="asset-import-panel" data-disabled={isDisabled}>
+      {progress ? (
+        <p
+          aria-live="polite"
+          className="asset-import-progress"
+          role="status"
+        >
+          Processing images {progress.done} / {progress.total}
+        </p>
+      ) : null}
       <label
         aria-disabled={isDisabled}
         className="mini-button asset-import-root"
@@ -1224,7 +1339,7 @@ function PawnSheetInspector({
   return (
     <section className="pawn-sheet" aria-label="Pawn inspector">
       <div className="selected-piece-card selected-piece-card--pawn">
-        <img alt="" src={placementAsset.url} />
+        <img alt="" src={getAssetPreviewUrl(placementAsset)} />
         <div>
           <strong>{placementAsset.name}</strong>
           <span>
@@ -1275,7 +1390,7 @@ function PawnSheetInspector({
         </h2>
         {characterCard ? (
           <div className="sheet-card-slot">
-            <img alt="" src={characterCard.url} />
+            <img alt="" src={getAssetPreviewUrl(characterCard)} />
             <strong title={characterCard.name}>{characterCard.name}</strong>
           </div>
         ) : (
@@ -1296,7 +1411,7 @@ function PawnSheetInspector({
           <div className="held-card-grid">
             {heldCards.map(({ asset, index }) => (
               <article className="held-card" key={`${asset.id}-${index}`}>
-                <img alt="" src={asset.url} />
+                <img alt="" src={getAssetPreviewUrl(asset)} />
                 <strong title={asset.name}>{asset.name}</strong>
                 <button
                   aria-label={`Remove ${asset.name}`}
@@ -1337,7 +1452,7 @@ function PawnSheetInspector({
                 }}
                 type="button"
               >
-                <img alt="" src={asset.url} />
+                <img alt="" src={getAssetPreviewUrl(asset)} />
                 <span>{count}</span>
                 <small>
                   {formatRemainingCopies(
@@ -1415,7 +1530,13 @@ function AssetItem({
       draggable={isPlaceable}
       onDragStart={handleDragStart}
     >
-      <img alt="" src={asset.url} />
+      {asset.thumbnailUrl ? (
+        <img alt="" decoding="async" loading="lazy" src={asset.thumbnailUrl} />
+      ) : (
+        <span aria-hidden="true" className="asset-thumb-pending">
+          <ImageIcon size={20} />
+        </span>
+      )}
       <div className="asset-item__body">
         <strong title={asset.name}>{asset.name}</strong>
         <span>{formatAssetMeta(asset)}</span>
@@ -1586,24 +1707,11 @@ function formatRemainingCopies(remaining: number) {
   return remaining >= 900 ? "unlimited" : `${remaining} left`;
 }
 
-function readImageDimensions(url: string): Promise<{
-  width?: number;
-  height?: number;
-}> {
-  return new Promise((resolve) => {
-    const image = new Image();
-
-    image.onload = () => {
-      resolve({
-        width: image.naturalWidth,
-        height: image.naturalHeight,
-      });
-    };
-    image.onerror = () => {
-      resolve({});
-    };
-    image.src = url;
-  });
+function getAssetPreviewUrl(asset: UploadedImageAsset) {
+  // Bounded preview slots (selected piece, pawn sheet) may fall back to the
+  // full image while the thumbnail is still being generated; unbounded lists
+  // must only render asset.thumbnailUrl.
+  return asset.thumbnailUrl ?? asset.url;
 }
 
 function getFileRelativePath(file: File) {

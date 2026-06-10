@@ -209,3 +209,33 @@
 - Added `src/ui/assetImport.ts` and `tests/ui/assetImport.test.ts` for path inference, default TOKEN copy limits, and placement-size defaults.
 - Verification passed: `npm.cmd exec -- vitest run tests/ui/assetImport.test.ts`, `npm.cmd run check-types`, `npm.cmd run test` (10 files / 34 tests), and `npm.cmd run build`.
 - Browser plugin direct controls were not exposed in this session; per Product Design browser constraints, no Playwright fallback was run without explicit user approval. Final harness verification is still required after this progress entry.
+
+## 2026-06-10 F-04 Asset Folder Crash Fix
+
+- Addressed browser feedback that selecting the full `assets` folder could crash Codex/the browser.
+- Root cause: folder import decoded image dimensions for every selected file and inserted assets one by one, then the sidebar rendered every imported asset thumbnail at once. The LOTR card folder can contain enough images to make this unsafe in the desktop browser.
+- Added `addAssets` to `src/state/boardStore.ts` so full-folder import performs a single Zustand update and de-duplicates ids within the imported batch.
+- Updated `src/ui/App.tsx` so large imports skip eager dimension decoding, asset thumbnails use lazy/async decoding, and each category initially renders only 32 asset rows with a `Show more` control.
+- Kept the `Assets folder` primary button readable by ensuring the primary import button color overrides generic `.mini-button` color rules.
+- Verification passed: `npm.cmd run check-types`, `npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/ui/assetImport.test.ts`, `npm.cmd run build`, and final `.\init.ps1` (10 files / 35 tests).
+
+## 2026-06-10 Asset Import Rework: Background Media Pipeline
+
+- Reworked image import after browser feedback that uploading the full `assets` folder (LOTR fixture: 498 files / ~830 MB, card scans up to 8 MB) still crashed the tab.
+- Root cause: the asset list and inspector previews rendered `<img src={asset.url}>` with the original full-resolution blob. Even with lazy loading and the 32-row cap, scrolling decoded dozens of multi-MB PNGs (a 6 MB scan decodes to tens of MB of RGBA), exhausting tab memory. Large imports also skipped dimension decoding entirely, so the board background lost its aspect ratio.
+- New design:
+  - Import never decodes image data. `handleImageImport` only creates object URLs and inserts all assets in one `addAssets` batch.
+  - New `src/ui/assetMedia.ts` runs a background media pipeline with bounded concurrency (3 decodes at a time): each file is decoded once (`createImageBitmap`, `<img>.decode()` fallback for SVG-in-Chromium), downscaled into a ~128 px thumbnail blob, and closed. Patches flush to the store in batches of 8.
+  - New `applyAssetMediaPatches` store action merges width/height/thumbnailUrl into assets in one update, syncs `board.background` dimensions when the background asset is patched, and revokes thumbnails for assets deleted mid-pipeline. `removeAsset` now revokes both the asset URL and its thumbnail.
+  - The asset list renders only `asset.thumbnailUrl` (placeholder icon while pending) - never the full-resolution URL. Bounded preview slots (selected piece, pawn sheet, held cards, token counters) prefer the thumbnail and fall back to the full URL.
+  - The Image Assets panel shows a "Processing images x / y" live progress line while the pipeline runs; progress state updates are throttled to one per 8 files.
+  - `ScenarioAsset` carries an optional transient `thumbnailUrl` so scenario round-trips keep typing consistent.
+- Tests: new `tests/ui/assetMedia.test.ts` covers thumbnail fitting, one-patch-per-task batch flushing, the concurrency cap, decode-failure tolerance, and cancellation. `tests/state/boardStore.test.ts` covers `applyAssetMediaPatches` background sync and orphan-thumbnail revocation.
+- Local verification passed: `npm.cmd run check-types`, `npm.cmd run test` (11 files / 42 tests), `npm.cmd run build` (no chunk warning).
+- First browser run exposed a StrictMode bug: the dev double-mount cleanup left `isUnmountedRef` permanently true, so `isCancelled()` cancelled the pipeline before any decode and progress stuck at `0 / 491`. Fixed by resetting the flag on every mount in `App.tsx`.
+- Browser verification (temporary Playwright + local Chrome against `http://localhost:5173/`, full fixture `local-fixtures/lotr/LotR-FotF/assets`, 491 images / ~839 MB):
+  - Directory submitted in ~0.2 s; all 491 assets inserted in ~1 s with JS heap at 18 MB.
+  - Background media pipeline decoded all 491 thumbnails in ~14 s; JS heap settled at 51 MB after the pipeline and stayed at 51 MB after scrolling the asset list (previously this scenario crashed the tab).
+  - Categories inferred from folder paths: Board 1, Pawn 20, Token 22, Tile 2, Card 427, Other 19; 96 visible asset rows all rendered blob thumbnails with 0 pending placeholders and a working Show more control.
+  - The 16.7 MB game board auto-set as background and rendered through PixiJS with the correct aspect ratio (dimensions delivered by the pipeline patch).
+  - No page crash, no error banner, no app console errors or warnings.

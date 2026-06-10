@@ -211,15 +211,43 @@
           "coverage": [
             "src/ui/assetImport.ts infers BOARD, PAWN, TOKEN, TILE, CARD, and OTHER categories from imported folder paths such as assets/token or token.",
             "src/ui/App.tsx imports assets from the Image Assets panel, groups imported assets by category, auto-sets only BOARD imports as the board background, and disables setup import controls in Run mode.",
-            "tests/ui/assetImport.test.ts covers folder-path category inference, category subfolder inference, TOKEN default high copy limits, and placement-size defaults."
+            "src/state/boardStore.ts supports addAssets for one-shot batch imports, avoiding a render/update per image during full asset folder imports.",
+            "tests/ui/assetImport.test.ts covers folder-path category inference, category subfolder inference, TOKEN default high copy limits, and placement-size defaults.",
+            "tests/state/boardStore.test.ts covers addAssets batch insertion and duplicate-id handling."
           ],
           "verification": [
-            "npm.cmd exec -- vitest run tests/ui/assetImport.test.ts",
+            "npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/ui/assetImport.test.ts",
             "npm.cmd run check-types",
             "npm.cmd run test",
-            "npm.cmd run build"
+            "npm.cmd run build",
+            ".\\init.ps1"
           ],
-          "notes": "This is a manual MVP import-entry refinement only. It does not implement .lorecanvas ZIP archive import, automatic setup parsing, online asset storage, or LOTR-specific import rules."
+          "notes": "This is a manual MVP import-entry refinement only. It does not implement .lorecanvas ZIP archive import, automatic setup parsing, online asset storage, or LOTR-specific import rules. 2026-06-10 browser feedback fix: full folder imports now batch state updates, skip eager dimension decoding for large batches, render lazy thumbnails, and show only the first 32 assets per category until Show more is clicked to reduce browser memory pressure.",
+          "mediaPipelineRework": {
+            "updatedAt": "2026-06-10",
+            "summary": "Second crash fix for full assets-folder import. Root cause was full-resolution blob URLs rendered as list thumbnails: scrolling decoded dozens of multi-MB PNGs and exhausted tab memory. Import no longer decodes any image data; a background media pipeline with bounded concurrency generates ~128px thumbnail blobs and reads dimensions, and list UI renders only thumbnails.",
+            "coverage": [
+              "src/ui/assetMedia.ts implements processAssetMedia with bounded decode concurrency (default 3), batched patch flushes (default 8), cancellation, decode-failure tolerance, and an <img>.decode() fallback for SVG blobs unsupported by createImageBitmap.",
+              "src/state/boardStore.ts adds UploadedImageAsset.thumbnailUrl and applyAssetMediaPatches, which batch-merges width/height/thumbnailUrl, syncs board.background dimensions, and revokes thumbnails for assets deleted mid-pipeline; removeAsset revokes both asset and thumbnail object URLs.",
+              "src/ui/App.tsx imports without any decoding, runs the media pipeline in the background with a throttled 'Processing images x / y' progress line, renders only thumbnailUrl (placeholder icon while pending) in the asset list, and prefers thumbnails in bounded preview slots.",
+              "src/engine/serialization.ts ScenarioAsset carries an optional transient thumbnailUrl.",
+              "tests/ui/assetMedia.test.ts covers thumbnail fitting, batch flushing, the concurrency cap, decode-failure tolerance, and cancellation; tests/state/boardStore.test.ts covers applyAssetMediaPatches and orphan-thumbnail revocation."
+            ],
+            "verification": [
+              "npm.cmd run check-types",
+              "npm.cmd exec -- vitest run tests/ui/assetMedia.test.ts tests/state/boardStore.test.ts tests/ui/assetImport.test.ts",
+              "npm.cmd run test (11 files / 42 tests)",
+              "npm.cmd run build",
+              ".\\init.ps1"
+            ],
+            "browserVerification": [
+              "Temporary Playwright + local Chrome uploaded the full LotR-FotF assets directory (491 images / ~839 MB) through the Assets folder input on http://localhost:5173/.",
+              "All 491 assets inserted in ~1 s with the JS heap at 18 MB; the background pipeline produced all thumbnails in ~14 s and the heap settled at 51 MB, unchanged after scrolling the asset list.",
+              "Categories inferred from paths (Board 1, Pawn 20, Token 22, Tile 2, Card 427, Other 19); 96 visible rows all rendered blob thumbnails with 0 pending placeholders; the 16.7 MB board auto-set as background and rendered with the correct aspect ratio.",
+              "No page crash, no error banner, no app console errors or warnings.",
+              "The first run caught a React StrictMode bug where the dev double-mount left the pipeline permanently cancelled at 'Processing images 0 / 491'; fixed by resetting the unmount flag on every mount."
+            ]
+          }
         }
       }
     },

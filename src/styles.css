@@ -519,6 +519,16 @@ button {
   display: none;
 }
 
+.asset-import-progress {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #eef3f2;
+  color: #214f52;
+  font-size: 0.76rem;
+  font-weight: 780;
+}
+
 .asset-import-panel[data-disabled="true"] {
   opacity: 0.62;
 }
@@ -597,6 +607,18 @@ button {
   font-weight: 820;
 }
 
+.asset-show-more {
+  width: 100%;
+  justify-content: space-between;
+  background: #f3f5f7;
+}
+
+.asset-show-more span {
+  color: #65707c;
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
 .asset-item,
 .edge-item {
   border: 1px solid #d3d8df;
@@ -629,6 +651,16 @@ button {
   object-fit: cover;
   border-radius: 6px;
   background: #d9dde3;
+}
+
+.asset-thumb-pending {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #d9dde3;
+  color: #8a939f;
 }
 
 .asset-item__body {
