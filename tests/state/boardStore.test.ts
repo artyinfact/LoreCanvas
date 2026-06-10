@@ -269,6 +269,37 @@ describe("Maker image assets and entity placement", () => {
     revokeSpy.mockRestore();
   });
 
+  it("revokes the previous thumbnail when a media patch replaces it", () => {
+    const revokeSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
+    const store = useBoardStore.getState();
+
+    store.addAsset({
+      id: "asset-token",
+      category: "TOKEN",
+      name: "Marker.png",
+      url: "blob:marker",
+      mimeType: "image/png",
+      size: 1000,
+      thumbnailUrl: "blob:old-thumb",
+      maxCopies: 999,
+      placementWidth: 64,
+      placementHeight: 64,
+    });
+
+    useBoardStore.getState().applyAssetMediaPatches([
+      { assetId: "asset-token", thumbnailUrl: "blob:new-thumb" },
+    ]);
+
+    expect(revokeSpy).toHaveBeenCalledWith("blob:old-thumb");
+    expect(useBoardStore.getState().assets[0]?.thumbnailUrl).toBe(
+      "blob:new-thumb",
+    );
+
+    revokeSpy.mockRestore();
+  });
+
   it("does not place board or other assets as entities", () => {
     const store = useBoardStore.getState();
 
@@ -287,6 +318,38 @@ describe("Maker image assets and entity placement", () => {
 
     expect(useBoardStore.getState().assetPlacements).toHaveLength(0);
     expect(useBoardStore.getState().lastError).toContain("BOARD assets");
+  });
+
+  it("clears existing placements and entities when a placed asset becomes the board background", () => {
+    const store = useBoardStore.getState();
+
+    store.addAsset({
+      id: "asset-tile",
+      category: "TILE",
+      name: "Map overlay.png",
+      url: "blob:map-overlay",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 1,
+      placementWidth: 128,
+      placementHeight: 96,
+    });
+    useBoardStore.getState().createAssetPlacement("asset-tile", 0.2, 0.2);
+
+    expect(useBoardStore.getState().assetPlacements).toHaveLength(1);
+    expect(useBoardStore.getState().entityState.entities).toHaveLength(1);
+
+    useBoardStore.getState().setBackgroundAsset("asset-tile");
+
+    const nextState = useBoardStore.getState();
+
+    expect(nextState.board.background?.assetId).toBe("asset-tile");
+    expect(nextState.assets.find((asset) => asset.id === "asset-tile")).toMatchObject({
+      category: "BOARD",
+    });
+    expect(nextState.assetPlacements).toHaveLength(0);
+    expect(nextState.entityState.entities).toHaveLength(0);
+    expect(nextState.selectedPlacementId).toBeNull();
   });
 
   it("removes the generated entity when its placed copy is deleted", () => {

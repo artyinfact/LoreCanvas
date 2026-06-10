@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyBoard } from "../../src/engine/board";
 import { createEmptyEntityState } from "../../src/engine/entity";
 import type { ResourceCategory } from "../../src/engine/entity";
@@ -153,6 +153,108 @@ describe("F-03 scenario store import/export", () => {
         y: -10,
       },
     });
+  });
+
+  it("releases object URLs that are not reused by the loaded scenario", () => {
+    const revokeSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
+
+    useBoardStore.setState({
+      assets: [
+        {
+          id: "asset-old",
+          category: "TOKEN",
+          name: "Old Token.png",
+          url: "blob:old-token",
+          thumbnailUrl: "blob:old-token-thumb",
+          mimeType: "image/png",
+          size: 100,
+          maxCopies: 999,
+          placementWidth: 64,
+          placementHeight: 64,
+        },
+        {
+          id: "asset-shared",
+          category: "CARD",
+          name: "Shared Card.png",
+          url: "blob:shared-card",
+          thumbnailUrl: "blob:shared-card-thumb",
+          mimeType: "image/png",
+          size: 100,
+          maxCopies: 1,
+          placementWidth: 64,
+          placementHeight: 90,
+        },
+      ],
+      frozenSetup: {
+        board: createEmptyBoard(),
+        entityState: createEmptyEntityState(),
+        assets: [
+          {
+            id: "asset-frozen-only",
+            category: "OTHER",
+            name: "Frozen.png",
+            url: "blob:frozen-only",
+            mimeType: "image/png",
+            size: 100,
+            maxCopies: 1,
+            placementWidth: 64,
+            placementHeight: 64,
+          },
+        ],
+        assetPlacements: [],
+        pawnSheets: {},
+        boardState: {},
+        locationStates: {},
+        edgeStates: {},
+        boardZoom: 1,
+        boardPan: { x: 0, y: 0 },
+      },
+    });
+
+    const scenario = createScenarioPackage({
+      assets: [
+        {
+          id: "asset-shared",
+          category: "CARD",
+          name: "Shared Card.png",
+          url: "blob:shared-card",
+          thumbnailUrl: "blob:shared-card-thumb",
+          mimeType: "image/png",
+          size: 100,
+          maxCopies: 1,
+          placementWidth: 64,
+          placementHeight: 90,
+        },
+        {
+          id: "asset-new",
+          category: "OTHER",
+          name: "New.png",
+          url: "blob:new-asset",
+          mimeType: "image/png",
+          size: 100,
+          maxCopies: 1,
+          placementWidth: 64,
+          placementHeight: 64,
+        },
+      ],
+      board: createEmptyBoard(),
+      assetPlacements: [],
+      entityState: createEmptyEntityState(),
+      pawnSheets: {},
+    });
+
+    applyScenarioPackageToBoardStore(serializeScenarioPackage(scenario));
+
+    expect(revokeSpy).toHaveBeenCalledWith("blob:old-token");
+    expect(revokeSpy).toHaveBeenCalledWith("blob:old-token-thumb");
+    expect(revokeSpy).toHaveBeenCalledWith("blob:frozen-only");
+    expect(revokeSpy).not.toHaveBeenCalledWith("blob:shared-card");
+    expect(revokeSpy).not.toHaveBeenCalledWith("blob:shared-card-thumb");
+    expect(revokeSpy).not.toHaveBeenCalledWith("blob:new-asset");
+
+    revokeSpy.mockRestore();
   });
 
   it("round-trips the LOTRRule setup snapshot through the generic scenario boundary", () => {

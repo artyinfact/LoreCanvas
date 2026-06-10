@@ -248,6 +248,27 @@
               "The first run caught a React StrictMode bug where the dev double-mount left the pipeline permanently cancelled at 'Processing images 0 / 491'; fixed by resetting the unmount flag on every mount."
             ]
           }
+        },
+        "manualMvpAudit": {
+          "updatedAt": "2026-06-10",
+          "summary": "Audited the manual MVP upload/save/load path after the Fable 5 asset-folder crash fix. Confirmed the StrictMode cancellation fix is present in code and harness evidence, then tightened object URL cleanup for repeated imports and scenario loads.",
+          "coverage": [
+            "src/ui/App.tsx resets the media pipeline unmount flag on every mount so React StrictMode double-mounts no longer leave full-folder import stuck at Processing images 0 / 491.",
+            "src/state/boardStore.ts now removes stale placements/entities when an already placed asset is promoted to the Board background, avoiding invalid placement/category mismatches during scenario export.",
+            "src/state/boardStore.ts now revokes replaced thumbnail object URLs and exposes revokeUnusedAssetObjectUrls for scenario-level cleanup.",
+            "src/state/scenarioStore.ts now revokes current asset and frozen-setup object URLs that are not reused by the loaded scenario before replacing the store.",
+            "README.md documents the pure-manual v1 workflow, asset-pack layout, validation commands, Save/Load limits, and deferred features."
+          ],
+          "verification": [
+            "npm.cmd exec -- vitest run tests/state/boardStore.test.ts",
+            "npm.cmd exec -- vitest run tests/state/scenarioStore.test.ts",
+            "npm.cmd run check-types",
+            "npm.cmd run test (11 files / 45 tests)",
+            "npm.cmd run build",
+            "npm.cmd audit --audit-level=moderate",
+            ".\\init.ps1 (11 files / 45 tests)"
+          ],
+          "notes": "Browser plugin direct controls were not exposed in this session. The previous full-folder browser evidence remains recorded under assetImportPolish.mediaPipelineRework; this audit added repeatable state-layer regressions for the newly found cleanup bugs."
         }
       }
     },

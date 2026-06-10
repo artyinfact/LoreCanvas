@@ -239,3 +239,22 @@
   - Categories inferred from folder paths: Board 1, Pawn 20, Token 22, Tile 2, Card 427, Other 19; 96 visible asset rows all rendered blob thumbnails with 0 pending placeholders and a working Show more control.
   - The 16.7 MB game board auto-set as background and rendered through PixiJS with the correct aspect ratio (dimensions delivered by the pipeline patch).
   - No page crash, no error banner, no app console errors or warnings.
+
+## 2026-06-10 Manual MVP Harness Audit And README
+
+- Confirmed the Fable 5 image-upload fix is synchronized into the harness: `feature_list.json` records the full 491-image browser verification, `progress.md` records the background media pipeline rework, and `src/ui/App.tsx` resets `isUnmountedRef.current = false` on every mount so React StrictMode double-mounts no longer leave import stuck at `Processing images 0 / 491`.
+- Audited the manual MVP upload/save/load state path and fixed two state-layer cleanup bugs:
+  - `setBackgroundAsset` now removes any existing placements, generated Entities, and pawn sheets for an asset that is promoted to the Board background. This prevents stale TILE/TOKEN/CARD placements from referencing an asset that has become `BOARD`.
+  - Scenario load now revokes current asset and frozen-setup blob URLs that are not reused by the loaded scenario. Media patching also revokes replaced thumbnail blob URLs.
+- Added regression coverage in `tests/state/boardStore.test.ts` for placed-asset-to-board cleanup and thumbnail replacement cleanup.
+- Added regression coverage in `tests/state/scenarioStore.test.ts` for object URL cleanup when a scenario replaces the current store while preserving reused URLs.
+- Added `README.md` for the pure-manual v1 workflow: install/verify, dev server startup, six-category asset-pack layout, Edit/Run workflow, state panels, Save/Load limits, and development commands.
+- Verification passed:
+  - `npm.cmd exec -- vitest run tests/state/boardStore.test.ts`
+  - `npm.cmd exec -- vitest run tests/state/scenarioStore.test.ts`
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` (11 files / 45 tests)
+  - `npm.cmd run build`
+  - `npm.cmd audit --audit-level=moderate` -> 0 vulnerabilities
+  - `.\init.ps1` -> harness valid, TypeScript green, 11 test files / 45 tests passed
+- Current next pending feature remains `F-05-MovementValidation`. No git staging, commit, or push was performed.

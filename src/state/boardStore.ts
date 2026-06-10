@@ -259,7 +259,22 @@ export const useBoardStore = create<BoardStore>((set) => ({
         return state;
       }
 
-      const patchByAssetId = new Map(patches.map((patch) => [patch.assetId, patch]));
+      const patchByAssetId = new Map<string, AssetMediaPatch>();
+
+      for (const patch of patches) {
+        const previousPatch = patchByAssetId.get(patch.assetId);
+
+        if (
+          previousPatch?.thumbnailUrl &&
+          patch.thumbnailUrl &&
+          previousPatch.thumbnailUrl !== patch.thumbnailUrl
+        ) {
+          URL.revokeObjectURL(previousPatch.thumbnailUrl);
+        }
+
+        patchByAssetId.set(patch.assetId, patch);
+      }
+
       const knownAssetIds = new Set(state.assets.map((asset) => asset.id));
 
       // Assets removed while their media was still decoding must not leak
@@ -279,6 +294,14 @@ export const useBoardStore = create<BoardStore>((set) => ({
         }
 
         didChange = true;
+
+        if (
+          patch.thumbnailUrl &&
+          asset.thumbnailUrl &&
+          patch.thumbnailUrl !== asset.thumbnailUrl
+        ) {
+          URL.revokeObjectURL(asset.thumbnailUrl);
+        }
 
         return normalizeAsset({
           ...asset,
@@ -329,11 +352,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
       );
 
       if (asset) {
-        URL.revokeObjectURL(asset.url);
-
-        if (asset.thumbnailUrl) {
-          URL.revokeObjectURL(asset.thumbnailUrl);
-        }
+        revokeAssetObjectUrls(asset);
       }
 
       return {
@@ -520,6 +539,16 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
 
+      const removedPlacements = state.assetPlacements.filter(
+        (placement) => placement.assetId === assetId,
+      );
+      const removedPlacementIds = new Set(
+        removedPlacements.map((placement) => placement.id),
+      );
+      const removedEntityIds = new Set(
+        removedPlacements.map((placement) => placement.entityId),
+      );
+
       return {
         board: setBoardBackground(state.board, {
           assetId: asset.id,
@@ -532,7 +561,24 @@ export const useBoardStore = create<BoardStore>((set) => ({
         assets: state.assets.map((candidate) =>
           candidate.id === asset.id ? { ...candidate, category: "BOARD" } : candidate,
         ),
+        entityState: {
+          entities: state.entityState.entities.filter(
+            (entity) => !removedEntityIds.has(entity.id),
+          ),
+        },
+        assetPlacements: state.assetPlacements.filter(
+          (placement) => placement.assetId !== assetId,
+        ),
+        pawnSheets: removePawnSheetsByPlacementId(
+          state.pawnSheets,
+          removedPlacementIds,
+        ),
         selectedAssetId: asset.id,
+        selectedPlacementId:
+          state.selectedPlacementId &&
+          removedPlacementIds.has(state.selectedPlacementId)
+            ? null
+            : state.selectedPlacementId,
         lastError: null,
       };
     }),
@@ -1321,8 +1367,55 @@ export function getSelectedLocation(
   );
 }
 
+export function revokeUnusedAssetObjectUrls(
+  currentAssets: readonly UploadedImageAsset[],
+  nextAssets: readonly UploadedImageAsset[],
+) {
+  const preservedUrls = collectAssetObjectUrls(nextAssets);
+  const revokedUrls = new Set<string>();
+
+  for (const asset of currentAssets) {
+    revokeAssetObjectUrls(asset, preservedUrls, revokedUrls);
+  }
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Board update failed.";
+}
+
+function collectAssetObjectUrls(assets: readonly UploadedImageAsset[]) {
+  const urls = new Set<string>();
+
+  for (const asset of assets) {
+    if (isObjectUrl(asset.url)) {
+      urls.add(asset.url);
+    }
+
+    if (asset.thumbnailUrl && isObjectUrl(asset.thumbnailUrl)) {
+      urls.add(asset.thumbnailUrl);
+    }
+  }
+
+  return urls;
+}
+
+function revokeAssetObjectUrls(
+  asset: UploadedImageAsset,
+  preservedUrls = new Set<string>(),
+  revokedUrls = new Set<string>(),
+) {
+  for (const url of [asset.url, asset.thumbnailUrl]) {
+    if (!url || !isObjectUrl(url) || preservedUrls.has(url) || revokedUrls.has(url)) {
+      continue;
+    }
+
+    URL.revokeObjectURL(url);
+    revokedUrls.add(url);
+  }
+}
+
+function isObjectUrl(url: string) {
+  return url.startsWith("blob:");
 }
 
 function createEmptyPawnSheet(): PawnSheet {

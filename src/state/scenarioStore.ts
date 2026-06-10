@@ -17,7 +17,7 @@ import type {
   ScenarioMode,
   UploadedImageAsset,
 } from "./boardStore";
-import { useBoardStore } from "./boardStore";
+import { revokeUnusedAssetObjectUrls, useBoardStore } from "./boardStore";
 import type { BoardState } from "../engine/board";
 import type { EntityState } from "../engine/entity";
 
@@ -133,6 +133,17 @@ export function applyScenarioPackageToBoardStore(
   source: ScenarioPackage | string,
 ) {
   const restoredState = importBoardStoreScenario(source);
+  const currentState = useBoardStore.getState();
+  const currentAssets = [
+    ...currentState.assets,
+    ...(currentState.frozenSetup?.assets ?? []),
+  ];
+  const restoredAssets = [
+    ...restoredState.assets,
+    ...(restoredState.frozenSetup?.assets ?? []),
+  ];
+
+  revokeUnusedAssetObjectUrls(currentAssets, restoredAssets);
 
   useBoardStore.setState({
     ...restoredState,
