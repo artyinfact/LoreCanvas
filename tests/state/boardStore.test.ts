@@ -352,6 +352,89 @@ describe("Maker image assets and entity placement", () => {
     expect(nextState.selectedPlacementId).toBeNull();
   });
 
+  it("updates and deletes locations by id for the workbench table", () => {
+    const store = useBoardStore.getState();
+
+    const firstLocationId = store.createLocationAt(0.2, 0.3);
+    const secondLocationId = useBoardStore.getState().createLocationAt(0.6, 0.7);
+
+    expect(firstLocationId).toBe("loc-1");
+    expect(secondLocationId).toBe("loc-2");
+
+    useBoardStore.getState().updateLocationDetails("loc-1", {
+      name: "Haven",
+      x: 0.25,
+      y: 0.35,
+      notes: "Recruitment point",
+    });
+    useBoardStore.getState().updateLocationState("loc-1", {
+      region: "north",
+    });
+    useBoardStore.getState().startOrCompleteEdge("loc-1");
+    useBoardStore.getState().startOrCompleteEdge("loc-2");
+
+    let nextState = useBoardStore.getState();
+
+    expect(nextState.board.locations[0]).toMatchObject({
+      id: "loc-1",
+      name: "Haven",
+      x: 0.25,
+      y: 0.35,
+      notes: "Recruitment point",
+    });
+    expect(nextState.locationStates["loc-1"]).toMatchObject({
+      region: "north",
+    });
+    expect(nextState.board.edges).toHaveLength(1);
+
+    useBoardStore.getState().deleteLocation("loc-1");
+    nextState = useBoardStore.getState();
+
+    expect(nextState.board.locations.map((location) => location.id)).toEqual([
+      "loc-2",
+    ]);
+    expect(nextState.board.edges).toHaveLength(0);
+    expect(nextState.locationStates["loc-1"]).toBeUndefined();
+    expect(nextState.selectedLocationId).toBe("loc-2");
+  });
+
+  it("updates and deletes edges by id for the workbench table", () => {
+    const store = useBoardStore.getState();
+
+    store.createLocationAt(0.2, 0.3);
+    useBoardStore.getState().createLocationAt(0.6, 0.7);
+    useBoardStore.getState().startOrCompleteEdge("loc-1");
+    useBoardStore.getState().startOrCompleteEdge("loc-2");
+    useBoardStore.getState().updateEdgeDetails("edge-1", {
+      label: "Hidden road",
+      fromId: "loc-2",
+      toId: "loc-1",
+    });
+    useBoardStore.getState().updateEdgeState("edge-1", {
+      cost: 2,
+      locked: true,
+    });
+
+    let nextState = useBoardStore.getState();
+
+    expect(nextState.board.edges[0]).toMatchObject({
+      id: "edge-1",
+      fromId: "loc-2",
+      toId: "loc-1",
+      label: "Hidden road",
+    });
+    expect(nextState.edgeStates["edge-1"]).toMatchObject({
+      cost: 2,
+      locked: true,
+    });
+
+    useBoardStore.getState().deleteEdgeById("edge-1");
+    nextState = useBoardStore.getState();
+
+    expect(nextState.board.edges).toHaveLength(0);
+    expect(nextState.edgeStates["edge-1"]).toBeUndefined();
+  });
+
   it("removes the generated entity when its placed copy is deleted", () => {
     const store = useBoardStore.getState();
 

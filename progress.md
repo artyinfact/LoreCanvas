@@ -258,3 +258,28 @@
   - `npm.cmd audit --audit-level=moderate` -> 0 vulnerabilities
   - `.\init.ps1` -> harness valid, TypeScript green, 11 test files / 45 tests passed
 - Current next pending feature remains `F-05-MovementValidation`. No git staging, commit, or push was performed.
+
+## 2026-06-11 F-04B Maker Workbench 1.0 Batch Editing
+
+- Completed the user-requested Maker UI redesign as `F-04B-MakerWorkbenchV1` in `feature_list.json`, inserted after the manual MVP and before movement validation.
+- Replaced the old primary Tools + Map + Inspector editing flow with a 1.0 workbench layout: left rail is now focused on image asset import/library, the center stage contains the map workspace plus a Data Workbench, and the right rail is a compact Context panel rather than the main editing surface.
+- Added Data Workbench tabs for `Locations`, `Edges`, `Objects`, and `Board State`.
+- Location rows now directly edit name, normalized X/Y percent, region, tags, notes, and arbitrary Location JSON state by `locationId`.
+- Edge rows now directly edit endpoints, label, directed, cost, lock, notes, and arbitrary Edge JSON state by `edgeId`.
+- Object rows expose generic Entity state, Location binding, zone id, count, and JSON state. Board State remains a JSON editor in the workbench.
+- Added store actions in `src/state/boardStore.ts`: `updateLocationDetails`, `deleteLocation`, `updateEdgeDetails`, and `deleteEdgeById`, so table rows no longer depend on selected-object inspector mutations.
+- Added regression tests in `tests/state/boardStore.test.ts` for row-level Location and Edge editing/deletion, state cleanup, and selection behavior.
+- Browser verification through the Browser plugin:
+  - Loaded `http://127.0.0.1:5173/`, confirmed `Data Workbench` rendered, no Vite overlay, and console error/warning count was 0.
+  - Created two PixiJS Locations and one Edge via the map controls.
+  - Edited `loc-1` to `Haven`, set Location region/tags/notes, edited `edge-1` label to `Road`, set directed true, and set cost to `2` through the table UI.
+  - Confirmed metrics showed `Locations2` and `Edges1`, Context showed the selected `loc-1`/`Haven`, and no error banner appeared.
+  - Checked a 390 x 844 viewport: no horizontal page overflow, mobile layout uses normal vertical flow, the Data Workbench is reachable, and Context appears after the workbench without overlap.
+- Verification passed:
+  - `npm.cmd run check-types`
+  - `npm.cmd exec -- vitest run tests/state/boardStore.test.ts` -> 14 tests
+  - `npm.cmd run test` -> 11 files / 47 tests
+  - `npm.cmd run build`
+  - `.\\init.ps1` -> harness valid, TypeScript green, 11 files / 47 tests
+- Current next pending feature is again `F-05-MovementValidation`.
+- No git staging, commit, or push was performed.

@@ -10,7 +10,7 @@ import {
   updateEdge,
   updateLocation,
 } from "../engine/board";
-import type { BoardLocation, BoardState } from "../engine/board";
+import type { BoardEdge, BoardLocation, BoardState } from "../engine/board";
 import {
   canPlaceAssetForCategory,
   clearLocationBindings,
@@ -126,9 +126,19 @@ export interface BoardStore {
   selectPlacement: (placementId: string | null) => void;
   createLocationAt: (x: number, y: number) => string | null;
   moveLocation: (locationId: string, x: number, y: number) => void;
+  updateLocationDetails: (
+    locationId: string,
+    patch: Partial<Omit<BoardLocation, "id">>,
+  ) => void;
+  deleteLocation: (locationId: string) => void;
   updateSelectedLocationName: (name: string) => void;
   deleteSelectedLocation: () => void;
   startOrCompleteEdge: (locationId: string) => void;
+  updateEdgeDetails: (
+    edgeId: string,
+    patch: Partial<Omit<BoardEdge, "id">>,
+  ) => void;
+  deleteEdgeById: (edgeId: string) => void;
   updateEdgeLabel: (edgeId: string, label: string) => void;
   deleteEdge: (edgeId: string) => void;
   createAssetPlacement: (
@@ -655,6 +665,70 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
     }),
+  updateLocationDetails: (locationId, patch) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          board: updateLocation(state.board, locationId, patch),
+          selectedLocationId: locationId,
+          selectedPlacementId: null,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  deleteLocation: (locationId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        const selectedLocationId =
+          state.selectedLocationId === locationId ? null : state.selectedLocationId;
+
+        return {
+          board: removeLocation(state.board, locationId),
+          locationStates: omitRecordKey(state.locationStates, locationId),
+          entityState: clearLocationBindings(state.entityState, locationId),
+          assetPlacements: state.assetPlacements.map((placement) => {
+            if (placement.locationId !== locationId) {
+              return placement;
+            }
+
+            const { locationId: _locationId, ...unboundPlacement } = placement;
+            return unboundPlacement;
+          }),
+          selectedLocationId,
+          selectedPlacementId:
+            state.selectedPlacementId &&
+            state.assetPlacements.some(
+              (placement) =>
+                placement.id === state.selectedPlacementId &&
+                placement.locationId === locationId,
+            )
+              ? null
+              : state.selectedPlacementId,
+          edgeDraftFromId: state.edgeDraftFromId === locationId ? null : state.edgeDraftFromId,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
   updateSelectedLocationName: (name) =>
     set((state) => {
       if (state.mode === "run") {
@@ -767,11 +841,52 @@ export const useBoardStore = create<BoardStore>((set) => ({
           selectedPlacementId: null,
           lastError: null,
         };
+    } catch (error) {
+      return {
+        edgeDraftFromId: null,
+        selectedLocationId: locationId,
+        selectedPlacementId: null,
+        lastError: getErrorMessage(error),
+      };
+    }
+  }),
+  updateEdgeDetails: (edgeId, patch) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          board: updateEdge(state.board, edgeId, patch),
+          edgeDraftFromId: null,
+          lastError: null,
+        };
       } catch (error) {
         return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  deleteEdgeById: (edgeId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          board: removeEdge(state.board, edgeId),
+          edgeStates: omitRecordKey(state.edgeStates, edgeId),
           edgeDraftFromId: null,
-          selectedLocationId: locationId,
-          selectedPlacementId: null,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
           lastError: getErrorMessage(error),
         };
       }

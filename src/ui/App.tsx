@@ -76,6 +76,19 @@ const TOOL_OPTIONS: Array<{
   { id: "edge", label: "Add Edge", Icon: Network },
 ];
 
+type WorkbenchTab = "locations" | "edges" | "objects" | "board";
+
+const WORKBENCH_TABS: Array<{
+  id: WorkbenchTab;
+  label: string;
+  Icon: typeof MousePointer2;
+}> = [
+  { id: "locations", label: "Locations", Icon: MapPinPlus },
+  { id: "edges", label: "Edges", Icon: Network },
+  { id: "objects", label: "Objects", Icon: CreditCard },
+  { id: "board", label: "Board State", Icon: Database },
+];
+
 const BoardCanvas = lazy(() =>
   import("./BoardCanvas").then((module) => ({ default: module.BoardCanvas })),
 );
@@ -97,9 +110,6 @@ export function App() {
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const pawnSheets = useBoardStore((state) => state.pawnSheets);
-  const boardState = useBoardStore((state) => state.boardState);
-  const locationStates = useBoardStore((state) => state.locationStates);
-  const edgeStates = useBoardStore((state) => state.edgeStates);
   const frozenSetup = useBoardStore((state) => state.frozenSetup);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
@@ -129,14 +139,6 @@ export function App() {
   const setInspectorCollapsed = useBoardStore(
     (state) => state.setInspectorCollapsed,
   );
-  const updateSelectedLocationName = useBoardStore(
-    (state) => state.updateSelectedLocationName,
-  );
-  const deleteSelectedLocation = useBoardStore(
-    (state) => state.deleteSelectedLocation,
-  );
-  const updateEdgeLabel = useBoardStore((state) => state.updateEdgeLabel);
-  const deleteEdge = useBoardStore((state) => state.deleteEdge);
   const updateAssetPlacement = useBoardStore(
     (state) => state.updateAssetPlacement,
   );
@@ -149,12 +151,6 @@ export function App() {
   const addPawnHeldCard = useBoardStore((state) => state.addPawnHeldCard);
   const removePawnHeldCard = useBoardStore((state) => state.removePawnHeldCard);
   const adjustPawnCounter = useBoardStore((state) => state.adjustPawnCounter);
-  const updateBoardState = useBoardStore((state) => state.updateBoardState);
-  const updateEntityObjectState = useBoardStore(
-    (state) => state.updateEntityObjectState,
-  );
-  const updateLocationState = useBoardStore((state) => state.updateLocationState);
-  const updateEdgeState = useBoardStore((state) => state.updateEdgeState);
   const enterRunMode = useBoardStore((state) => state.enterRunMode);
   const returnToEditMode = useBoardStore((state) => state.returnToEditMode);
   const moveEntityToLocation = useBoardStore((state) => state.moveEntityToLocation);
@@ -333,6 +329,8 @@ export function App() {
   const [visibleAssetCounts, setVisibleAssetCounts] = useState<
     Partial<Record<ResourceCategory, number>>
   >({});
+  const [activeWorkbenchTab, setActiveWorkbenchTab] =
+    useState<WorkbenchTab>("locations");
   const toggleSection = useCallback((id: string) => {
     setCollapsedSections((current) => ({
       ...current,
@@ -434,38 +432,6 @@ export function App() {
 
           <div className="creation-content">
             <CollapsibleSection
-              id="tools"
-              isCollapsed={collapsedSections.tools}
-              onToggle={toggleSection}
-              title="Tools"
-              trailing={
-                edgeDraftFromId ? (
-                  <span className="draft-pill">
-                    <Link2 aria-hidden="true" size={14} />
-                    {edgeDraftFromId}
-                  </span>
-                ) : null
-              }
-            >
-              <div className="tool-switcher" role="toolbar">
-                {TOOL_OPTIONS.map(({ id, label, Icon }) => (
-                  <button
-                    aria-pressed={activeTool === id}
-                    className="tool-button"
-                    data-active={activeTool === id}
-                    key={id}
-                    onClick={() => setActiveTool(id)}
-                    title={label}
-                    type="button"
-                  >
-                    <Icon aria-hidden="true" size={18} />
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
               id="assets"
               isCollapsed={collapsedSections.assets}
               onToggle={toggleSection}
@@ -553,60 +519,92 @@ export function App() {
         </aside>
 
         <section className="stage-region" aria-label="Map canvas">
-          <div className="stage-toolbar" aria-label="Map zoom controls">
-            <button
-              aria-label="Zoom out"
-              className="icon-only icon-only--neutral"
-              onClick={() => setBoardZoom(boardZoom - 0.1)}
-              title="Zoom out"
-              type="button"
+          <section className="map-workspace" aria-label="Graph board canvas">
+            <div className="stage-toolbar" aria-label="Map controls">
+              <div className="stage-toolbar__tools" role="toolbar">
+                {TOOL_OPTIONS.map(({ id, label, Icon }) => (
+                  <button
+                    aria-pressed={activeTool === id}
+                    className="toolbar-tool"
+                    data-active={activeTool === id}
+                    key={id}
+                    onClick={() => setActiveTool(id)}
+                    title={label}
+                    type="button"
+                  >
+                    <Icon aria-hidden="true" size={16} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              {edgeDraftFromId ? (
+                <span className="draft-pill draft-pill--toolbar">
+                  <Link2 aria-hidden="true" size={14} />
+                  {edgeDraftFromId}
+                </span>
+              ) : null}
+              <div className="stage-toolbar__zoom">
+                <button
+                  aria-label="Zoom out"
+                  className="icon-only icon-only--neutral"
+                  onClick={() => setBoardZoom(boardZoom - 0.1)}
+                  title="Zoom out"
+                  type="button"
+                >
+                  <Minus aria-hidden="true" size={16} />
+                </button>
+                <label className="zoom-control">
+                  <span>Zoom</span>
+                  <input
+                    aria-label="Board zoom"
+                    max={400}
+                    min={50}
+                    onChange={(event) =>
+                      setBoardZoom(Number(event.currentTarget.value) / 100)
+                    }
+                    step={10}
+                    type="range"
+                    value={Math.round(boardZoom * 100)}
+                  />
+                </label>
+                <output className="zoom-value">
+                  {Math.round(boardZoom * 100)}%
+                </output>
+                <button
+                  aria-label="Zoom in"
+                  className="icon-only icon-only--neutral"
+                  onClick={() => setBoardZoom(boardZoom + 0.1)}
+                  title="Zoom in"
+                  type="button"
+                >
+                  <Plus aria-hidden="true" size={16} />
+                </button>
+                <button
+                  aria-label="Reset zoom"
+                  className="icon-only icon-only--neutral"
+                  onClick={resetBoardView}
+                  title="Reset zoom"
+                  type="button"
+                >
+                  <RotateCcw aria-hidden="true" size={16} />
+                </button>
+              </div>
+            </div>
+            <Suspense
+              fallback={<div className="board-canvas-loading">Loading map...</div>}
             >
-              <Minus aria-hidden="true" size={16} />
-            </button>
-            <label className="zoom-control">
-              <span>Zoom</span>
-              <input
-                aria-label="Board zoom"
-                max={400}
-                min={50}
-                onChange={(event) =>
-                  setBoardZoom(Number(event.currentTarget.value) / 100)
-                }
-                step={10}
-                type="range"
-                value={Math.round(boardZoom * 100)}
-              />
-            </label>
-            <output className="zoom-value">{Math.round(boardZoom * 100)}%</output>
-            <button
-              aria-label="Zoom in"
-              className="icon-only icon-only--neutral"
-              onClick={() => setBoardZoom(boardZoom + 0.1)}
-              title="Zoom in"
-              type="button"
-            >
-              <Plus aria-hidden="true" size={16} />
-            </button>
-            <button
-              aria-label="Reset zoom"
-              className="icon-only icon-only--neutral"
-              onClick={resetBoardView}
-              title="Reset zoom"
-              type="button"
-            >
-              <RotateCcw aria-hidden="true" size={16} />
-            </button>
-          </div>
-          <Suspense
-            fallback={<div className="board-canvas-loading">Loading map...</div>}
-          >
-            <BoardCanvas />
-          </Suspense>
+              <BoardCanvas />
+            </Suspense>
+          </section>
+          <DataWorkbench
+            activeTab={activeWorkbenchTab}
+            onTabChange={setActiveWorkbenchTab}
+          />
         </section>
 
         <aside
-          aria-label="Board inspector"
-          className="tool-panel tool-panel--inspector"
+          aria-label="Context rail"
+          className="tool-panel tool-panel--inspector tool-panel--context"
         >
           <button
             aria-expanded={!isInspectorCollapsed}
@@ -615,24 +613,16 @@ export function App() {
             type="button"
           >
             <ChevronsRight aria-hidden="true" size={17} />
-            <span>Inspector</span>
+            <span>Context</span>
           </button>
 
           <div className="inspector-content">
             <ModeStatus mode={mode} frozenSetup={frozenSetup} />
-            <ScenarioStatePanels
-              boardState={boardState}
+            <SelectionContext
               connectedEdges={connectedEdges}
-              edgeStates={edgeStates}
-              mode={mode}
               selectedEntity={selectedEntity}
               selectedLocation={selectedLocation}
               selectedPlacement={selectedPlacement}
-              locationStates={locationStates}
-              updateBoardState={updateBoardState}
-              updateEdgeState={updateEdgeState}
-              updateEntityObjectState={updateEntityObjectState}
-              updateLocationState={updateLocationState}
             />
             {mode === "run" && selectedEntity ? (
               <RuntimeObjectControls
@@ -661,171 +651,18 @@ export function App() {
                 sheet={selectedPawnSheet}
                 updateAssetPlacement={updateAssetPlacement}
               />
-            ) : (
-              <>
-                <CollapsibleSection
-                  id="placement"
-                  isCollapsed={collapsedSections.placement}
-                  onToggle={toggleSection}
-                  title="Placed Entity"
-                  trailing={
-                    selectedPlacement ? <span>{selectedPlacement.id}</span> : null
-                  }
-                >
-                  {selectedPlacement && selectedPlacementAsset ? (
-                    <div className="inspector-stack">
-                      <div className="selected-piece-card">
-                        <img
-                          alt=""
-                          src={getAssetPreviewUrl(selectedPlacementAsset)}
-                        />
-                        <div>
-                          <strong>{selectedPlacementAsset.name}</strong>
-                          <span>
-                            {selectedPlacement.category} /{" "}
-                            {selectedPlacement.entityId}
-                          </span>
-                        </div>
-                      </div>
-                      {selectedPlacement.locationId ? (
-                        <p className="binding-pill">
-                          Bound to {selectedPlacement.locationId}
-                        </p>
-                      ) : null}
-                      <div className="coordinate-row">
-                        <span>X {formatCoordinate(selectedPlacement.x)}</span>
-                        <span>Y {formatCoordinate(selectedPlacement.y)}</span>
-                      </div>
-                      <div className="piece-controls piece-controls--wide">
-                        <label>
-                          <span>W</span>
-                          <input
-                            min={12}
-                            max={640}
-                            onChange={(event) =>
-                              updateAssetPlacement(selectedPlacement.id, {
-                                width: toNumber(
-                                  event.currentTarget.value,
-                                  selectedPlacement.width,
-                                ),
-                              })
-                            }
-                            type="number"
-                            value={selectedPlacement.width}
-                          />
-                        </label>
-                        <label>
-                          <span>H</span>
-                          <input
-                            min={12}
-                            max={640}
-                            onChange={(event) =>
-                              updateAssetPlacement(selectedPlacement.id, {
-                                height: toNumber(
-                                  event.currentTarget.value,
-                                  selectedPlacement.height,
-                                ),
-                              })
-                            }
-                            type="number"
-                            value={selectedPlacement.height}
-                          />
-                        </label>
-                      </div>
-                      <button
-                        className="danger-button"
-                        onClick={deleteSelectedPlacement}
-                        type="button"
-                      >
-                        <Trash2 aria-hidden="true" size={15} />
-                        <span>Delete placed entity</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="empty-state">No placed entity selected</p>
-                  )}
-                </CollapsibleSection>
-
-                <CollapsibleSection
-                  id="location"
-                  isCollapsed={collapsedSections.location}
-                  onToggle={toggleSection}
-                  title="Location"
-                  trailing={
-                    selectedLocation ? <span>{selectedLocation.id}</span> : null
-                  }
-                >
-                  {selectedLocation ? (
-                    <div className="inspector-stack">
-                      <label className="field">
-                        <span>Name</span>
-                        <input
-                          onChange={(event) =>
-                            updateSelectedLocationName(event.currentTarget.value)
-                          }
-                          value={selectedLocation.name}
-                        />
-                      </label>
-                      <div className="coordinate-row">
-                        <span>X {formatCoordinate(selectedLocation.x)}</span>
-                        <span>Y {formatCoordinate(selectedLocation.y)}</span>
-                      </div>
-                      <button
-                        className="danger-button"
-                        onClick={deleteSelectedLocation}
-                        type="button"
-                      >
-                        <Trash2 aria-hidden="true" size={15} />
-                        <span>Delete location</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="empty-state">No location selected</p>
-                  )}
-                </CollapsibleSection>
-
-                <CollapsibleSection
-                  id="edges"
-                  isCollapsed={collapsedSections.edges}
-                  onToggle={toggleSection}
-                  title="Edges"
-                  trailing={<span>{connectedEdges.length}</span>}
-                >
-                  <div className="edge-list">
-                    {connectedEdges.length === 0 ? (
-                      <p className="empty-state">No connected edges</p>
-                    ) : (
-                      connectedEdges.map((edge) => (
-                        <article className="edge-item" key={edge.id}>
-                          <div>
-                            <strong>{edge.id}</strong>
-                            <span>
-                              {edge.fromId} / {edge.toId}
-                            </span>
-                          </div>
-                          <input
-                            aria-label={`${edge.id} label`}
-                            onChange={(event) =>
-                              updateEdgeLabel(edge.id, event.currentTarget.value)
-                            }
-                            placeholder="Label"
-                            value={edge.label ?? ""}
-                          />
-                          <button
-                            aria-label={`Delete ${edge.id}`}
-                            className="icon-only"
-                            onClick={() => deleteEdge(edge.id)}
-                            title="Delete edge"
-                            type="button"
-                          >
-                            <Trash2 aria-hidden="true" size={15} />
-                          </button>
-                        </article>
-                      ))
-                    )}
-                  </div>
-                </CollapsibleSection>
-              </>
+            ) : selectedPlacement && selectedPlacementAsset ? (
+              <SelectedPlacementContext
+                deleteSelectedPlacement={deleteSelectedPlacement}
+                isDisabled={mode === "run"}
+                placement={selectedPlacement}
+                placementAsset={selectedPlacementAsset}
+                updateAssetPlacement={updateAssetPlacement}
+              />
+            ) : selectedLocation ? null : (
+              <p className="empty-state">
+                Select a map node, table row, or placed object.
+              </p>
             )}
           </div>
         </aside>
@@ -904,101 +741,794 @@ function ModeStatus({ mode, frozenSetup }: ModeStatusProps) {
   );
 }
 
-interface ScenarioStatePanelsProps {
-  boardState: JsonRecord;
+interface SelectionContextProps {
   connectedEdges: BoardEdge[];
-  edgeStates: Record<string, JsonRecord>;
-  mode: ScenarioMode;
   selectedEntity: Entity | null;
   selectedLocation: BoardLocation | null;
   selectedPlacement: AssetPlacement | null;
-  locationStates: Record<string, JsonRecord>;
-  updateBoardState: (patch: JsonRecord) => void;
-  updateEdgeState: (edgeId: string, patch: JsonRecord) => void;
-  updateEntityObjectState: (entityId: string, patch: JsonRecord) => void;
-  updateLocationState: (locationId: string, patch: JsonRecord) => void;
 }
 
-function ScenarioStatePanels({
-  boardState,
+function SelectionContext({
   connectedEdges,
-  edgeStates,
-  mode,
   selectedEntity,
   selectedLocation,
   selectedPlacement,
-  locationStates,
-  updateBoardState,
-  updateEdgeState,
-  updateEntityObjectState,
-  updateLocationState,
-}: ScenarioStatePanelsProps) {
+}: SelectionContextProps) {
   return (
-    <section className="state-panel-stack" aria-label="Scenario state panels">
+    <section className="selection-context" aria-label="Current selection">
+      <div className="state-panel__heading">
+        <h2>Selection</h2>
+        <span>
+          {selectedLocation
+            ? selectedLocation.id
+            : selectedPlacement?.id ?? selectedEntity?.id ?? "None"}
+        </span>
+      </div>
+      {selectedLocation ? (
+        <div className="selection-context__body">
+          <strong>{selectedLocation.name}</strong>
+          <span>
+            X {formatCoordinate(selectedLocation.x)} / Y{" "}
+            {formatCoordinate(selectedLocation.y)}
+          </span>
+          <span>{connectedEdges.length} connected edges</span>
+        </div>
+      ) : selectedEntity ? (
+        <div className="selection-context__body">
+          <strong>{selectedEntity.id}</strong>
+          <span>{selectedPlacement?.category ?? selectedEntity.type}</span>
+          <span>{selectedEntity.locationId ?? "Unbound object"}</span>
+        </div>
+      ) : (
+        <p className="empty-state">No row or canvas object selected</p>
+      )}
+    </section>
+  );
+}
+
+interface SelectedPlacementContextProps {
+  deleteSelectedPlacement: () => void;
+  isDisabled: boolean;
+  placement: AssetPlacement;
+  placementAsset: UploadedImageAsset;
+  updateAssetPlacement: (
+    placementId: string,
+    patch: Partial<Pick<AssetPlacement, "width" | "height">>,
+  ) => void;
+}
+
+function SelectedPlacementContext({
+  deleteSelectedPlacement,
+  isDisabled,
+  placement,
+  placementAsset,
+  updateAssetPlacement,
+}: SelectedPlacementContextProps) {
+  return (
+    <section className="selected-placement-context" aria-label="Placed object">
+      <div className="selected-piece-card">
+        <img alt="" src={getAssetPreviewUrl(placementAsset)} />
+        <div>
+          <strong>{placementAsset.name}</strong>
+          <span>
+            {placement.category} / {placement.entityId}
+          </span>
+        </div>
+      </div>
+      {placement.locationId ? (
+        <p className="binding-pill">Bound to {placement.locationId}</p>
+      ) : null}
+      <div className="coordinate-row">
+        <span>X {formatCoordinate(placement.x)}</span>
+        <span>Y {formatCoordinate(placement.y)}</span>
+      </div>
+      <div className="piece-controls piece-controls--wide">
+        <label>
+          <span>W</span>
+          <input
+            disabled={isDisabled}
+            min={12}
+            max={640}
+            onChange={(event) =>
+              updateAssetPlacement(placement.id, {
+                width: toNumber(event.currentTarget.value, placement.width),
+              })
+            }
+            type="number"
+            value={placement.width}
+          />
+        </label>
+        <label>
+          <span>H</span>
+          <input
+            disabled={isDisabled}
+            min={12}
+            max={640}
+            onChange={(event) =>
+              updateAssetPlacement(placement.id, {
+                height: toNumber(event.currentTarget.value, placement.height),
+              })
+            }
+            type="number"
+            value={placement.height}
+          />
+        </label>
+      </div>
+      <button
+        className="danger-button"
+        disabled={isDisabled}
+        onClick={deleteSelectedPlacement}
+        type="button"
+      >
+        <Trash2 aria-hidden="true" size={15} />
+        <span>Delete placed object</span>
+      </button>
+    </section>
+  );
+}
+
+interface DataWorkbenchProps {
+  activeTab: WorkbenchTab;
+  onTabChange: (tab: WorkbenchTab) => void;
+}
+
+function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
+  const mode = useBoardStore((state) => state.mode);
+  const board = useBoardStore((state) => state.board);
+  const boardState = useBoardStore((state) => state.boardState);
+  const locationStates = useBoardStore((state) => state.locationStates);
+  const edgeStates = useBoardStore((state) => state.edgeStates);
+  const entityState = useBoardStore((state) => state.entityState);
+  const assets = useBoardStore((state) => state.assets);
+  const assetPlacements = useBoardStore((state) => state.assetPlacements);
+  const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
+  const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
+  const selectLocation = useBoardStore((state) => state.selectLocation);
+  const selectPlacement = useBoardStore((state) => state.selectPlacement);
+  const updateLocationDetails = useBoardStore(
+    (state) => state.updateLocationDetails,
+  );
+  const deleteLocation = useBoardStore((state) => state.deleteLocation);
+  const updateLocationState = useBoardStore((state) => state.updateLocationState);
+  const updateEdgeDetails = useBoardStore((state) => state.updateEdgeDetails);
+  const deleteEdgeById = useBoardStore((state) => state.deleteEdgeById);
+  const updateEdgeState = useBoardStore((state) => state.updateEdgeState);
+  const updateBoardState = useBoardStore((state) => state.updateBoardState);
+  const updateEntityObjectState = useBoardStore(
+    (state) => state.updateEntityObjectState,
+  );
+  const moveEntityToLocation = useBoardStore((state) => state.moveEntityToLocation);
+
+  return (
+    <section className="data-workbench" aria-label="Scenario data workbench">
+      <div className="data-workbench__header">
+        <div>
+          <h2>Data Workbench</h2>
+          <span>
+            Batch-edit graph structure and semantic state without reselecting map
+            nodes.
+          </span>
+        </div>
+        <div className="workbench-tabs" role="tablist">
+          {WORKBENCH_TABS.map(({ id, label, Icon }) => (
+            <button
+              aria-selected={activeTab === id}
+              className="workbench-tab"
+              data-active={activeTab === id}
+              key={id}
+              onClick={() => onTabChange(id)}
+              role="tab"
+              type="button"
+            >
+              <Icon aria-hidden="true" size={15} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="data-workbench__body">
+        {activeTab === "locations" ? (
+          <LocationsTable
+            isSetupLocked={mode === "run"}
+            locationStates={locationStates}
+            locations={board.locations}
+            onDeleteLocation={deleteLocation}
+            onSelectLocation={selectLocation}
+            onUpdateLocation={updateLocationDetails}
+            onUpdateLocationState={updateLocationState}
+            selectedLocationId={selectedLocationId}
+          />
+        ) : null}
+        {activeTab === "edges" ? (
+          <EdgesTable
+            edgeStates={edgeStates}
+            edges={board.edges}
+            isSetupLocked={mode === "run"}
+            locations={board.locations}
+            onDeleteEdge={deleteEdgeById}
+            onSelectLocation={selectLocation}
+            onUpdateEdge={updateEdgeDetails}
+            onUpdateEdgeState={updateEdgeState}
+            selectedLocationId={selectedLocationId}
+          />
+        ) : null}
+        {activeTab === "objects" ? (
+          <ObjectsTable
+            assetPlacements={assetPlacements}
+            assets={assets}
+            entities={entityState.entities}
+            locations={board.locations}
+            onMoveEntityToLocation={moveEntityToLocation}
+            onSelectPlacement={selectPlacement}
+            onUpdateEntityState={updateEntityObjectState}
+            selectedPlacementId={selectedPlacementId}
+          />
+        ) : null}
+        {activeTab === "board" ? (
+          <BoardStateWorkbench
+            boardState={boardState}
+            mode={mode}
+            onUpdateBoardState={updateBoardState}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+interface LocationsTableProps {
+  isSetupLocked: boolean;
+  locations: BoardLocation[];
+  locationStates: Record<string, JsonRecord>;
+  onDeleteLocation: (locationId: string) => void;
+  onSelectLocation: (locationId: string | null) => void;
+  onUpdateLocation: (
+    locationId: string,
+    patch: Partial<Omit<BoardLocation, "id">>,
+  ) => void;
+  onUpdateLocationState: (locationId: string, patch: JsonRecord) => void;
+  selectedLocationId: string | null;
+}
+
+function LocationsTable({
+  isSetupLocked,
+  locations,
+  locationStates,
+  onDeleteLocation,
+  onSelectLocation,
+  onUpdateLocation,
+  onUpdateLocationState,
+  selectedLocationId,
+}: LocationsTableProps) {
+  if (locations.length === 0) {
+    return (
+      <p className="empty-state">
+        Add Locations on the map, then edit their names, coordinates, semantic
+        fields, and JSON state here.
+      </p>
+    );
+  }
+
+  return (
+    <div className="workbench-table-scroll">
+      <table className="workbench-table">
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">Name</th>
+            <th scope="col">X%</th>
+            <th scope="col">Y%</th>
+            <th scope="col">Region</th>
+            <th scope="col">Tags</th>
+            <th scope="col">Notes</th>
+            <th scope="col">State JSON</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {locations.map((location) => {
+            const state = locationStates[location.id] ?? EMPTY_JSON_STATE;
+
+            return (
+              <tr
+                data-selected={selectedLocationId === location.id}
+                key={location.id}
+                onClick={() => onSelectLocation(location.id)}
+              >
+                <th scope="row">{location.id}</th>
+                <td>
+                  <input
+                    aria-label={`${location.id} name`}
+                    disabled={isSetupLocked}
+                    onChange={(event) =>
+                      onUpdateLocation(location.id, {
+                        name: event.currentTarget.value,
+                      })
+                    }
+                    value={location.name}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${location.id} x percent`}
+                    disabled={isSetupLocked}
+                    max={100}
+                    min={0}
+                    onChange={(event) =>
+                      onUpdateLocation(location.id, {
+                        x: toNormalizedPercent(
+                          event.currentTarget.value,
+                          location.x,
+                        ),
+                      })
+                    }
+                    step={0.1}
+                    type="number"
+                    value={toPercentNumber(location.x)}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${location.id} y percent`}
+                    disabled={isSetupLocked}
+                    max={100}
+                    min={0}
+                    onChange={(event) =>
+                      onUpdateLocation(location.id, {
+                        y: toNormalizedPercent(
+                          event.currentTarget.value,
+                          location.y,
+                        ),
+                      })
+                    }
+                    step={0.1}
+                    type="number"
+                    value={toPercentNumber(location.y)}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${location.id} region`}
+                    onChange={(event) =>
+                      onUpdateLocationState(location.id, {
+                        region: event.currentTarget.value,
+                      })
+                    }
+                    value={getStateString(state, "region")}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${location.id} tags`}
+                    onChange={(event) =>
+                      onUpdateLocationState(location.id, {
+                        tags: event.currentTarget.value,
+                      })
+                    }
+                    value={getStateString(state, "tags")}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${location.id} notes`}
+                    disabled={isSetupLocked}
+                    onChange={(event) =>
+                      onUpdateLocation(location.id, {
+                        notes: event.currentTarget.value,
+                      })
+                    }
+                    value={location.notes ?? ""}
+                  />
+                </td>
+                <td>
+                  <JsonTableStateCell
+                    value={state}
+                    onApply={(patch) => onUpdateLocationState(location.id, patch)}
+                  />
+                </td>
+                <td>
+                  <button
+                    aria-label={`Delete ${location.id}`}
+                    className="icon-only"
+                    disabled={isSetupLocked}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteLocation(location.id);
+                    }}
+                    title="Delete location"
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={15} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+interface EdgesTableProps {
+  edgeStates: Record<string, JsonRecord>;
+  edges: BoardEdge[];
+  isSetupLocked: boolean;
+  locations: BoardLocation[];
+  onDeleteEdge: (edgeId: string) => void;
+  onSelectLocation: (locationId: string | null) => void;
+  onUpdateEdge: (edgeId: string, patch: Partial<Omit<BoardEdge, "id">>) => void;
+  onUpdateEdgeState: (edgeId: string, patch: JsonRecord) => void;
+  selectedLocationId: string | null;
+}
+
+function EdgesTable({
+  edgeStates,
+  edges,
+  isSetupLocked,
+  locations,
+  onDeleteEdge,
+  onSelectLocation,
+  onUpdateEdge,
+  onUpdateEdgeState,
+  selectedLocationId,
+}: EdgesTableProps) {
+  if (edges.length === 0) {
+    return (
+      <p className="empty-state">
+        Use Add Edge on the map to connect Locations, then maintain traversal
+        labels, costs, locks, and JSON state here.
+      </p>
+    );
+  }
+
+  return (
+    <div className="workbench-table-scroll">
+      <table className="workbench-table workbench-table--edges">
+        <thead>
+          <tr>
+            <th scope="col">ID</th>
+            <th scope="col">From</th>
+            <th scope="col">To</th>
+            <th scope="col">Label</th>
+            <th scope="col">Directed</th>
+            <th scope="col">Cost</th>
+            <th scope="col">Lock</th>
+            <th scope="col">Notes</th>
+            <th scope="col">State JSON</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {edges.map((edge) => {
+            const state = edgeStates[edge.id] ?? EMPTY_JSON_STATE;
+            const isSelected =
+              selectedLocationId === edge.fromId || selectedLocationId === edge.toId;
+
+            return (
+              <tr
+                data-selected={isSelected}
+                key={edge.id}
+                onClick={() => onSelectLocation(edge.fromId)}
+              >
+                <th scope="row">{edge.id}</th>
+                <td>
+                  <select
+                    aria-label={`${edge.id} from location`}
+                    disabled={isSetupLocked}
+                    onChange={(event) =>
+                      onUpdateEdge(edge.id, {
+                        fromId: event.currentTarget.value,
+                      })
+                    }
+                    value={edge.fromId}
+                  >
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    aria-label={`${edge.id} to location`}
+                    disabled={isSetupLocked}
+                    onChange={(event) =>
+                      onUpdateEdge(edge.id, {
+                        toId: event.currentTarget.value,
+                      })
+                    }
+                    value={edge.toId}
+                  >
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <input
+                    aria-label={`${edge.id} label`}
+                    disabled={isSetupLocked}
+                    onChange={(event) =>
+                      onUpdateEdge(edge.id, {
+                        label: event.currentTarget.value,
+                      })
+                    }
+                    value={edge.label ?? ""}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${edge.id} directed`}
+                    checked={getStateBoolean(state, "directed")}
+                    className="workbench-checkbox"
+                    onChange={(event) =>
+                      onUpdateEdgeState(edge.id, {
+                        directed: event.currentTarget.checked,
+                      })
+                    }
+                    type="checkbox"
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${edge.id} cost`}
+                    min={0}
+                    onChange={(event) =>
+                      onUpdateEdgeState(edge.id, {
+                        cost: toNumber(event.currentTarget.value, 0),
+                      })
+                    }
+                    type="number"
+                    value={getStateNumber(state, "cost")}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${edge.id} lock`}
+                    onChange={(event) =>
+                      onUpdateEdgeState(edge.id, {
+                        lock: event.currentTarget.value,
+                      })
+                    }
+                    value={getStateString(state, "lock")}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${edge.id} notes`}
+                    onChange={(event) =>
+                      onUpdateEdgeState(edge.id, {
+                        notes: event.currentTarget.value,
+                      })
+                    }
+                    value={getStateString(state, "notes")}
+                  />
+                </td>
+                <td>
+                  <JsonTableStateCell
+                    value={state}
+                    onApply={(patch) => onUpdateEdgeState(edge.id, patch)}
+                  />
+                </td>
+                <td>
+                  <button
+                    aria-label={`Delete ${edge.id}`}
+                    className="icon-only"
+                    disabled={isSetupLocked}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteEdge(edge.id);
+                    }}
+                    title="Delete edge"
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" size={15} />
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+interface ObjectsTableProps {
+  assetPlacements: AssetPlacement[];
+  assets: UploadedImageAsset[];
+  entities: Entity[];
+  locations: BoardLocation[];
+  onMoveEntityToLocation: (entityId: string, locationId: string) => void;
+  onSelectPlacement: (placementId: string | null) => void;
+  onUpdateEntityState: (entityId: string, patch: JsonRecord) => void;
+  selectedPlacementId: string | null;
+}
+
+function ObjectsTable({
+  assetPlacements,
+  assets,
+  entities,
+  locations,
+  onMoveEntityToLocation,
+  onSelectPlacement,
+  onUpdateEntityState,
+  selectedPlacementId,
+}: ObjectsTableProps) {
+  if (entities.length === 0) {
+    return (
+      <p className="empty-state">
+        Drag placeable image assets onto the board to create editable generic
+        Objects.
+      </p>
+    );
+  }
+
+  return (
+    <div className="workbench-table-scroll">
+      <table className="workbench-table workbench-table--objects">
+        <thead>
+          <tr>
+            <th scope="col">Entity ID</th>
+            <th scope="col">Type</th>
+            <th scope="col">Asset</th>
+            <th scope="col">Location</th>
+            <th scope="col">Zone</th>
+            <th scope="col">Count</th>
+            <th scope="col">State JSON</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entities.map((entity) => {
+            const placement = assetPlacements.find(
+              (candidate) => candidate.entityId === entity.id,
+            );
+            const asset = placement
+              ? assets.find((candidate) => candidate.id === placement.assetId)
+              : null;
+
+            return (
+              <tr
+                data-selected={selectedPlacementId === placement?.id}
+                key={entity.id}
+                onClick={() => onSelectPlacement(placement?.id ?? null)}
+              >
+                <th scope="row">{entity.id}</th>
+                <td>{entity.type}</td>
+                <td>{asset?.name ?? "Unlinked"}</td>
+                <td>
+                  <select
+                    aria-label={`${entity.id} location`}
+                    onChange={(event) =>
+                      onMoveEntityToLocation(entity.id, event.currentTarget.value)
+                    }
+                    value={entity.locationId ?? ""}
+                  >
+                    <option value="" disabled>
+                      Unbound
+                    </option>
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <input
+                    aria-label={`${entity.id} zone`}
+                    onChange={(event) =>
+                      onUpdateEntityState(entity.id, {
+                        zoneId: event.currentTarget.value,
+                      })
+                    }
+                    value={getStateString(entity.state, "zoneId")}
+                  />
+                </td>
+                <td>
+                  <input
+                    aria-label={`${entity.id} count`}
+                    min={0}
+                    onChange={(event) =>
+                      onUpdateEntityState(entity.id, {
+                        count: toNumber(event.currentTarget.value, 0),
+                      })
+                    }
+                    type="number"
+                    value={getStateNumber(entity.state, "count")}
+                  />
+                </td>
+                <td>
+                  <JsonTableStateCell
+                    value={entity.state}
+                    onApply={(patch) => onUpdateEntityState(entity.id, patch)}
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+interface BoardStateWorkbenchProps {
+  boardState: JsonRecord;
+  mode: ScenarioMode;
+  onUpdateBoardState: (patch: JsonRecord) => void;
+}
+
+function BoardStateWorkbench({
+  boardState,
+  mode,
+  onUpdateBoardState,
+}: BoardStateWorkbenchProps) {
+  return (
+    <div className="board-state-workbench">
       <JsonStateEditor
         description={
           mode === "edit"
-            ? "Global setup state"
-            : "Current global runtime state"
+            ? "Scenario-wide setup state"
+            : "Current scenario runtime state"
         }
         title="Board State"
         value={boardState}
-        onApply={updateBoardState}
+        onApply={onUpdateBoardState}
       />
-      <JsonStateEditor
-        description={
-          selectedEntity
-            ? `${selectedEntity.id} / ${selectedPlacement?.category ?? selectedEntity.type}`
-            : "Select an object"
-        }
-        isDisabled={!selectedEntity}
-        title="Object State"
-        value={selectedEntity?.state ?? EMPTY_JSON_STATE}
-        onApply={(patch) => {
-          if (selectedEntity) {
-            updateEntityObjectState(selectedEntity.id, patch);
-          }
-        }}
+    </div>
+  );
+}
+
+interface JsonTableStateCellProps {
+  onApply: (patch: JsonRecord) => void;
+  value: JsonRecord;
+}
+
+function JsonTableStateCell({ onApply, value }: JsonTableStateCellProps) {
+  const [draft, setDraft] = useState(formatJson(value));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(formatJson(value));
+    setError(null);
+  }, [value]);
+
+  const handleApply = useCallback(() => {
+    try {
+      const parsed = JSON.parse(draft) as unknown;
+
+      if (!isPlainObject(parsed)) {
+        setError("JSON object required");
+        return;
+      }
+
+      onApply(parsed);
+      setError(null);
+    } catch (parseError) {
+      setError(getErrorMessage(parseError));
+    }
+  }, [draft, onApply]);
+
+  return (
+    <div className="json-table-cell">
+      <textarea
+        aria-label="State JSON"
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        spellCheck={false}
+        value={draft}
       />
-      <JsonStateEditor
-        description={
-          selectedLocation ? selectedLocation.id : "Select a Location"
-        }
-        isDisabled={!selectedLocation}
-        title="Location State"
-        value={
-          selectedLocation
-            ? locationStates[selectedLocation.id] ?? {}
-            : EMPTY_JSON_STATE
-        }
-        onApply={(patch) => {
-          if (selectedLocation) {
-            updateLocationState(selectedLocation.id, patch);
-          }
-        }}
-      />
-      <section className="state-panel">
-        <div className="state-panel__heading">
-          <h2>Edge State</h2>
-          <span>{connectedEdges.length} connected</span>
-        </div>
-        {connectedEdges.length === 0 ? (
-          <p className="empty-state">Select a Location with connected Edges</p>
-        ) : (
-          <div className="edge-state-list">
-            {connectedEdges.map((edge) => (
-              <JsonStateEditor
-                description={`${edge.fromId} / ${edge.toId}`}
-                key={edge.id}
-                title={edge.id}
-                value={edgeStates[edge.id] ?? {}}
-                onApply={(patch) => updateEdgeState(edge.id, patch)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-    </section>
+      <div>
+        {error ? <span>{error}</span> : null}
+        <button className="mini-button" onClick={handleApply} type="button">
+          Apply
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1752,6 +2282,40 @@ function formatAssetMeta(asset: UploadedImageAsset) {
 
 function formatCoordinate(value: number) {
   return `${Math.round(value * 1000) / 10}%`;
+}
+
+function toPercentNumber(value: number) {
+  return Math.round(value * 1000) / 10;
+}
+
+function toNormalizedPercent(value: string, fallback: number) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(1, Math.max(0, parsed / 100));
+}
+
+function getStateString(state: JsonRecord, key: string) {
+  const value = state[key];
+
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  return typeof value === "string" ? value : String(value);
+}
+
+function getStateNumber(state: JsonRecord, key: string) {
+  const value = state[key];
+
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function getStateBoolean(state: JsonRecord, key: string) {
+  return state[key] === true;
 }
 
 function toNumber(value: string, fallback: number) {

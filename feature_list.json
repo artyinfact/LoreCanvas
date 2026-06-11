@@ -273,6 +273,41 @@
       }
     },
     {
+      "id": "F-04B-MakerWorkbenchV1",
+      "priority": 5,
+      "title": "Maker Workbench 1.0 Batch Editing",
+      "description": "Restructure the Maker UI from the old Tools + Map + Inspector workflow into a 1.0 editing workbench. The map remains the fast point-and-connect surface for creating Locations and Edges, while a spreadsheet-like Data Workbench becomes the primary surface for maintaining Location, Edge, Object, and Board State properties. Location rows must support batch editing names, normalized coordinates, common semantic fields, notes, and arbitrary JSON state. Edge rows must support batch editing endpoints, labels, directed/cost/lock/notes semantics, and arbitrary JSON state. The design must remain a generic graph-board editor and must not introduce grid movement, LOTR-specific branches, or rule-trigger implementation.",
+      "status": "completed",
+      "dependencies": [
+        "F-04-ManualScenarioPrototype"
+      ],
+      "verification": "npm.cmd exec -- vitest run tests/state/boardStore.test.ts; npm.cmd run test; npm.cmd run build; .\\init.ps1; Browser verification for map-created Locations/Edges -> Data Workbench row edits -> synchronized selection/context state",
+      "evidence": {
+        "completedAt": "2026-06-11",
+        "localVerification": [
+          "npm.cmd run check-types",
+          "npm.cmd exec -- vitest run tests/state/boardStore.test.ts (14 tests)",
+          "npm.cmd run test (11 files / 47 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (11 files / 47 tests)"
+        ],
+        "coverage": [
+          "src/state/boardStore.ts now exposes updateLocationDetails/deleteLocation and updateEdgeDetails/deleteEdgeById so workbench rows can edit arbitrary Location and Edge records directly by id instead of relying on selected-object inspector actions.",
+          "tests/state/boardStore.test.ts covers Location row edits/deletion, Edge row edits/deletion, state cleanup, and selection preservation.",
+          "src/ui/App.tsx now renders a Map Workspace plus Data Workbench with Locations, Edges, Objects, and Board State tabs. The left rail is asset import/library only, and the right rail is a compact Context panel rather than the primary editing surface.",
+          "src/styles.css now supports the 1.0 workbench layout, scroll-contained spreadsheet tables, stable row controls, selected-row highlighting, and a mobile fallback that keeps the workbench reachable without horizontal page overflow."
+        ],
+        "browserVerification": [
+          "Browser plugin opened http://127.0.0.1:5173/ and confirmed page title LoreCanvas, Data Workbench present, no Vite overlay, and no app console errors or warnings.",
+          "Desktop flow: clicked Add Location, created two PixiJS Locations on the map, clicked Add Edge, connected them, and confirmed metrics showed Locations2 and Edges1.",
+          "Data Workbench flow: edited loc-1 name to Haven, region to north, tags and notes through the Locations table; edited edge-1 label to Road, directed=true, and cost=2 through the Edges table; no error banner appeared.",
+          "Selection synchronization: table/map selection reflected loc-1 in the Context rail with name, coordinates, and connected-edge count.",
+          "Responsive check: set viewport to 390 x 844, confirmed body scroll width equaled client width, Data Workbench existed, the mobile stage no longer clipped the workbench, and Context appeared after the workbench without overlap."
+        ],
+        "notes": "This is a Maker UX/workflow rework only. It does not implement automatic event triggers, movement validation, Cut-in rendering, online collaboration, or game-specific rules."
+      }
+    },
+    {
       "id": "F-05-MovementValidation",
       "priority": 5,
       "title": "Graph Movement Validation",
