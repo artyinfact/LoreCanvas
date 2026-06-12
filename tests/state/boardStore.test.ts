@@ -14,6 +14,7 @@ describe("Maker image assets and entity placement", () => {
       selectedAssetId: null,
       selectedLocationId: null,
       selectedPlacementId: null,
+      selectedEdgeId: null,
       edgeDraftFromId: null,
       activeTool: "select",
       boardZoom: 1,
@@ -395,7 +396,8 @@ describe("Maker image assets and entity placement", () => {
     ]);
     expect(nextState.board.edges).toHaveLength(0);
     expect(nextState.locationStates["loc-1"]).toBeUndefined();
-    expect(nextState.selectedLocationId).toBe("loc-2");
+    expect(nextState.selectedLocationId).toBeNull();
+    expect(nextState.selectedEdgeId).toBeNull();
   });
 
   it("updates and deletes edges by id for the workbench table", () => {
@@ -432,6 +434,45 @@ describe("Maker image assets and entity placement", () => {
     nextState = useBoardStore.getState();
 
     expect(nextState.board.edges).toHaveLength(0);
+    expect(nextState.edgeStates["edge-1"]).toBeUndefined();
+  });
+
+  it("selects and deletes an edge directly from the map selection state", () => {
+    const store = useBoardStore.getState();
+
+    store.createLocationAt(0.2, 0.3);
+    useBoardStore.getState().createLocationAt(0.6, 0.7);
+    useBoardStore.getState().startOrCompleteEdge("loc-1");
+    useBoardStore.getState().startOrCompleteEdge("loc-2");
+
+    let nextState = useBoardStore.getState();
+
+    expect(nextState.selectedEdgeId).toBe("edge-1");
+    expect(nextState.selectedLocationId).toBeNull();
+
+    useBoardStore.getState().selectEdge("edge-1");
+    useBoardStore.getState().deleteEdgeById("edge-1");
+    nextState = useBoardStore.getState();
+
+    expect(nextState.board.edges).toHaveLength(0);
+    expect(nextState.selectedEdgeId).toBeNull();
+  });
+
+  it("clears selected connected edge state when deleting a location", () => {
+    const store = useBoardStore.getState();
+
+    store.createLocationAt(0.2, 0.3);
+    useBoardStore.getState().createLocationAt(0.6, 0.7);
+    useBoardStore.getState().startOrCompleteEdge("loc-1");
+    useBoardStore.getState().startOrCompleteEdge("loc-2");
+    useBoardStore.getState().updateEdgeState("edge-1", { cost: 3 });
+    useBoardStore.getState().selectEdge("edge-1");
+    useBoardStore.getState().deleteLocation("loc-1");
+
+    const nextState = useBoardStore.getState();
+
+    expect(nextState.board.edges).toHaveLength(0);
+    expect(nextState.selectedEdgeId).toBeNull();
     expect(nextState.edgeStates["edge-1"]).toBeUndefined();
   });
 

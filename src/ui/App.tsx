@@ -117,6 +117,7 @@ export function App() {
   const frozenSetup = useBoardStore((state) => state.frozenSetup);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
+  const selectedEdgeId = useBoardStore((state) => state.selectedEdgeId);
   const activeTool = useBoardStore((state) => state.activeTool);
   const boardZoom = useBoardStore((state) => state.boardZoom);
   const isCreationPanelCollapsed = useBoardStore(
@@ -152,6 +153,8 @@ export function App() {
   const updateAssetPlacement = useBoardStore(
     (state) => state.updateAssetPlacement,
   );
+  const deleteLocation = useBoardStore((state) => state.deleteLocation);
+  const deleteEdgeById = useBoardStore((state) => state.deleteEdgeById);
   const deleteSelectedPlacement = useBoardStore(
     (state) => state.deleteSelectedPlacement,
   );
@@ -168,6 +171,8 @@ export function App() {
   const moveCardToZone = useBoardStore((state) => state.moveCardToZone);
   const setLastError = useBoardStore((state) => state.setLastError);
   const selectedLocation = getSelectedLocation(board, selectedLocationId);
+  const selectedEdge =
+    board.edges.find((edge) => edge.id === selectedEdgeId) ?? null;
   const selectedPlacement =
     assetPlacements.find((placement) => placement.id === selectedPlacementId) ??
     null;
@@ -594,6 +599,13 @@ export function App() {
                   {edgeDraftFromId}
                 </span>
               ) : null}
+              <QuickSelectionActions
+                deleteEdgeById={deleteEdgeById}
+                deleteLocation={deleteLocation}
+                isDisabled={mode === "run"}
+                selectedEdge={selectedEdge}
+                selectedLocation={selectedLocation}
+              />
               <div className="stage-toolbar__zoom">
                 <button
                   aria-label="Zoom out"
@@ -714,6 +726,7 @@ export function App() {
             <ModeStatus mode={mode} frozenSetup={frozenSetup} />
             <SelectionContext
               connectedEdges={connectedEdges}
+              selectedEdge={selectedEdge}
               selectedEntity={selectedEntity}
               selectedLocation={selectedLocation}
               selectedPlacement={selectedPlacement}
@@ -849,13 +862,70 @@ function ModeStatus({ mode, frozenSetup }: ModeStatusProps) {
 
 interface SelectionContextProps {
   connectedEdges: BoardEdge[];
+  selectedEdge: BoardEdge | null;
   selectedEntity: Entity | null;
   selectedLocation: BoardLocation | null;
   selectedPlacement: AssetPlacement | null;
 }
 
+interface QuickSelectionActionsProps {
+  deleteEdgeById: (edgeId: string) => void;
+  deleteLocation: (locationId: string) => void;
+  isDisabled: boolean;
+  selectedEdge: BoardEdge | null;
+  selectedLocation: BoardLocation | null;
+}
+
+function QuickSelectionActions({
+  deleteEdgeById,
+  deleteLocation,
+  isDisabled,
+  selectedEdge,
+  selectedLocation,
+}: QuickSelectionActionsProps) {
+  const selectedLabel = selectedLocation
+    ? `Location ${selectedLocation.id}`
+    : selectedEdge
+      ? `Edge ${selectedEdge.id}`
+      : null;
+
+  if (!selectedLabel) {
+    return null;
+  }
+
+  return (
+    <div className="selection-actions" aria-label="Selection actions">
+      <span className="selection-actions__label">{selectedLabel}</span>
+      <button
+        aria-label={`Delete ${selectedLabel}`}
+        className="icon-only icon-only--danger"
+        disabled={isDisabled}
+        onClick={() => {
+          if (selectedLocation) {
+            deleteLocation(selectedLocation.id);
+            return;
+          }
+
+          if (selectedEdge) {
+            deleteEdgeById(selectedEdge.id);
+          }
+        }}
+        title={
+          isDisabled
+            ? "Switch to Edit mode to delete setup graph items"
+            : `Delete ${selectedLabel}`
+        }
+        type="button"
+      >
+        <Trash2 aria-hidden="true" size={16} />
+      </button>
+    </div>
+  );
+}
+
 function SelectionContext({
   connectedEdges,
+  selectedEdge,
   selectedEntity,
   selectedLocation,
   selectedPlacement,
@@ -867,7 +937,7 @@ function SelectionContext({
         <span>
           {selectedLocation
             ? selectedLocation.id
-            : selectedPlacement?.id ?? selectedEntity?.id ?? "None"}
+            : selectedEdge?.id ?? selectedPlacement?.id ?? selectedEntity?.id ?? "None"}
         </span>
       </div>
       {selectedLocation ? (
@@ -878,6 +948,15 @@ function SelectionContext({
             {formatCoordinate(selectedLocation.y)}
           </span>
           <span>{connectedEdges.length} connected edges</span>
+        </div>
+      ) : selectedEdge ? (
+        <div className="selection-context__body">
+          <strong>{selectedEdge.label || selectedEdge.id}</strong>
+          <span>
+            {selectedEdge.fromId}
+            {" -> "}
+            {selectedEdge.toId}
+          </span>
         </div>
       ) : selectedEntity ? (
         <div className="selection-context__body">
@@ -989,8 +1068,10 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
+  const selectedEdgeId = useBoardStore((state) => state.selectedEdgeId);
   const selectLocation = useBoardStore((state) => state.selectLocation);
   const selectPlacement = useBoardStore((state) => state.selectPlacement);
+  const selectEdge = useBoardStore((state) => state.selectEdge);
   const updateLocationDetails = useBoardStore(
     (state) => state.updateLocationDetails,
   );
@@ -1052,9 +1133,10 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
             isSetupLocked={mode === "run"}
             locations={board.locations}
             onDeleteEdge={deleteEdgeById}
-            onSelectLocation={selectLocation}
+            onSelectEdge={selectEdge}
             onUpdateEdge={updateEdgeDetails}
             onUpdateEdgeState={updateEdgeState}
+            selectedEdgeId={selectedEdgeId}
             selectedLocationId={selectedLocationId}
           />
         ) : null}
@@ -1262,9 +1344,10 @@ interface EdgesTableProps {
   isSetupLocked: boolean;
   locations: BoardLocation[];
   onDeleteEdge: (edgeId: string) => void;
-  onSelectLocation: (locationId: string | null) => void;
+  onSelectEdge: (edgeId: string | null) => void;
   onUpdateEdge: (edgeId: string, patch: Partial<Omit<BoardEdge, "id">>) => void;
   onUpdateEdgeState: (edgeId: string, patch: JsonRecord) => void;
+  selectedEdgeId: string | null;
   selectedLocationId: string | null;
 }
 
@@ -1274,9 +1357,10 @@ function EdgesTable({
   isSetupLocked,
   locations,
   onDeleteEdge,
-  onSelectLocation,
+  onSelectEdge,
   onUpdateEdge,
   onUpdateEdgeState,
+  selectedEdgeId,
   selectedLocationId,
 }: EdgesTableProps) {
   if (edges.length === 0) {
@@ -1309,13 +1393,15 @@ function EdgesTable({
           {edges.map((edge) => {
             const state = edgeStates[edge.id] ?? EMPTY_JSON_STATE;
             const isSelected =
-              selectedLocationId === edge.fromId || selectedLocationId === edge.toId;
+              selectedEdgeId === edge.id ||
+              selectedLocationId === edge.fromId ||
+              selectedLocationId === edge.toId;
 
             return (
               <tr
                 data-selected={isSelected}
                 key={edge.id}
-                onClick={() => onSelectLocation(edge.fromId)}
+                onClick={() => onSelectEdge(edge.id)}
               >
                 <th scope="row">{edge.id}</th>
                 <td>

@@ -308,6 +308,43 @@
       }
     },
     {
+      "id": "F-04C-CanvasQuickDelete",
+      "priority": 5,
+      "title": "Canvas Quick Delete for Graph Items",
+      "description": "Refine the Maker 1.0 map workflow after the workbench was hidden by default. Location and Edge deletion must be available from the map selection context without requiring the Data Workbench to be opened. Edges must be selectable as first-class canvas objects in Select mode, and the toolbar/context surfaces must stay synchronized with Location/Edge selection and deletion.",
+      "status": "completed",
+      "dependencies": [
+        "F-04B-MakerWorkbenchV1"
+      ],
+      "verification": "npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/state/scenarioStore.test.ts; npm.cmd run check-types; npm.cmd run test; npm.cmd run build; .\\init.ps1; Browser verification for hidden Workbench -> canvas Edge select/delete -> canvas Location select/delete",
+      "evidence": {
+        "completedAt": "2026-06-12",
+        "localVerification": [
+          "npm.cmd run check-types",
+          "npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/state/scenarioStore.test.ts (19 tests)",
+          "npm.cmd run test (11 files / 49 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (11 files / 49 tests)"
+        ],
+        "coverage": [
+          "src/state/boardStore.ts adds selectedEdgeId/selectEdge, clears mutually exclusive graph/object selections, selects newly created/updated Edges, and clears selected connected Edge state when a Location is deleted.",
+          "src/ui/BoardCanvas.tsx adds transparent PixiJS hit targets for each Edge in Select mode and highlights the selected Edge on the canvas.",
+          "src/ui/App.tsx adds a toolbar Selection actions chip with direct Trash controls for selected Locations and Edges, and the Context panel now reports selected Edge details.",
+          "src/styles.css prevents the toolbar quick-action chip from overlapping Add Edge and allows the toolbar to wrap cleanly.",
+          "tests/state/boardStore.test.ts covers direct Edge selection/deletion and Location deletion cleanup for selected connected Edge state."
+        ],
+        "browserVerification": [
+          "Browser plugin loaded http://127.0.0.1:5173/ with Data Workbench hidden by default.",
+          "Created two Locations and one Edge on the PixiJS canvas with the map tools.",
+          "Switched to Select, clicked the Edge midpoint, confirmed toolbar Selection actions showed Edge edge-1 and the Context panel showed edge-1 endpoints.",
+          "Clicked the toolbar Trash action for Edge edge-1 and confirmed the header metrics showed Edges0 while Locations remained 2.",
+          "Clicked a Location node, confirmed toolbar Selection actions showed Location loc-2, clicked Trash, and confirmed metrics showed Locations1 and Edges0.",
+          "Confirmed no app console errors or warnings during the browser flow."
+        ],
+        "notes": "This is a graph editing UX refinement only. It does not implement movement validation, rule triggers, Cut-in rendering, online collaboration, or game-specific branches."
+      }
+    },
+    {
       "id": "F-05-MovementValidation",
       "priority": 5,
       "title": "Graph Movement Validation",

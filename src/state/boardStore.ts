@@ -104,6 +104,7 @@ export interface BoardStore {
   selectedAssetId: string | null;
   selectedLocationId: string | null;
   selectedPlacementId: string | null;
+  selectedEdgeId: string | null;
   edgeDraftFromId: string | null;
   activeTool: BoardTool;
   boardZoom: number;
@@ -125,6 +126,7 @@ export interface BoardStore {
   setActiveTool: (tool: BoardTool) => void;
   selectLocation: (locationId: string | null) => void;
   selectPlacement: (placementId: string | null) => void;
+  selectEdge: (edgeId: string | null) => void;
   createLocationAt: (x: number, y: number) => string | null;
   moveLocation: (locationId: string, x: number, y: number) => void;
   updateLocationDetails: (
@@ -211,6 +213,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
   selectedAssetId: null,
   selectedLocationId: null,
   selectedPlacementId: null,
+  selectedEdgeId: null,
   edgeDraftFromId: null,
   activeTool: "select",
   boardZoom: 1,
@@ -605,12 +608,21 @@ export const useBoardStore = create<BoardStore>((set) => ({
     set({
       selectedLocationId: locationId,
       selectedPlacementId: null,
+      selectedEdgeId: null,
       lastError: null,
     }),
   selectPlacement: (placementId) =>
     set({
       selectedLocationId: null,
       selectedPlacementId: placementId,
+      selectedEdgeId: null,
+      lastError: null,
+    }),
+  selectEdge: (edgeId) =>
+    set({
+      selectedLocationId: null,
+      selectedPlacementId: null,
+      selectedEdgeId: edgeId,
       lastError: null,
     }),
   createLocationAt: (x, y) => {
@@ -636,6 +648,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           board: nextBoard,
           selectedLocationId: id,
           selectedPlacementId: null,
+          selectedEdgeId: null,
           lastError: null,
         };
       } catch (error) {
@@ -660,6 +673,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           board: updateLocation(state.board, locationId, { x, y }),
           selectedLocationId: locationId,
           selectedPlacementId: null,
+          selectedEdgeId: null,
           lastError: null,
         };
       } catch (error) {
@@ -681,6 +695,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           board: updateLocation(state.board, locationId, patch),
           selectedLocationId: locationId,
           selectedPlacementId: null,
+          selectedEdgeId: null,
           lastError: null,
         };
       } catch (error) {
@@ -698,12 +713,14 @@ export const useBoardStore = create<BoardStore>((set) => ({
       }
 
       try {
+        const removedEdgeIds = getConnectedEdgeIds(state.board.edges, locationId);
         const selectedLocationId =
           state.selectedLocationId === locationId ? null : state.selectedLocationId;
 
         return {
           board: removeLocation(state.board, locationId),
           locationStates: omitRecordKey(state.locationStates, locationId),
+          edgeStates: omitRecordKeys(state.edgeStates, removedEdgeIds),
           entityState: clearLocationBindings(state.entityState, locationId),
           assetPlacements: state.assetPlacements.map((placement) => {
             if (placement.locationId !== locationId) {
@@ -723,6 +740,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
             )
               ? null
               : state.selectedPlacementId,
+          selectedEdgeId:
+            state.selectedEdgeId && removedEdgeIds.has(state.selectedEdgeId)
+              ? null
+              : state.selectedEdgeId,
           edgeDraftFromId: state.edgeDraftFromId === locationId ? null : state.edgeDraftFromId,
           lastError: null,
         };
@@ -768,12 +789,18 @@ export const useBoardStore = create<BoardStore>((set) => ({
       }
 
       try {
+        const removedEdgeIds = getConnectedEdgeIds(
+          state.board.edges,
+          state.selectedLocationId,
+        );
+
         return {
           board: removeLocation(state.board, state.selectedLocationId),
           locationStates: omitRecordKey(
             state.locationStates,
             state.selectedLocationId,
           ),
+          edgeStates: omitRecordKeys(state.edgeStates, removedEdgeIds),
           entityState: clearLocationBindings(
             state.entityState,
             state.selectedLocationId,
@@ -788,6 +815,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           }),
           selectedLocationId: null,
           selectedPlacementId: null,
+          selectedEdgeId: null,
           edgeDraftFromId:
             state.edgeDraftFromId === state.selectedLocationId
               ? null
@@ -813,6 +841,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           edgeDraftFromId: locationId,
           selectedLocationId: locationId,
           selectedPlacementId: null,
+          selectedEdgeId: null,
           lastError: null,
         };
       }
@@ -822,6 +851,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           edgeDraftFromId: null,
           selectedLocationId: locationId,
           selectedPlacementId: null,
+          selectedEdgeId: null,
           lastError: null,
         };
       }
@@ -840,8 +870,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
         return {
           board: nextBoard,
           edgeDraftFromId: null,
-          selectedLocationId: locationId,
+          selectedLocationId: null,
           selectedPlacementId: null,
+          selectedEdgeId: id,
           lastError: null,
         };
     } catch (error) {
@@ -849,6 +880,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
         edgeDraftFromId: null,
         selectedLocationId: locationId,
         selectedPlacementId: null,
+        selectedEdgeId: null,
         lastError: getErrorMessage(error),
       };
     }
@@ -865,6 +897,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
         return {
           board: updateEdge(state.board, edgeId, patch),
           edgeDraftFromId: null,
+          selectedLocationId: null,
+          selectedPlacementId: null,
+          selectedEdgeId: edgeId,
           lastError: null,
         };
       } catch (error) {
@@ -885,6 +920,8 @@ export const useBoardStore = create<BoardStore>((set) => ({
         return {
           board: removeEdge(state.board, edgeId),
           edgeStates: omitRecordKey(state.edgeStates, edgeId),
+          selectedEdgeId:
+            state.selectedEdgeId === edgeId ? null : state.selectedEdgeId,
           edgeDraftFromId: null,
           lastError: null,
         };
@@ -905,6 +942,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
       try {
         return {
           board: updateEdge(state.board, edgeId, { label }),
+          selectedLocationId: null,
+          selectedPlacementId: null,
+          selectedEdgeId: edgeId,
           lastError: null,
         };
       } catch (error) {
@@ -925,6 +965,8 @@ export const useBoardStore = create<BoardStore>((set) => ({
         return {
           board: removeEdge(state.board, edgeId),
           edgeStates: omitRecordKey(state.edgeStates, edgeId),
+          selectedEdgeId:
+            state.selectedEdgeId === edgeId ? null : state.selectedEdgeId,
           lastError: null,
         };
       } catch (error) {
@@ -1019,6 +1061,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
               : state.pawnSheets,
           selectedLocationId: null,
           selectedPlacementId: id,
+          selectedEdgeId: null,
           lastError: null,
         };
       } catch (error) {
@@ -1064,6 +1107,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
         ),
         selectedLocationId: null,
         selectedPlacementId: placementId,
+        selectedEdgeId: null,
         lastError: null,
       };
     }),
@@ -1351,6 +1395,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
         selectedAssetId: null,
         selectedLocationId: null,
         selectedPlacementId: null,
+        selectedEdgeId: null,
         edgeDraftFromId: null,
         activeTool: "select",
         lastError: null,
@@ -1372,6 +1417,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
         selectedAssetId: null,
         selectedLocationId: null,
         selectedPlacementId: null,
+        selectedEdgeId: null,
         edgeDraftFromId: null,
         activeTool: "select",
         lastError: null,
@@ -1721,6 +1767,30 @@ function omitRecordKey<T>(
 ): Record<string, T> {
   return Object.fromEntries(
     Object.entries(record).filter(([key]) => key !== removedKey),
+  );
+}
+
+function omitRecordKeys<T>(
+  record: Record<string, T>,
+  removedKeys: ReadonlySet<string>,
+): Record<string, T> {
+  if (removedKeys.size === 0) {
+    return record;
+  }
+
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => !removedKeys.has(key)),
+  );
+}
+
+function getConnectedEdgeIds(
+  edges: readonly BoardEdge[],
+  locationId: string,
+): Set<string> {
+  return new Set(
+    edges
+      .filter((edge) => edge.fromId === locationId || edge.toId === locationId)
+      .map((edge) => edge.id),
   );
 }
 

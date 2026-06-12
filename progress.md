@@ -296,3 +296,20 @@
 - Environment note: a running Vite dev server locks `@rolldown/binding-win32-x64-msvc`, which makes the harness `npm ci` fail with EPERM and can leave `node_modules` half-deleted. Stop the dev server before running `.\init.ps1`.
 - Verification passed: `npm.cmd run check-types`, `npm.cmd run test` (11 files / 47 tests), `npm.cmd run build` (no chunk warning), and full `.\init.ps1` (harness valid, TypeScript green, 11 files / 47 tests).
 - No git staging, commit, or push was performed.
+
+## 2026-06-12 F-04C Canvas Quick Delete
+
+- Completed the user-requested deletion refinement after the hidden-workbench/fullscreen rework. Location and Edge deletion no longer requires opening the Data Workbench.
+- Added `selectedEdgeId` and `selectEdge` to `src/state/boardStore.ts`. Location, placement, and Edge selections are now mutually exclusive; newly created/updated Edges can become the active selection; deleting a Location clears connected Edge state and any selected connected Edge.
+- Added PixiJS Edge hit targets in `src/ui/BoardCanvas.tsx`: Select mode can click an Edge line directly, and the selected Edge is highlighted on the canvas.
+- Added a toolbar Selection actions chip in `src/ui/App.tsx` with a direct Trash button for selected Locations and Edges. The Context rail also reports selected Edge id/endpoints.
+- Browser verification found a layout regression introduced by the new chip: it overlapped the Add Edge button in the flex toolbar. `src/styles.css` now keeps the tool group non-shrinking, lets the toolbar wrap, and prevents the quick action chip from covering tools.
+- Browser verification through the Browser plugin against `http://127.0.0.1:5173/`:
+  - Data Workbench was hidden by default.
+  - Created two Locations and one Edge using the map tools.
+  - Switched to Select, clicked the Edge midpoint, confirmed `Edge edge-1` appeared in the toolbar Selection actions and Context showed `edge-1` endpoints.
+  - Clicked the toolbar Trash action for `edge-1`; metrics changed to `Edges0` while Locations remained `2`.
+  - Clicked a Location node, confirmed `Location loc-2` appeared in the toolbar Selection actions, clicked Trash, and metrics changed to `Locations1` / `Edges0`.
+  - Console errors/warnings: 0.
+- Verification passed: `npm.cmd run check-types`, `npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/state/scenarioStore.test.ts` (19 tests), `npm.cmd run test` (11 files / 49 tests), `npm.cmd run build`, and final `.\init.ps1` (harness valid, TypeScript green, 11 files / 49 tests).
+- No git staging, commit, or push was performed.

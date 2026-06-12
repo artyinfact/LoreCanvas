@@ -17,7 +17,7 @@ import type {
   Texture,
 } from "pixi.js";
 import type { DragEvent, RefObject } from "react";
-import type { BoardImageRef, BoardLocation } from "../engine/board";
+import type { BoardEdge, BoardImageRef, BoardLocation } from "../engine/board";
 import { useBoardStore } from "../state/boardStore";
 import type { AssetPlacement, UploadedImageAsset } from "../state/boardStore";
 
@@ -65,6 +65,7 @@ export function BoardCanvas() {
   const boardPan = useBoardStore((state) => state.boardPan);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
+  const selectedEdgeId = useBoardStore((state) => state.selectedEdgeId);
   const edgeDraftFromId = useBoardStore((state) => state.edgeDraftFromId);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
@@ -75,6 +76,7 @@ export function BoardCanvas() {
   const moveLocation = useBoardStore((state) => state.moveLocation);
   const selectLocation = useBoardStore((state) => state.selectLocation);
   const selectPlacement = useBoardStore((state) => state.selectPlacement);
+  const selectEdge = useBoardStore((state) => state.selectEdge);
   const setBoardPan = useBoardStore((state) => state.setBoardPan);
   const setBoardZoom = useBoardStore((state) => state.setBoardZoom);
   const setLastError = useBoardStore((state) => state.setLastError);
@@ -140,7 +142,7 @@ export function BoardCanvas() {
   );
   const canvasCursor = getCanvasCursor({
     activeTool,
-    hasSelection: Boolean(selectedLocationId || selectedPlacementId),
+    hasSelection: Boolean(selectedLocationId || selectedPlacementId || selectedEdgeId),
     isPanning: Boolean(draggingBoardPan),
   });
   const drawBoardFrame = useCallback(
@@ -184,24 +186,37 @@ export function BoardCanvas() {
         const fromPoint = locationToScenePoint(from, frame);
         const toPoint = locationToScenePoint(to, frame);
 
+        const isSelected = edge.id === selectedEdgeId;
+
         graphics
           .moveTo(fromPoint.x, fromPoint.y)
           .lineTo(toPoint.x, toPoint.y)
-          .stroke({ color: 0x111827, width: 7, alpha: 0.18, cap: "round" });
+          .stroke({
+            color: isSelected ? 0x2f6f73 : 0x111827,
+            width: isSelected ? 13 : 7,
+            alpha: isSelected ? 0.32 : 0.18,
+            cap: "round",
+          });
         graphics
           .moveTo(fromPoint.x, fromPoint.y)
           .lineTo(toPoint.x, toPoint.y)
-          .stroke({ color: 0xf2b84b, width: 3, alpha: 0.92, cap: "round" });
+          .stroke({
+            color: isSelected ? 0xe6f3f1 : 0xf2b84b,
+            width: isSelected ? 5 : 3,
+            alpha: 0.92,
+            cap: "round",
+          });
       }
     },
-    [board.edges, frame, locationById],
+    [board.edges, frame, locationById, selectedEdgeId],
   );
   const handleCanvasPointerDown = useCallback(
     (event: FederatedPointerEvent) => {
       if (activeTool === "select") {
-        if (selectedLocationId || selectedPlacementId) {
+        if (selectedLocationId || selectedPlacementId || selectedEdgeId) {
           selectLocation(null);
           selectPlacement(null);
+          selectEdge(null);
           return;
         }
 
@@ -234,10 +249,24 @@ export function BoardCanvas() {
       frame,
       selectLocation,
       selectPlacement,
+      selectEdge,
+      selectedEdgeId,
       selectedLocationId,
       selectedPlacementId,
       mode,
     ],
+  );
+  const handleEdgePointerDown = useCallback(
+    (edgeId: string, event: FederatedPointerEvent) => {
+      event.stopPropagation();
+
+      if (activeTool !== "select") {
+        return;
+      }
+
+      selectEdge(edgeId);
+    },
+    [activeTool, selectEdge],
   );
   const handleGlobalPointerMove = useCallback(
     (event: FederatedPointerEvent) => {
@@ -521,6 +550,14 @@ export function BoardCanvas() {
             assetById={assetById}
           />
           <pixiGraphics draw={drawEdges} />
+          <EdgeHitTargets
+            activeTool={activeTool}
+            edges={board.edges}
+            frame={frame}
+            locationById={locationById}
+            onPointerDown={handleEdgePointerDown}
+            selectedEdgeId={selectedEdgeId}
+          />
           {board.locations.map((location, index) => (
             <LocationNode
               frame={frame}
@@ -551,6 +588,103 @@ interface PlacementSpritesProps {
   placements: AssetPlacement[];
   selectedPlacementId: string | null;
   assetById: Map<string, UploadedImageAsset>;
+}
+
+interface EdgeHitTargetsProps {
+  activeTool: string;
+  edges: BoardEdge[];
+  frame: BoardFrame;
+  locationById: Map<string, BoardLocation>;
+  onPointerDown: (edgeId: string, event: FederatedPointerEvent) => void;
+  selectedEdgeId: string | null;
+}
+
+function EdgeHitTargets({
+  activeTool,
+  edges,
+  frame,
+  locationById,
+  onPointerDown,
+  selectedEdgeId,
+}: EdgeHitTargetsProps) {
+  return (
+    <>
+      {edges.map((edge) => {
+        const from = locationById.get(edge.fromId);
+        const to = locationById.get(edge.toId);
+
+        if (!from || !to) {
+          return null;
+        }
+
+        return (
+          <EdgeHitTarget
+            edge={edge}
+            eventMode={activeTool === "select" ? "static" : "none"}
+            frame={frame}
+            from={from}
+            isSelected={selectedEdgeId === edge.id}
+            key={edge.id}
+            onPointerDown={onPointerDown}
+            to={to}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+interface EdgeHitTargetProps {
+  edge: BoardEdge;
+  eventMode: "static" | "none";
+  frame: BoardFrame;
+  from: BoardLocation;
+  isSelected: boolean;
+  onPointerDown: (edgeId: string, event: FederatedPointerEvent) => void;
+  to: BoardLocation;
+}
+
+function EdgeHitTarget({
+  edge,
+  eventMode,
+  frame,
+  from,
+  isSelected,
+  onPointerDown,
+  to,
+}: EdgeHitTargetProps) {
+  const fromPoint = locationToScenePoint(from, frame);
+  const toPoint = locationToScenePoint(to, frame);
+  const drawHitTarget = useCallback(
+    (graphics: PixiGraphics) => {
+      graphics.clear();
+      graphics
+        .moveTo(fromPoint.x, fromPoint.y)
+        .lineTo(toPoint.x, toPoint.y)
+        .stroke({
+          color: isSelected ? 0x2f6f73 : 0xffffff,
+          width: isSelected ? 18 : 16,
+          alpha: isSelected ? 0.1 : 0.001,
+          cap: "round",
+        });
+    },
+    [fromPoint.x, fromPoint.y, isSelected, toPoint.x, toPoint.y],
+  );
+  const handlePointerDown = useCallback(
+    (event: FederatedPointerEvent) => {
+      onPointerDown(edge.id, event);
+    },
+    [edge.id, onPointerDown],
+  );
+
+  return (
+    <pixiGraphics
+      cursor="pointer"
+      draw={drawHitTarget}
+      eventMode={eventMode}
+      onPointerDown={handlePointerDown}
+    />
+  );
 }
 
 function PlacementSprites({

@@ -35,6 +35,7 @@ describe("F-03 scenario store import/export", () => {
       selectedAssetId: null,
       selectedLocationId: null,
       selectedPlacementId: null,
+      selectedEdgeId: null,
       edgeDraftFromId: null,
       activeTool: "select",
       boardZoom: 1,

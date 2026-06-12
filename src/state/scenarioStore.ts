@@ -150,6 +150,7 @@ export function applyScenarioPackageToBoardStore(
     selectedAssetId: null,
     selectedLocationId: null,
     selectedPlacementId: null,
+    selectedEdgeId: null,
     edgeDraftFromId: null,
     activeTool: "select",
     lastError: null,

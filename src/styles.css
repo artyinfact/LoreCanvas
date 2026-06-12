@@ -275,6 +275,7 @@ button {
 .stage-toolbar {
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -292,7 +293,12 @@ button {
   gap: 6px;
 }
 
+.stage-toolbar__tools {
+  flex: 0 0 auto;
+}
+
 .stage-toolbar__zoom {
+  flex: 1 1 320px;
   justify-content: flex-end;
 }
 
@@ -320,6 +326,28 @@ button {
 
 .draft-pill--toolbar {
   flex: none;
+}
+
+.selection-actions {
+  min-width: 0;
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px 4px 9px;
+  border: 1px solid #d3d8df;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.selection-actions__label {
+  max-width: 150px;
+  overflow: hidden;
+  color: #414952;
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .board-canvas {
@@ -920,6 +948,15 @@ button {
 
 .icon-only--neutral {
   color: #414952;
+}
+
+.icon-only--danger {
+  color: #8a2d2d;
+}
+
+.icon-only:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .piece-controls {
