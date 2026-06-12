@@ -10,9 +10,13 @@ import {
   ImageIcon,
   Link2,
   MapPinPlus,
+  Maximize,
+  Minimize,
   MousePointer2,
   Network,
   Minus,
+  PanelBottomClose,
+  PanelBottomOpen,
   Plus,
   Play,
   Pencil,
@@ -121,6 +125,9 @@ export function App() {
   const isInspectorCollapsed = useBoardStore(
     (state) => state.isInspectorCollapsed,
   );
+  const isWorkbenchCollapsed = useBoardStore(
+    (state) => state.isWorkbenchCollapsed,
+  );
   const edgeDraftFromId = useBoardStore((state) => state.edgeDraftFromId);
   const lastError = useBoardStore((state) => state.lastError);
   const addAssets = useBoardStore((state) => state.addAssets);
@@ -138,6 +145,9 @@ export function App() {
   );
   const setInspectorCollapsed = useBoardStore(
     (state) => state.setInspectorCollapsed,
+  );
+  const setWorkbenchCollapsed = useBoardStore(
+    (state) => state.setWorkbenchCollapsed,
   );
   const updateAssetPlacement = useBoardStore(
     (state) => state.updateAssetPlacement,
@@ -191,6 +201,38 @@ export function App() {
   const [mediaProgress, setMediaProgress] = useState<MediaProgress | null>(null);
   const mediaCountsRef = useRef<MediaProgress>({ done: 0, total: 0 });
   const isUnmountedRef = useRef(false);
+  const mapWorkspaceRef = useRef<HTMLElement>(null);
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsMapFullscreen(
+        document.fullscreenElement === mapWorkspaceRef.current &&
+          document.fullscreenElement !== null,
+      );
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleMapFullscreen = useCallback(() => {
+    const workspace = mapWorkspaceRef.current;
+
+    if (!workspace) {
+      return;
+    }
+
+    if (document.fullscreenElement === workspace) {
+      void document.exitFullscreen();
+      return;
+    }
+
+    void workspace.requestFullscreen();
+  }, []);
 
   useEffect(() => {
     // Reset on every mount so the StrictMode dev double-mount cleanup does not
@@ -518,8 +560,17 @@ export function App() {
           </div>
         </aside>
 
-        <section className="stage-region" aria-label="Map canvas">
-          <section className="map-workspace" aria-label="Graph board canvas">
+        <section
+          className="stage-region"
+          aria-label="Map canvas"
+          data-workbench-collapsed={isWorkbenchCollapsed}
+        >
+          <section
+            aria-label="Graph board canvas"
+            className="map-workspace"
+            data-fullscreen={isMapFullscreen}
+            ref={mapWorkspaceRef}
+          >
             <div className="stage-toolbar" aria-label="Map controls">
               <div className="stage-toolbar__tools" role="toolbar">
                 {TOOL_OPTIONS.map(({ id, label, Icon }) => (
@@ -588,6 +639,47 @@ export function App() {
                 >
                   <RotateCcw aria-hidden="true" size={16} />
                 </button>
+                <span className="stage-toolbar__divider" aria-hidden="true" />
+                <button
+                  aria-label={
+                    isWorkbenchCollapsed
+                      ? "Show data workbench"
+                      : "Hide data workbench"
+                  }
+                  aria-pressed={!isWorkbenchCollapsed}
+                  className="icon-only icon-only--neutral"
+                  onClick={() => setWorkbenchCollapsed(!isWorkbenchCollapsed)}
+                  title={
+                    isWorkbenchCollapsed
+                      ? "Show data workbench"
+                      : "Hide data workbench"
+                  }
+                  type="button"
+                >
+                  {isWorkbenchCollapsed ? (
+                    <PanelBottomOpen aria-hidden="true" size={16} />
+                  ) : (
+                    <PanelBottomClose aria-hidden="true" size={16} />
+                  )}
+                </button>
+                <button
+                  aria-label={
+                    isMapFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                  }
+                  aria-pressed={isMapFullscreen}
+                  className="icon-only icon-only--neutral"
+                  onClick={toggleMapFullscreen}
+                  title={
+                    isMapFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                  }
+                  type="button"
+                >
+                  {isMapFullscreen ? (
+                    <Minimize aria-hidden="true" size={16} />
+                  ) : (
+                    <Maximize aria-hidden="true" size={16} />
+                  )}
+                </button>
               </div>
             </div>
             <Suspense
@@ -596,10 +688,12 @@ export function App() {
               <BoardCanvas />
             </Suspense>
           </section>
-          <DataWorkbench
-            activeTab={activeWorkbenchTab}
-            onTabChange={setActiveWorkbenchTab}
-          />
+          {!isWorkbenchCollapsed ? (
+            <DataWorkbench
+              activeTab={activeWorkbenchTab}
+              onTabChange={setActiveWorkbenchTab}
+            />
+          ) : null}
         </section>
 
         <aside
@@ -667,14 +761,26 @@ export function App() {
           </div>
         </aside>
 
-        {isInspectorCollapsed ? (
+        {isCreationPanelCollapsed ? (
           <button
-            aria-label="Expand inspector"
-            className="inspector-tab"
-            onClick={() => setInspectorCollapsed(false)}
+            aria-label="Show creation toolbar"
+            className="panel-expand-tab panel-expand-tab--left"
+            onClick={() => setCreationPanelCollapsed(false)}
+            title="Show creation toolbar"
             type="button"
           >
             <ChevronsRight aria-hidden="true" size={18} />
+          </button>
+        ) : null}
+        {isInspectorCollapsed ? (
+          <button
+            aria-label="Show context rail"
+            className="panel-expand-tab panel-expand-tab--right"
+            onClick={() => setInspectorCollapsed(false)}
+            title="Show context rail"
+            type="button"
+          >
+            <ChevronsLeft aria-hidden="true" size={18} />
           </button>
         ) : null}
       </section>

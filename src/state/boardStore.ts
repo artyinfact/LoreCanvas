@@ -110,6 +110,7 @@ export interface BoardStore {
   boardPan: BoardPan;
   isCreationPanelCollapsed: boolean;
   isInspectorCollapsed: boolean;
+  isWorkbenchCollapsed: boolean;
   lastError: string | null;
   addAsset: (asset: UploadedImageAsset) => void;
   addAssets: (assets: UploadedImageAsset[]) => void;
@@ -165,6 +166,7 @@ export interface BoardStore {
   resetBoardView: () => void;
   setCreationPanelCollapsed: (isCollapsed: boolean) => void;
   setInspectorCollapsed: (isCollapsed: boolean) => void;
+  setWorkbenchCollapsed: (isCollapsed: boolean) => void;
   setLastError: (message: string) => void;
   clearError: () => void;
   updateBoardState: (patch: JsonRecord) => void;
@@ -215,6 +217,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
   boardPan: { x: 0, y: 0 },
   isCreationPanelCollapsed: false,
   isInspectorCollapsed: false,
+  isWorkbenchCollapsed: true,
   lastError: null,
   addAsset: (asset) =>
     set((state) => {
@@ -1252,6 +1255,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
   setInspectorCollapsed: (isCollapsed) =>
     set({
       isInspectorCollapsed: isCollapsed,
+    }),
+  setWorkbenchCollapsed: (isCollapsed) =>
+    set({
+      isWorkbenchCollapsed: isCollapsed,
     }),
   setLastError: (message) =>
     set({

@@ -283,3 +283,16 @@
   - `.\\init.ps1` -> harness valid, TypeScript green, 11 files / 47 tests
 - Current next pending feature is again `F-05-MovementValidation`.
 - No git staging, commit, or push was performed.
+
+## 2026-06-12 Maker Canvas Space Rework: Hidden Workbench, Fullscreen, Zero-Width Rails
+
+- Addressed direct user feedback on the F-04B workbench layout: the map canvas was too small, the bottom Data Workbench should be hidden by default, the canvas needs a fullscreen mode, and collapsed side rails left an ugly 48px arrow column.
+- Data Workbench is now hidden by default. Added `isWorkbenchCollapsed` (default `true`) and `setWorkbenchCollapsed` to `src/state/boardStore.ts`; `App.tsx` only renders `DataWorkbench` when expanded, and `.stage-region[data-workbench-collapsed="true"]` switches to a single full-height map row.
+- Added two stage-toolbar buttons after a divider in the zoom group: a Data Workbench show/hide toggle (PanelBottomOpen/PanelBottomClose) and a map fullscreen toggle (Maximize/Minimize). Fullscreen uses the native Fullscreen API on the `.map-workspace` element (toolbar + PixiJS canvas stay visible); state syncs via a `fullscreenchange` listener, and Esc or the button exits.
+- Collapsed side rails are now completely hidden: collapsed grid columns are `0` and the rail gets `display: none`. Re-expansion uses new floating `.panel-expand-tab` chevron buttons vertically centered on the left/right edges of the stage.
+- Layout regression found during browser verification: with `display: none` rails, grid auto-placement pushed `.stage-region` into the zero-width first column. Fixed by pinning explicit `grid-row`/`grid-column` positions on `.tool-panel--creation` (column 1), `.stage-region` (column 2), and `.tool-panel--inspector` (column 3).
+- BoardCanvas needed no changes: its ResizeObserver + `app.renderer.resize` path already handles workbench toggle, rail collapse, and fullscreen resizes.
+- Playwright browser verification against `http://127.0.0.1:5173/` at 1440x900: default view shows no workbench and a full-height canvas; collapsing both rails leaves zero-width columns with floating expand tabs and a full-width PixiJS canvas; the workbench toggle shows/hides the table panel; fullscreen covers the entire screen with working toolbar and exit button; expand tabs restore both rails. Console errors/warnings: 0.
+- Environment note: a running Vite dev server locks `@rolldown/binding-win32-x64-msvc`, which makes the harness `npm ci` fail with EPERM and can leave `node_modules` half-deleted. Stop the dev server before running `.\init.ps1`.
+- Verification passed: `npm.cmd run check-types`, `npm.cmd run test` (11 files / 47 tests), `npm.cmd run build` (no chunk warning), and full `.\init.ps1` (harness valid, TypeScript green, 11 files / 47 tests).
+- No git staging, commit, or push was performed.
