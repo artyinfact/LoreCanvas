@@ -20,6 +20,16 @@ import type { DragEvent, RefObject } from "react";
 import type { BoardEdge, BoardImageRef, BoardLocation } from "../engine/board";
 import { useBoardStore } from "../state/boardStore";
 import type { AssetPlacement, UploadedImageAsset } from "../state/boardStore";
+import {
+  computeBoardFrame,
+  getImageSize,
+  resolveFrameBackground,
+} from "./boardCanvasFrame";
+import type {
+  BoardFrame,
+  ImageSize,
+  ViewportSize,
+} from "./boardCanvasFrame";
 
 extend({
   Container,
@@ -27,18 +37,6 @@ extend({
   Sprite,
   Text,
 });
-
-interface ViewportSize {
-  width: number;
-  height: number;
-}
-
-interface BoardFrame {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 interface BoardPanDrag {
   origin: PointData;
@@ -92,9 +90,35 @@ export function BoardCanvas() {
   );
   const [draggingBoardPan, setDraggingBoardPan] =
     useState<BoardPanDrag | null>(null);
+  const assetById = useMemo(
+    () =>
+      new Map(
+        assets.map((asset) => [asset.id, asset] as const),
+      ),
+    [assets],
+  );
+  const backgroundAssetSize = useMemo<ImageSize | null>(() => {
+    if (!board.background) {
+      return null;
+    }
+
+    const backgroundAsset = assetById.get(board.background.assetId);
+
+    return getImageSize(backgroundAsset);
+  }, [assetById, board.background]);
+  const backgroundTextureSize = useBackgroundTextureSize(board.background);
+  const frameBackground = useMemo(
+    () =>
+      resolveFrameBackground(
+        board.background,
+        backgroundAssetSize,
+        backgroundTextureSize,
+      ),
+    [backgroundAssetSize, backgroundTextureSize, board.background],
+  );
   const frame = useMemo(
-    () => computeBoardFrame(viewport, board.background, boardZoom, boardPan),
-    [board.background, boardPan, boardZoom, viewport],
+    () => computeBoardFrame(viewport, frameBackground, boardZoom, boardPan),
+    [boardPan, boardZoom, frameBackground, viewport],
   );
   useEffect(() => {
     const app = appRef.current?.getApplication();
@@ -115,13 +139,6 @@ export function BoardCanvas() {
   const locationById = useMemo(
     () => new Map(board.locations.map((location) => [location.id, location])),
     [board.locations],
-  );
-  const assetById = useMemo(
-    () =>
-      new Map(
-        assets.map((asset) => [asset.id, asset] as const),
-      ),
-    [assets],
   );
   const selectedPlacement = useMemo(
     () =>
@@ -904,6 +921,54 @@ function BoardBackgroundSprite({ background, frame }: BoardBackgroundSpriteProps
   );
 }
 
+function useBackgroundTextureSize(background: BoardImageRef | null) {
+  const [textureSize, setTextureSize] = useState<ImageSize | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setTextureSize(null);
+
+    if (!background || getImageSize(background)) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void Assets.load<Texture>({
+      parser: getPixiImageParser(background),
+      src: background.url,
+    })
+      .then((loadedTexture) => {
+        if (!cancelled) {
+          setTextureSize(getTextureImageSize(loadedTexture));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTextureSize(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [background]);
+
+  return textureSize;
+}
+
+function getTextureImageSize(texture: Texture): ImageSize | null {
+  if (!texture.width || !texture.height) {
+    return null;
+  }
+
+  return {
+    width: texture.width,
+    height: texture.height,
+  };
+}
+
 interface LocationNodeProps {
   frame: BoardFrame;
   index: number;
@@ -1004,40 +1069,6 @@ function useElementSize(
   }, [fallback, ref]);
 
   return size;
-}
-
-function computeBoardFrame(
-  viewport: ViewportSize,
-  background: BoardImageRef | null,
-  zoom: number,
-  pan: PointData,
-): BoardFrame {
-  const padding = Math.max(20, Math.min(viewport.width, viewport.height) * 0.04);
-  const availableWidth = Math.max(1, viewport.width - padding * 2);
-  const availableHeight = Math.max(1, viewport.height - padding * 2);
-
-  if (!background?.width || !background.height) {
-    return {
-      x: (viewport.width - availableWidth * zoom) / 2 + pan.x,
-      y: (viewport.height - availableHeight * zoom) / 2 + pan.y,
-      width: availableWidth * zoom,
-      height: availableHeight * zoom,
-    };
-  }
-
-  const imageRatio = background.width / background.height;
-  const availableRatio = availableWidth / availableHeight;
-  const width =
-    imageRatio > availableRatio ? availableWidth : availableHeight * imageRatio;
-  const height =
-    imageRatio > availableRatio ? availableWidth / imageRatio : availableHeight;
-
-  return {
-    x: (viewport.width - width * zoom) / 2 + pan.x,
-    y: (viewport.height - height * zoom) / 2 + pan.y,
-    width: width * zoom,
-    height: height * zoom,
-  };
 }
 
 function getCanvasCursor({

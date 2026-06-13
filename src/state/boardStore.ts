@@ -640,7 +640,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           "loc",
           state.board.locations.map((location) => location.id),
         );
-        const name = `Location ${state.board.locations.length + 1}`;
+        const name = getDefaultLocationName(id);
         const nextBoard = addLocation(state.board, { id, name, x, y });
         createdId = id;
 
@@ -1792,6 +1792,12 @@ function getConnectedEdgeIds(
       .filter((edge) => edge.fromId === locationId || edge.toId === locationId)
       .map((edge) => edge.id),
   );
+}
+
+function getDefaultLocationName(locationId: string) {
+  const locationNumber = locationId.match(/^loc-(\d+)$/)?.[1];
+
+  return locationNumber ? `Location ${locationNumber}` : locationId;
 }
 
 function cloneJson<T>(value: T): T {

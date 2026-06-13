@@ -1,4 +1,7 @@
 import {
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ArrowUpDown,
   CreditCard,
   ChevronDown,
   ChevronsLeft,
@@ -81,6 +84,13 @@ const TOOL_OPTIONS: Array<{
 ];
 
 type WorkbenchTab = "locations" | "edges" | "objects" | "board";
+export type LocationSortField = "name" | "region";
+export type SortDirection = "asc" | "desc";
+
+export interface LocationSortState {
+  direction: SortDirection;
+  field: LocationSortField;
+}
 
 const WORKBENCH_TABS: Array<{
   id: WorkbenchTab;
@@ -1188,6 +1198,24 @@ function LocationsTable({
   onUpdateLocationState,
   selectedLocationId,
 }: LocationsTableProps) {
+  const [sort, setSort] = useState<LocationSortState | null>(null);
+  const sortedLocations = useMemo(
+    () => sortLocationsForWorkbench(locations, locationStates, sort),
+    [locations, locationStates, sort],
+  );
+  const handleSortClick = useCallback((field: LocationSortField) => {
+    setSort((currentSort) => {
+      if (currentSort?.field !== field) {
+        return { field, direction: "asc" };
+      }
+
+      return {
+        field,
+        direction: currentSort.direction === "asc" ? "desc" : "asc",
+      };
+    });
+  }, []);
+
   if (locations.length === 0) {
     return (
       <p className="empty-state">
@@ -1203,10 +1231,24 @@ function LocationsTable({
         <thead>
           <tr>
             <th scope="col">ID</th>
-            <th scope="col">Name</th>
+            <th scope="col">
+              <LocationSortButton
+                field="name"
+                label="Name"
+                onSort={handleSortClick}
+                sort={sort}
+              />
+            </th>
             <th scope="col">X%</th>
             <th scope="col">Y%</th>
-            <th scope="col">Region</th>
+            <th scope="col">
+              <LocationSortButton
+                field="region"
+                label="Region"
+                onSort={handleSortClick}
+                sort={sort}
+              />
+            </th>
             <th scope="col">Tags</th>
             <th scope="col">Notes</th>
             <th scope="col">State JSON</th>
@@ -1214,7 +1256,7 @@ function LocationsTable({
           </tr>
         </thead>
         <tbody>
-          {locations.map((location) => {
+          {sortedLocations.map((location) => {
             const state = locationStates[location.id] ?? EMPTY_JSON_STATE;
 
             return (
@@ -1336,6 +1378,90 @@ function LocationsTable({
       </table>
     </div>
   );
+}
+
+interface LocationSortButtonProps {
+  field: LocationSortField;
+  label: string;
+  onSort: (field: LocationSortField) => void;
+  sort: LocationSortState | null;
+}
+
+function LocationSortButton({
+  field,
+  label,
+  onSort,
+  sort,
+}: LocationSortButtonProps) {
+  const isActive = sort?.field === field;
+  const nextDirection =
+    isActive && sort.direction === "asc" ? "desc" : "asc";
+  const Icon = isActive
+    ? sort.direction === "asc"
+      ? ArrowUpAZ
+      : ArrowDownAZ
+    : ArrowUpDown;
+
+  return (
+    <button
+      aria-label={`Sort locations by ${label} ${
+        nextDirection === "asc" ? "A to Z" : "Z to A"
+      }`}
+      className="table-sort-button"
+      data-active={isActive}
+      onClick={() => onSort(field)}
+      type="button"
+    >
+      <span>{label}</span>
+      <Icon aria-hidden="true" size={13} />
+      {isActive ? (
+        <span className="table-sort-button__direction">
+          {sort.direction === "asc" ? "A-Z" : "Z-A"}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+export function sortLocationsForWorkbench(
+  locations: readonly BoardLocation[],
+  locationStates: Record<string, JsonRecord>,
+  sort: LocationSortState | null,
+): BoardLocation[] {
+  if (!sort) {
+    return [...locations];
+  }
+
+  const collator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  const directionMultiplier = sort.direction === "asc" ? 1 : -1;
+
+  return [...locations].sort((first, second) => {
+    const firstValue = getLocationSortValue(first, locationStates, sort.field);
+    const secondValue = getLocationSortValue(second, locationStates, sort.field);
+    const primary = collator.compare(firstValue, secondValue);
+
+    if (primary !== 0) {
+      return primary * directionMultiplier;
+    }
+
+    return collator.compare(first.id, second.id);
+  });
+}
+
+function getLocationSortValue(
+  location: BoardLocation,
+  locationStates: Record<string, JsonRecord>,
+  field: LocationSortField,
+) {
+  if (field === "name") {
+    return location.name.trim();
+  }
+
+  return getStateString(locationStates[location.id] ?? EMPTY_JSON_STATE, "region")
+    .trim();
 }
 
 interface EdgesTableProps {

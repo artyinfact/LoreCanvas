@@ -313,3 +313,18 @@
   - Console errors/warnings: 0.
 - Verification passed: `npm.cmd run check-types`, `npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/state/scenarioStore.test.ts` (19 tests), `npm.cmd run test` (11 files / 49 tests), `npm.cmd run build`, and final `.\init.ps1` (harness valid, TypeScript green, 11 files / 49 tests).
 - No git staging, commit, or push was performed.
+
+## 2026-06-13 F-04D Map Editor Polish
+
+- Completed the latest map editor feedback as `F-04D-MapEditorPolish` in `feature_list.json`.
+- Fullscreen/aspect fix: extracted pure board-frame sizing into `src/ui/boardCanvasFrame.ts`, and `BoardCanvas` now resolves missing background dimensions from asset metadata or Pixi texture dimensions before computing the frame. This protects legacy saved boards whose `board.background` lacks width/height.
+- Toolbar overlap fix: `.stage-toolbar` now wraps by functional groups. The selected Location/Edge quick-action chip has bounded width and the zoom controls move to their own row when space is constrained, preventing overlap at 400% zoom.
+- Workbench sorting: Locations table headers now expose Name and Region sort buttons with A-Z/Z-A toggles and stable id tie-breaking.
+- Reused Location naming: `createLocationAt` now derives default names from the generated id, so deleting `loc-2` and creating a new point produces `loc-2` / `Location 2`.
+- Browser verification through the Browser plugin against `http://127.0.0.1:5173/`:
+  - Created Locations on the PixiJS canvas, selected a Location, zoomed to 400%, and confirmed the selection chip did not intersect the zoom control group in a constrained 1280px viewport.
+  - Opened Data Workbench, edited Location name/region values, and confirmed Name A-Z/Z-A and Region A-Z/Z-A row order.
+  - Deleted `loc-2`, created a new map point, reopened the workbench, and confirmed the reused `loc-2` row defaulted to `Location 2`.
+  - Browser console had no app errors or warnings; only Vite debug and React DevTools info messages appeared.
+- Local verification passed: `npm.cmd run check-types`, `npm.cmd exec -- vitest run tests/ui/boardCanvasFrame.test.ts tests/ui/workbenchSort.test.ts tests/state/boardStore.test.ts` (21 tests), `npm.cmd run test` (13 files / 54 tests), `npm.cmd run build`, and final `.\init.ps1` (13 files / 54 tests).
+- No git staging, commit, or push was performed.

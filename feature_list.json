@@ -345,6 +345,45 @@
       }
     },
     {
+      "id": "F-04D-MapEditorPolish",
+      "priority": 5,
+      "title": "Map Editor Polish for Fullscreen, Sorting, and Reused IDs",
+      "description": "Refine the Maker map editor after the fullscreen and quick-delete reworks. Fullscreen and resized map workspaces must preserve board-image aspect ratio, selected Location/Edge toolbar chips must not overlap zoom controls, the Locations workbench table must support Name and Region A-Z/Z-A sorting, and reused Location ids must produce matching default names.",
+      "status": "completed",
+      "dependencies": [
+        "F-04C-CanvasQuickDelete"
+      ],
+      "verification": "npm.cmd exec -- vitest run tests/ui/boardCanvasFrame.test.ts tests/ui/workbenchSort.test.ts tests/state/boardStore.test.ts; npm.cmd run check-types; npm.cmd run test; npm.cmd run build; .\\init.ps1; Browser verification for 400% selected-location toolbar layout, Location table sorting, and delete/recreate reused Location id naming",
+      "evidence": {
+        "completedAt": "2026-06-13",
+        "localVerification": [
+          "npm.cmd run check-types",
+          "npm.cmd exec -- vitest run tests/ui/boardCanvasFrame.test.ts tests/ui/workbenchSort.test.ts tests/state/boardStore.test.ts (21 tests)",
+          "npm.cmd run test (13 files / 54 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (13 files / 54 tests)"
+        ],
+        "coverage": [
+          "src/ui/boardCanvasFrame.ts extracts pure board-frame sizing and preserves source image aspect ratio when the workspace enters fullscreen or otherwise resizes.",
+          "src/ui/BoardCanvas.tsx resolves missing background dimensions from imported asset metadata or loaded Pixi texture dimensions before computing the board frame, protecting legacy scenario backgrounds that lack width/height.",
+          "src/styles.css makes the stage toolbar wrap by groups and keeps the selected Location/Edge quick-action chip separate from zoom controls at narrow widths and high zoom.",
+          "src/ui/App.tsx adds sortable Location table headers for Name and Region with A-Z/Z-A toggles and stable id tie-breaking.",
+          "src/state/boardStore.ts names default Locations from the generated id, so a reused loc-2 id receives Location 2 rather than the next array-length name.",
+          "tests/ui/boardCanvasFrame.test.ts covers aspect-ratio frame sizing and legacy background dimension fallback.",
+          "tests/ui/workbenchSort.test.ts covers Location sorting by name and region in both directions.",
+          "tests/state/boardStore.test.ts covers reused Location id default naming."
+        ],
+        "browserVerification": [
+          "Browser plugin loaded http://127.0.0.1:5173/ with no Vite overlay and no app console errors or warnings.",
+          "Created Locations through the PixiJS canvas, selected a Location, zoomed via toolbar controls to 400%, and confirmed the selected Location chip did not intersect the zoom control group in a constrained 1280px viewport.",
+          "Opened Data Workbench, edited Location name/region values, and confirmed Name A-Z/Z-A and Region A-Z/Z-A row orders matched expected collated ordering.",
+          "Deleted loc-2 from the Locations table, hid the workbench, created another Location through the map, reopened the workbench, and confirmed the reused loc-2 row defaulted to name Location 2.",
+          "Captured a headless Chrome screenshot of the loaded Maker page at C:\\Users\\xyzg\\AppData\\Local\\Temp\\lorecanvas-map-polish-browser-loaded.png for visual review."
+        ],
+        "notes": "This is a Maker editing polish pass only. It does not implement movement validation, rule triggers, Cut-in rendering, online collaboration, or game-specific branches."
+      }
+    },
+    {
       "id": "F-05-MovementValidation",
       "priority": 5,
       "title": "Graph Movement Validation",

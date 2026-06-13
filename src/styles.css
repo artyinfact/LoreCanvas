@@ -277,7 +277,7 @@ button {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   padding: 8px;
   border: 1px solid #c3c9d1;
@@ -298,8 +298,10 @@ button {
 }
 
 .stage-toolbar__zoom {
-  flex: 1 1 320px;
+  flex: 0 1 auto;
   justify-content: flex-end;
+  margin-left: auto;
+  max-width: 100%;
 }
 
 .toolbar-tool {
@@ -330,7 +332,8 @@ button {
 
 .selection-actions {
   min-width: 0;
-  flex: 0 1 auto;
+  max-width: 220px;
+  flex: 0 1 220px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -341,7 +344,8 @@ button {
 }
 
 .selection-actions__label {
-  max-width: 150px;
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: #414952;
   font-size: 0.76rem;
@@ -1145,6 +1149,32 @@ button {
   text-transform: uppercase;
 }
 
+.table-sort-button {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.table-sort-button[data-active="true"] {
+  color: #214f52;
+}
+
+.table-sort-button__direction {
+  color: #65707c;
+  font-size: 0.62rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .workbench-table th,
 .workbench-table td {
   max-width: 260px;
@@ -1631,7 +1661,8 @@ input:disabled {
 }
 
 .zoom-control {
-  min-width: 160px;
+  min-width: 150px;
+  flex: 0 1 260px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1645,7 +1676,7 @@ input:disabled {
 }
 
 .zoom-control input {
-  width: min(220px, 26vw);
+  width: min(220px, 22vw);
   accent-color: #2f6f73;
 }
 

@@ -400,6 +400,26 @@ describe("Maker image assets and entity placement", () => {
     expect(nextState.selectedEdgeId).toBeNull();
   });
 
+  it("keeps the default location name aligned with a reused id", () => {
+    const store = useBoardStore.getState();
+
+    store.createLocationAt(0.2, 0.2);
+    useBoardStore.getState().createLocationAt(0.4, 0.4);
+    useBoardStore.getState().createLocationAt(0.6, 0.6);
+    useBoardStore.getState().deleteLocation("loc-2");
+
+    const reusedLocationId = useBoardStore.getState().createLocationAt(0.8, 0.8);
+    const nextState = useBoardStore.getState();
+
+    expect(reusedLocationId).toBe("loc-2");
+    expect(
+      nextState.board.locations.find((location) => location.id === "loc-2"),
+    ).toMatchObject({
+      id: "loc-2",
+      name: "Location 2",
+    });
+  });
+
   it("updates and deletes edges by id for the workbench table", () => {
     const store = useBoardStore.getState();
 
