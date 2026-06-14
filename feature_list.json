@@ -435,8 +435,33 @@
         "F-03-ScenarioLoadSave",
         "F-04-ManualScenarioPrototype"
       ],
-      "verification": "npx vitest run tests/engine/dice.test.ts tests/state/diceStore.test.ts tests/engine/serialization.test.ts",
-      "evidence": null
+      "verification": "npx vitest run tests/engine/dice.test.ts tests/state/diceStore.test.ts tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts; browser verification for Dice workbench render, pool creation, roll state surface, and console health",
+      "evidence": {
+        "completedAt": "2026-06-14",
+        "localVerification": [
+          "npm.cmd exec -- vitest run tests/engine/dice.test.ts tests/state/diceStore.test.ts tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts (4 files / 14 tests)",
+          "npm.cmd run check-types",
+          "npm.cmd run test (17 files / 69 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (harness valid, TypeScript green, 17 files / 69 tests)"
+        ],
+        "coverage": [
+          "src/engine/dice.ts implements generic die definitions, ordered face refs, dice pools, random/manual/deterministic roll modes, last-roll/history tracking, result face overrides, and asset-reference cleanup without game-specific branches.",
+          "src/state/boardStore.ts stores diceState, creates die definitions from TOKEN assets with face metadata or from folder-uploaded TOKEN face images, edits pools and pool die counts, permits run-mode roll/override state, blocks setup creation in run mode, and freezes diceState in setup snapshots.",
+          "src/engine/serialization.ts and src/state/scenarioStore.ts serialize/restore diceState and validate die face assets, TOKEN categories, optional asset face ids, pool references, roll history, lastRollId, and backward-compatible empty dice defaults.",
+          "src/ui/App.tsx adds a Dice workbench tab for creating dice from manifest-style die assets or face folders, inspecting/renaming/deleting dice, creating pools, changing dice counts, rolling pools, clearing roll history, and overriding selected rolled faces.",
+          "tests/state/scenarioStore.test.ts reads the ignored local LOTR dice-face-plan.json fixture and validates combat/search dice as generic six-face definitions, reusable pools, and saved manual roll records."
+        ],
+        "browserVerification": [
+          "Started Vite dev server at http://127.0.0.1:5173 and verified the app loaded with title LoreCanvas.",
+          "Opened Data Workbench through the map toolbar, selected the Dice tab, and confirmed die metadata, face-folder, pool, and Last Roll regions rendered in an empty scenario.",
+          "Entered Smoke Pool in the New dice pool name input, confirmed the Pool button became enabled, created the pool, and confirmed the pool appeared in the Dice workbench.",
+          "Browser console warn/error count was 0 during the Dice workbench smoke path.",
+          "With no TOKEN dice assets imported in the empty browser scenario, die creation and rolling controls correctly remained disabled; folder/face asset workflows are covered by Vitest and the LOTR fixture test.",
+          "Browser screenshot capture timed out through the Browser API, so no screenshot artifact was recorded for this pass."
+        ],
+        "notes": "F-06 closes the custom dice setup gap for pure manual tabletop setup. The implementation models dice and rolls generically and does not implement LOTR search, battle, or symbol rules; LOTR dice requirements are represented only through ignored fixture data and tests."
+      }
     },
     {
       "id": "F-07-TileMarkerSlots",

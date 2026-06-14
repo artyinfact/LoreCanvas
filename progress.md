@@ -380,3 +380,16 @@
 - Browser Use blocked `javascript:` localStorage seeding by security policy, and the Browser API for this flow does not expose file upload, so browser validation did not seed CARD assets. Card data workflows are covered by Vitest and serialization tests instead. Browser screenshot capture also timed out twice with `Page.captureScreenshot`.
 - Final verification passed: `.\init.ps1` reported valid harness state, TypeScript green, and 15 Vitest files / 62 tests passed. Current next pending feature is `F-06-DicePoolsAndRollState`.
 - No git staging, commit, or push was performed.
+
+## 2026-06-14 F-06 Dice Pools And Roll State
+
+- Completed `F-06-DicePoolsAndRollState` as the next manual setup surface after card zones.
+- Added `src/engine/dice.ts`, a generic dice model for die definitions, ordered face refs, reusable pools, random/manual/deterministic roll modes, last-roll/history state, selected-face overrides, and asset-reference cleanup. It does not encode LOTR symbols, search, battle, or other game rules.
+- Added `diceState` to the board store, frozen setup snapshots, `.lorecanvas` serialization, and scenario import/export. Store actions can create dice from TOKEN assets with `faces[]` metadata or from folder-uploaded TOKEN face images that preserve `sourcePath`; run mode permits rolling and result overrides while setup creation remains blocked.
+- Added a Dice tab to the Data Workbench. It can create dice from manifest-style die assets or face folders, inspect/rename/delete dice, create and edit pools, adjust pool die counts, roll pools, clear roll history, and override rolled faces.
+- Extended serialization validation for dice definitions, face asset references, TOKEN category checks, optional face ids, pool references, roll history, result ids, and `lastRollId`. Backward-compatible packages without dice state normalize to an empty dice state.
+- Extended the ignored LOTR setup fixture snapshot through `tests/state/scenarioStore.test.ts`: `dice-face-plan.json` now drives generic combat/search six-face dice definitions, one search pool, one two-die combat pool, and saved manual search/combat roll records.
+- Verification passed before final harness: `npm.cmd exec -- vitest run tests/engine/dice.test.ts tests/state/diceStore.test.ts tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts` (4 files / 14 tests), `npm.cmd run check-types`, `npm.cmd run test` (17 files / 69 tests), and `npm.cmd run build`.
+- Browser plugin verification against `http://127.0.0.1:5173/`: app loaded with title `LoreCanvas`, Data Workbench opened, Dice tab rendered die metadata/face-folder/pool/Last Roll regions, `Smoke Pool` was created through the UI, and browser console warn/error count was 0. With no TOKEN dice assets imported in the empty browser scenario, die creation and roll controls correctly stayed disabled; folder/face asset workflows are covered by Vitest and fixture tests. Browser screenshot capture timed out, so no screenshot artifact was recorded.
+- Final verification passed: `.\init.ps1` reported valid harness state, TypeScript green, and 17 Vitest files / 69 tests passed. Current next pending feature is `F-07-TileMarkerSlots`.
+- No git staging, commit, or push was performed.

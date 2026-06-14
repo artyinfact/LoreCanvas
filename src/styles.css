@@ -1600,6 +1600,236 @@ button {
   gap: 6px;
 }
 
+.dice-workbench {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.8fr);
+  gap: 12px;
+}
+
+.dice-panel {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.dice-panel--wide {
+  min-width: 0;
+}
+
+.dice-panel__header,
+.dice-detail__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dice-panel__header h3 {
+  margin: 0;
+  color: #20252b;
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.dice-panel__header span,
+.dice-roll-summary span {
+  color: #65707c;
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.dice-create-grid,
+.dice-pool-create,
+.dice-pool-actions {
+  display: grid;
+  gap: 8px;
+  align-items: end;
+}
+
+.dice-create-grid {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.dice-pool-create {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.dice-pool-actions {
+  grid-template-columns: minmax(160px, 1fr) 84px auto auto;
+}
+
+.dice-create-grid input,
+.dice-create-grid select,
+.dice-pool-create input,
+.dice-pool-actions input,
+.dice-pool-actions select,
+.dice-detail__heading input,
+.dice-roll-result select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #c8ced6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #20252b;
+  padding: 0 8px;
+  outline: none;
+}
+
+.dice-create-grid input:focus,
+.dice-create-grid select:focus,
+.dice-pool-create input:focus,
+.dice-pool-actions input:focus,
+.dice-pool-actions select:focus,
+.dice-detail__heading input:focus,
+.dice-roll-result select:focus {
+  border-color: #2f6f73;
+  box-shadow: 0 0 0 3px rgba(47, 111, 115, 0.16);
+}
+
+.dice-list {
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.dice-list--horizontal {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  max-height: none;
+}
+
+.dice-list-item {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid #d3d8df;
+  border-radius: 8px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dice-list-item:hover {
+  border-color: #87919d;
+}
+
+.dice-list-item[data-selected="true"] {
+  border-color: #2f6f73;
+  background: #e6f3f1;
+}
+
+.dice-list-item strong,
+.dice-list-item span,
+.dice-pool-die strong,
+.dice-roll-result strong,
+.dice-roll-result span,
+.dice-face-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dice-list-item strong,
+.dice-pool-die strong,
+.dice-roll-result strong {
+  color: #20252b;
+  font-size: 0.82rem;
+  font-weight: 860;
+}
+
+.dice-list-item span,
+.dice-roll-result span,
+.dice-face-chip span {
+  color: #65707c;
+  font-size: 0.7rem;
+  font-weight: 780;
+}
+
+.dice-detail,
+.dice-pool-detail,
+.dice-roll-history {
+  min-width: 0;
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #d3d8df;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.dice-face-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.dice-face-chip,
+.dice-roll-result {
+  min-width: 0;
+  display: grid;
+  align-items: center;
+  gap: 7px;
+}
+
+.dice-face-chip {
+  grid-template-columns: 34px minmax(0, 1fr);
+  padding: 6px;
+  border: 1px solid #e2e6eb;
+  border-radius: 8px;
+}
+
+.dice-face-chip img,
+.dice-face-chip .asset-thumb-pending,
+.dice-roll-result img,
+.dice-roll-result .asset-thumb-pending {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  background: #d9dde3;
+  object-fit: cover;
+}
+
+.dice-pool-dice,
+.dice-roll-results {
+  display: grid;
+  gap: 8px;
+}
+
+.dice-pool-die {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.dice-roll-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dice-roll-summary strong {
+  color: #20252b;
+  font-size: 0.82rem;
+  font-weight: 860;
+}
+
+.dice-roll-result {
+  grid-template-columns: 34px minmax(0, 1fr) minmax(140px, 0.8fr);
+  padding: 7px;
+  border: 1px solid #e2e6eb;
+  border-radius: 8px;
+}
+
 .json-table-cell {
   width: 240px;
   display: grid;

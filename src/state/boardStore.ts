@@ -29,6 +29,23 @@ import {
 } from "../engine/cardDeck";
 import type { CardDeckState, CardZoneKind } from "../engine/cardDeck";
 import {
+  addDicePool as addDicePoolToState,
+  addDieDefinition,
+  addDieToPool,
+  clearDiceRollHistory as clearDiceRollHistoryState,
+  createEmptyDiceState,
+  overrideDiceRollResult as overrideDiceRollResultState,
+  removeDicePool,
+  removeDiceReferencesByAssetId,
+  removeDieDefinition,
+  removeDieFromPool,
+  rollDicePool as rollDicePoolState,
+  updateDicePool as updateDicePoolState,
+  updateDieDefinition as updateDieDefinitionState,
+  updatePoolDieCount,
+} from "../engine/dice";
+import type { DiceState } from "../engine/dice";
+import {
   canPlaceAssetForCategory,
   clearLocationBindings,
   createEmptyEntityState,
@@ -121,6 +138,7 @@ export interface BoardStore {
   assetPlacements: AssetPlacement[];
   pawnSheets: Record<string, PawnSheet>;
   cardDeckState: CardDeckState;
+  diceState: DiceState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -220,6 +238,49 @@ export interface BoardStore {
     faceUp?: boolean,
   ) => void;
   reorderCardInZone: (zoneId: string, cardId: string, toIndex: number) => void;
+  createDieDefinitionFromAsset: (
+    assetId: string,
+    name?: string,
+  ) => string | null;
+  createDieDefinitionFromAssets: (
+    name: string,
+    assetIds: string[],
+  ) => string | null;
+  updateDieDefinition: (
+    dieId: string,
+    patch: Partial<{
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  deleteDieDefinition: (dieId: string) => void;
+  createDicePool: (name: string) => string | null;
+  updateDicePool: (
+    poolId: string,
+    patch: Partial<{
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  deleteDicePool: (poolId: string) => void;
+  addDieToDicePool: (
+    poolId: string,
+    dieId: string,
+    count?: number,
+  ) => string | null;
+  updateDicePoolDieCount: (
+    poolId: string,
+    poolDieId: string,
+    count: number,
+  ) => void;
+  removeDieFromDicePool: (poolId: string, poolDieId: string) => void;
+  rollDicePool: (poolId: string, faceRefIds?: string[]) => string | null;
+  overrideDiceRollResult: (
+    rollId: string,
+    resultId: string,
+    faceRefId: string,
+  ) => void;
+  clearDiceRollHistory: () => void;
   setBoardZoom: (zoom: number) => void;
   setBoardPan: (pan: BoardPan) => void;
   resetBoardView: () => void;
@@ -250,6 +311,7 @@ export interface FrozenSetupSnapshot {
   assetPlacements: AssetPlacement[];
   pawnSheets: Record<string, PawnSheet>;
   cardDeckState: CardDeckState;
+  diceState: DiceState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -265,6 +327,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
   assetPlacements: [],
   pawnSheets: {},
   cardDeckState: createEmptyCardDeckState(),
+  diceState: createEmptyDiceState(),
   boardState: {},
   locationStates: {},
   edgeStates: {},
@@ -449,6 +512,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           assetId,
         ),
         cardDeckState: removeCardsByAssetId(state.cardDeckState, assetId),
+        diceState: removeDiceReferencesByAssetId(state.diceState, assetId),
         selectedAssetId:
           state.selectedAssetId === assetId ? null : state.selectedAssetId,
         selectedPlacementId:
@@ -539,6 +603,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
           category === "CARD"
             ? state.cardDeckState
             : removeCardsByAssetId(state.cardDeckState, assetId),
+        diceState:
+          category === "TOKEN"
+            ? state.diceState
+            : removeDiceReferencesByAssetId(state.diceState, assetId),
         entityState: {
           entities: state.entityState.entities
             .filter((entity) => !removedEntityIds.has(entity.id))
@@ -654,6 +722,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           removedPlacementIds,
         ),
         cardDeckState: removeCardsByAssetId(state.cardDeckState, assetId),
+        diceState: removeDiceReferencesByAssetId(state.diceState, assetId),
         selectedAssetId: asset.id,
         selectedPlacementId:
           state.selectedPlacementId &&
@@ -1674,6 +1743,378 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
     }),
+  createDieDefinitionFromAsset: (assetId, name) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const asset = state.assets.find((candidate) => candidate.id === assetId);
+
+      if (!asset) {
+        return {
+          lastError: `Image asset '${assetId}' was not found.`,
+        };
+      }
+
+      if (asset.category !== "TOKEN") {
+        return {
+          lastError: `${asset.category} assets cannot define dice.`,
+        };
+      }
+
+      if (!asset.faces || asset.faces.length === 0) {
+        return {
+          lastError: `${asset.name} does not have ordered die face metadata.`,
+        };
+      }
+
+      const id = createSequentialId(
+        "die",
+        getDiceDefinitionIds(state.diceState),
+      );
+
+      try {
+        const diceState = addDieDefinition(state.diceState, {
+          id,
+          name: name?.trim() || asset.name,
+          faces: asset.faces.map((faceId, faceIndex) => ({
+            id: createDieFaceId(faceId, faceIndex),
+            assetId,
+            faceId,
+            label: createDieFaceLabel(faceId, faceIndex),
+          })),
+          state: {
+            assetId,
+            kind: asset.kind ?? "die",
+          },
+        });
+
+        createdId = id;
+
+        return {
+          diceState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  createDieDefinitionFromAssets: (name, assetIds) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const selectedAssets = assetIds.map((assetId) =>
+        state.assets.find((candidate) => candidate.id === assetId),
+      );
+      const missingAssetId = assetIds.find((_assetId, index) => !selectedAssets[index]);
+
+      if (missingAssetId) {
+        return {
+          lastError: `Image asset '${missingAssetId}' was not found.`,
+        };
+      }
+
+      if (selectedAssets.some((asset) => asset?.category !== "TOKEN")) {
+        return {
+          lastError: "Only TOKEN assets can be used as die faces.",
+        };
+      }
+
+      if (!name.trim() || selectedAssets.length === 0) {
+        return {
+          lastError: "Die definition requires a name and at least one face asset.",
+        };
+      }
+
+      const id = createSequentialId(
+        "die",
+        getDiceDefinitionIds(state.diceState),
+      );
+
+      try {
+        const diceState = addDieDefinition(state.diceState, {
+          id,
+          name,
+          faces: selectedAssets.map((asset, faceIndex) => ({
+            id: createDieFaceId(asset!.name, faceIndex),
+            assetId: asset!.id,
+            label: asset!.name,
+          })),
+          state: {
+            source: "face-assets",
+          },
+        });
+
+        createdId = id;
+
+        return {
+          diceState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  updateDieDefinition: (dieId, patch) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          diceState: updateDieDefinitionState(state.diceState, dieId, patch),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  deleteDieDefinition: (dieId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          diceState: removeDieDefinition(state.diceState, dieId),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  createDicePool: (name) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const id = createSequentialId("pool", getDicePoolIds(state.diceState));
+
+      try {
+        const diceState = addDicePoolToState(state.diceState, {
+          id,
+          name,
+        });
+
+        createdId = id;
+
+        return {
+          diceState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  updateDicePool: (poolId, patch) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          diceState: updateDicePoolState(state.diceState, poolId, patch),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  deleteDicePool: (poolId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          diceState: removeDicePool(state.diceState, poolId),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  addDieToDicePool: (poolId, dieId, count = 1) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const id = createSequentialId("pool-die", getDicePoolDieIds(state.diceState));
+
+      try {
+        const diceState = addDieToPool(state.diceState, {
+          id,
+          count,
+          dieId,
+          poolId,
+        });
+
+        createdId = id;
+
+        return {
+          diceState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  updateDicePoolDieCount: (poolId, poolDieId, count) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          diceState: updatePoolDieCount(state.diceState, poolId, poolDieId, count),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  removeDieFromDicePool: (poolId, poolDieId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          diceState: removeDieFromPool(state.diceState, poolId, poolDieId),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  rollDicePool: (poolId, faceRefIds) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      const id = createSequentialId(
+        "roll",
+        state.diceState.rollHistory.map((roll) => roll.id),
+      );
+
+      try {
+        const diceState = rollDicePoolState(state.diceState, {
+          id,
+          faceRefIds,
+          mode: faceRefIds?.length ? "manual" : "random",
+          poolId,
+          resultIdPrefix: `${id}-result`,
+          rolledAt: new Date().toISOString(),
+        });
+
+        createdId = id;
+
+        return {
+          diceState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  overrideDiceRollResult: (rollId, resultId, faceRefId) =>
+    set((state) => {
+      try {
+        return {
+          diceState: overrideDiceRollResultState(
+            state.diceState,
+            rollId,
+            resultId,
+            faceRefId,
+          ),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  clearDiceRollHistory: () =>
+    set((state) => ({
+      diceState: clearDiceRollHistoryState(state.diceState),
+      lastError: null,
+    })),
   setBoardZoom: (zoom) =>
     set({
       boardZoom: clampNumber(zoom, 0.5, 4),
@@ -2084,6 +2525,42 @@ function getCardDeckCardIds(cardDeckState: CardDeckState) {
   );
 }
 
+function getDiceDefinitionIds(diceState: DiceState) {
+  return diceState.definitions.map((definition) => definition.id);
+}
+
+function getDicePoolIds(diceState: DiceState) {
+  return diceState.pools.map((pool) => pool.id);
+}
+
+function getDicePoolDieIds(diceState: DiceState) {
+  return diceState.pools.flatMap((pool) => pool.dice.map((poolDie) => poolDie.id));
+}
+
+function createDieFaceId(source: string, index: number) {
+  const baseName = source
+    .split(/[\\/]+/)
+    .pop()
+    ?.replace(/\.[^.]+$/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 32);
+
+  return baseName || `face-${index + 1}`;
+}
+
+function createDieFaceLabel(source: string, index: number) {
+  return (
+    source
+      .split(/[\\/]+/)
+      .pop()
+      ?.replace(/\.[^.]+$/, "")
+      .replace(/[-_]+/g, " ")
+      .trim() || `Face ${index + 1}`
+  );
+}
+
 function reconcilePawnSheets(
   pawnSheets: Record<string, PawnSheet>,
   placements: AssetPlacement[],
@@ -2147,6 +2624,7 @@ function createFrozenSetupSnapshot(
     | "assetPlacements"
     | "pawnSheets"
     | "cardDeckState"
+    | "diceState"
     | "boardState"
     | "locationStates"
     | "edgeStates"
@@ -2161,6 +2639,7 @@ function createFrozenSetupSnapshot(
     assetPlacements: state.assetPlacements,
     pawnSheets: state.pawnSheets,
     cardDeckState: state.cardDeckState,
+    diceState: state.diceState,
     boardState: state.boardState,
     locationStates: state.locationStates,
     edgeStates: state.edgeStates,

@@ -3,6 +3,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyBoard } from "../../src/engine/board";
 import { createEmptyCardDeckState } from "../../src/engine/cardDeck";
+import { createEmptyDiceState } from "../../src/engine/dice";
 import { createEmptyEntityState } from "../../src/engine/entity";
 import type { ResourceCategory } from "../../src/engine/entity";
 import {
@@ -24,6 +25,7 @@ import { useBoardStore } from "../../src/state/boardStore";
 const LOTR_PACK_DIR = path.resolve("local-fixtures/lotr/LotR-FotF");
 const LOTR_MANIFEST_PATH = path.join(LOTR_PACK_DIR, "manifest.json");
 const LOTR_RULE_PATH = path.join(LOTR_PACK_DIR, "LOTRRule.pdf");
+const LOTR_DICE_PLAN_PATH = path.join(LOTR_PACK_DIR, "dice-face-plan.json");
 
 describe("F-03 scenario store import/export", () => {
   beforeEach(() => {
@@ -33,6 +35,8 @@ describe("F-03 scenario store import/export", () => {
       assets: [],
       assetPlacements: [],
       pawnSheets: {},
+      cardDeckState: createEmptyCardDeckState(),
+      diceState: createEmptyDiceState(),
       selectedAssetId: null,
       selectedLocationId: null,
       selectedPlacementId: null,
@@ -208,6 +212,7 @@ describe("F-03 scenario store import/export", () => {
         assetPlacements: [],
         pawnSheets: {},
         cardDeckState: createEmptyCardDeckState(),
+        diceState: createEmptyDiceState(),
         boardState: {},
         locationStates: {},
         edgeStates: {},
@@ -345,10 +350,43 @@ describe("F-03 scenario store import/export", () => {
     expect(zoneCardLabels(imported.cardDeckState, "zone-unused-cards")).toContain(
       "Unused event cards",
     );
+    expect(imported.diceState.definitions).toHaveLength(2);
+    expect(
+      imported.diceState.definitions.every((definition) => definition.faces.length === 6),
+    ).toBe(true);
+    expect(
+      imported.diceState.pools.find((pool) => pool.id === "pool-search-dice"),
+    ).toMatchObject({
+      name: "Search Dice",
+      dice: [
+        {
+          dieId: "die-search-die",
+          count: 1,
+        },
+      ],
+    });
+    expect(
+      imported.diceState.pools.find((pool) => pool.id === "pool-combat-dice"),
+    ).toMatchObject({
+      name: "Combat Dice",
+      dice: [
+        {
+          dieId: "die-combat-die",
+          count: 2,
+        },
+      ],
+    });
+    expect(imported.diceState.rollHistory.map((roll) => roll.poolId)).toEqual([
+      "pool-search-dice",
+      "pool-combat-dice",
+    ]);
+    expect(imported.diceState.rollHistory[0]?.results).toHaveLength(1);
+    expect(imported.diceState.rollHistory[1]?.results).toHaveLength(2);
     expect(reexported.board).toEqual(scenario.board);
     expect(reexported.entityState).toEqual(scenario.entityState);
     expect(reexported.assetPlacements).toEqual(scenario.assetPlacements);
     expect(reexported.cardDeckState).toEqual(scenario.cardDeckState);
+    expect(reexported.diceState).toEqual(scenario.diceState);
   });
 });
 
@@ -371,6 +409,13 @@ interface Manifest {
   entries: ManifestEntry[];
 }
 
+interface DiceFacePlan {
+  plans: Array<{
+    displayName: string;
+    slug: string;
+  }>;
+}
+
 interface StackInput {
   id: string;
   assetId: string;
@@ -382,6 +427,10 @@ interface StackInput {
 
 function readManifest(): Manifest {
   return JSON.parse(readFileSync(LOTR_MANIFEST_PATH, "utf8")) as Manifest;
+}
+
+function readDiceFacePlan(): DiceFacePlan {
+  return JSON.parse(readFileSync(LOTR_DICE_PLAN_PATH, "utf8")) as DiceFacePlan;
 }
 
 function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
@@ -575,6 +624,7 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
     },
     pawnSheets: {},
     cardDeckState: buildLotrCardDeckState(),
+    diceState: buildLotrDiceState(manifest),
     viewport: {
       boardZoom: 1,
       boardPan: {
@@ -693,6 +743,130 @@ function buildLotrCardDeckState() {
         ],
       },
     ],
+  };
+}
+
+function buildLotrDiceState(manifest: Manifest) {
+  const dicePlan = readDiceFacePlan();
+  const definitions = dicePlan.plans.map((plan) => {
+    const assetId = `token.dice.${plan.slug}`;
+    const asset = manifest.entries.find((entry) => entry.id === assetId);
+
+    if (!asset?.faces || asset.faces.length !== 6) {
+      throw new Error(`Missing six-face dice asset '${assetId}'.`);
+    }
+
+    return {
+      id: `die-${plan.slug}`,
+      name: asset.displayName ?? plan.displayName,
+      state: {
+        setupSource: "dice-face-plan.json",
+        slug: plan.slug,
+      },
+      faces: asset.faces.map((faceId, index) => ({
+        id: `face-${index + 1}`,
+        assetId,
+        faceId,
+        label: `Face ${index + 1}`,
+        state: {
+          source: faceId,
+        },
+      })),
+    };
+  });
+
+  return {
+    definitions,
+    pools: [
+      {
+        id: "pool-search-dice",
+        name: "Search Dice",
+        state: {
+          setupRole: "searchDicePool",
+        },
+        dice: [
+          {
+            id: "pool-die-search",
+            dieId: "die-search-die",
+            count: 1,
+            state: {},
+          },
+        ],
+      },
+      {
+        id: "pool-combat-dice",
+        name: "Combat Dice",
+        state: {
+          setupRole: "combatDicePool",
+        },
+        dice: [
+          {
+            id: "pool-die-combat",
+            dieId: "die-combat-die",
+            count: 2,
+            state: {},
+          },
+        ],
+      },
+    ],
+    rollHistory: [
+      {
+        id: "roll-search-setup",
+        poolId: "pool-search-dice",
+        mode: "manual" as const,
+        rolledAt: "2026-06-14T00:00:00.000Z",
+        state: {
+          recordedFor: "generic search roll state",
+        },
+        results: [
+          {
+            id: "roll-search-result-1",
+            poolDieId: "pool-die-search",
+            dieId: "die-search-die",
+            faceRefId: "face-1",
+            assetId: "token.dice.search-die",
+            faceId: "token/dice/search-die/face-01.png",
+            label: "Face 1",
+            isOverride: true,
+            state: {},
+          },
+        ],
+      },
+      {
+        id: "roll-combat-setup",
+        poolId: "pool-combat-dice",
+        mode: "manual" as const,
+        rolledAt: "2026-06-14T00:00:00.000Z",
+        state: {
+          recordedFor: "generic battle roll state",
+        },
+        results: [
+          {
+            id: "roll-combat-result-1",
+            poolDieId: "pool-die-combat",
+            dieId: "die-combat-die",
+            faceRefId: "face-2",
+            assetId: "token.dice.combat-die",
+            faceId: "token/dice/combat-die/face-02.png",
+            label: "Face 2",
+            isOverride: true,
+            state: {},
+          },
+          {
+            id: "roll-combat-result-2",
+            poolDieId: "pool-die-combat",
+            dieId: "die-combat-die",
+            faceRefId: "face-3",
+            assetId: "token.dice.combat-die",
+            faceId: "token/dice/combat-die/face-03.png",
+            label: "Face 3",
+            isOverride: true,
+            state: {},
+          },
+        ],
+      },
+    ],
+    lastRollId: "roll-combat-setup",
   };
 }
 

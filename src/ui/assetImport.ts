@@ -19,6 +19,7 @@ export interface CreateImportedImageAssetInput {
   dimensions?: ImportedImageDimensions;
   file: ImageImportFileLike;
   index: number;
+  sourcePath?: string;
   url: string;
 }
 
@@ -56,6 +57,7 @@ export function createImportedImageAsset({
   dimensions = {},
   file,
   index,
+  sourcePath,
   url,
 }: CreateImportedImageAssetInput): UploadedImageAsset {
   const placementSize = getDefaultPlacementSize(dimensions);
@@ -71,6 +73,7 @@ export function createImportedImageAsset({
     maxCopies: getDefaultMaxCopies(category),
     placementWidth: placementSize.width,
     placementHeight: placementSize.height,
+    ...(sourcePath ? { sourcePath } : {}),
   };
 }
 

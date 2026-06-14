@@ -46,6 +46,42 @@ describe("F-03 scenario serialization", () => {
         },
       ],
     });
+    expect(restored.diceState.definitions[0]).toMatchObject({
+      id: "die-search",
+      faces: expect.arrayContaining([
+        expect.objectContaining({
+          id: "search-1",
+          assetId: "asset-die",
+          faceId: "face-1",
+        }),
+      ]),
+    });
+    expect(restored.diceState).toMatchObject({
+      pools: [
+        {
+          id: "pool-search",
+          dice: [
+            {
+              dieId: "die-search",
+              count: 1,
+            },
+          ],
+        },
+      ],
+      rollHistory: [
+        {
+          id: "roll-search-1",
+          mode: "manual",
+          results: [
+            {
+              faceRefId: "search-2",
+              isOverride: true,
+            },
+          ],
+        },
+      ],
+      lastRollId: "roll-search-1",
+    });
     expect(restored.viewport).toEqual({
       boardZoom: 1.4,
       boardPan: {
@@ -117,6 +153,35 @@ describe("F-03 scenario serialization", () => {
     );
   });
 
+  it("reports invalid dice face references", () => {
+    const invalidScenario = createSampleScenario();
+
+    invalidScenario.diceState!.definitions[0]!.faces[0] = {
+      ...invalidScenario.diceState!.definitions[0]!.faces[0]!,
+      faceId: "missing-face",
+    };
+
+    const issues = validateScenarioPackage({
+      format: "lorecanvas.scenario",
+      version: 1,
+      ...invalidScenario,
+      metadata: {},
+      viewport: {
+        boardZoom: 1,
+        boardPan: {
+          x: 0,
+          y: 0,
+        },
+      },
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "die_face_asset_face_not_found" }),
+      ]),
+    );
+  });
+
   it("throws a scenario validation error for malformed packages", () => {
     expect(() =>
       parseScenarioPackage(
@@ -180,6 +245,19 @@ function createSampleScenario(): ScenarioPackageInput {
         maxCopies: 99,
         placementWidth: 32,
         placementHeight: 32,
+      },
+      {
+        id: "asset-die",
+        category: "TOKEN",
+        kind: "die",
+        name: "Search Die.png",
+        url: "asset://search-die.png",
+        mimeType: "image/png",
+        size: 100,
+        maxCopies: 99,
+        placementWidth: 64,
+        placementHeight: 64,
+        faces: ["face-1", "face-2", "face-3", "face-4", "face-5", "face-6"],
       },
     ],
     board: {
@@ -272,6 +350,69 @@ function createSampleScenario(): ScenarioPackageInput {
           ],
         },
       ],
+    },
+    diceState: {
+      definitions: [
+        {
+          id: "die-search",
+          name: "Search Die",
+          state: {},
+          faces: [
+            {
+              id: "search-1",
+              assetId: "asset-die",
+              faceId: "face-1",
+              label: "Search 1",
+              state: {},
+            },
+            {
+              id: "search-2",
+              assetId: "asset-die",
+              faceId: "face-2",
+              label: "Search 2",
+              state: {},
+            },
+          ],
+        },
+      ],
+      pools: [
+        {
+          id: "pool-search",
+          name: "Search Pool",
+          state: {},
+          dice: [
+            {
+              id: "pool-die-search",
+              dieId: "die-search",
+              count: 1,
+              state: {},
+            },
+          ],
+        },
+      ],
+      rollHistory: [
+        {
+          id: "roll-search-1",
+          poolId: "pool-search",
+          mode: "manual",
+          rolledAt: "2026-06-14T00:00:00.000Z",
+          state: {},
+          results: [
+            {
+              id: "roll-result-1",
+              poolDieId: "pool-die-search",
+              dieId: "die-search",
+              faceRefId: "search-2",
+              assetId: "asset-die",
+              faceId: "face-2",
+              label: "Search 2",
+              isOverride: true,
+              state: {},
+            },
+          ],
+        },
+      ],
+      lastRollId: "roll-search-1",
     },
     viewport: {
       boardZoom: 1.4,

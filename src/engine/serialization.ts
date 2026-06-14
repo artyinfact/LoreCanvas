@@ -2,6 +2,16 @@ import type { BoardState } from "./board";
 import { validateBoard } from "./board";
 import { createEmptyCardDeckState, isCardZoneKind } from "./cardDeck";
 import type { CardDeckState, CardRef, CardZone } from "./cardDeck";
+import { createEmptyDiceState, isDiceRollMode } from "./dice";
+import type {
+  DicePool,
+  DicePoolDie,
+  DiceRoll,
+  DiceRollResult,
+  DiceState,
+  DieDefinition,
+  DieFaceRef,
+} from "./dice";
 import type { EntityState, JsonRecord, ResourceCategory } from "./entity";
 import { isResourceCategory } from "./entity";
 
@@ -74,6 +84,7 @@ export interface ScenarioFrozenSetup {
   entityState: EntityState;
   pawnSheets: Record<string, ScenarioPawnSheet>;
   cardDeckState: CardDeckState;
+  diceState: DiceState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -91,6 +102,7 @@ export interface ScenarioPackage {
   entityState: EntityState;
   pawnSheets: Record<string, ScenarioPawnSheet>;
   cardDeckState: CardDeckState;
+  diceState: DiceState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -134,6 +146,26 @@ export type ScenarioValidationCode =
   | "card_ref_asset_not_found"
   | "card_ref_asset_category"
   | "card_ref_face_not_found"
+  | "invalid_dice_state"
+  | "invalid_die_definition"
+  | "duplicate_die_id"
+  | "invalid_die_face"
+  | "duplicate_die_face_id"
+  | "die_face_asset_not_found"
+  | "die_face_asset_category"
+  | "die_face_asset_face_not_found"
+  | "invalid_dice_pool"
+  | "duplicate_dice_pool_id"
+  | "invalid_dice_pool_die"
+  | "duplicate_dice_pool_die_id"
+  | "dice_pool_die_not_found"
+  | "invalid_dice_roll"
+  | "duplicate_dice_roll_id"
+  | "invalid_dice_roll_result"
+  | "duplicate_dice_roll_result_id"
+  | "dice_roll_pool_not_found"
+  | "dice_roll_die_not_found"
+  | "dice_roll_face_not_found"
   | "invalid_viewport"
   | "invalid_mode"
   | "invalid_board_state"
@@ -167,6 +199,7 @@ export type ScenarioPackageInput = Omit<
   | "viewport"
   | "mode"
   | "cardDeckState"
+  | "diceState"
   | "boardState"
   | "locationStates"
   | "edgeStates"
@@ -176,6 +209,7 @@ export type ScenarioPackageInput = Omit<
   viewport?: Partial<ScenarioViewport>;
   mode?: ScenarioMode;
   cardDeckState?: CardDeckState;
+  diceState?: DiceState;
   boardState?: JsonRecord;
   locationStates?: Record<string, JsonRecord>;
   edgeStates?: Record<string, JsonRecord>;
@@ -194,6 +228,7 @@ export function createScenarioPackage(input: ScenarioPackageInput): ScenarioPack
     entityState: cloneJson(input.entityState),
     pawnSheets: cloneJson(input.pawnSheets),
     cardDeckState: cloneJson(input.cardDeckState ?? createEmptyCardDeckState()),
+    diceState: cloneJson(input.diceState ?? createEmptyDiceState()),
     boardState: cloneJson(input.boardState ?? {}),
     locationStates: cloneJson(input.locationStates ?? {}),
     edgeStates: cloneJson(input.edgeStates ?? {}),
@@ -282,6 +317,7 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
   const cardDeckState = isCardDeckState(value.cardDeckState)
     ? value.cardDeckState
     : null;
+  const diceState = isDiceState(value.diceState) ? value.diceState : null;
 
   if (!assets) {
     issues.push({
@@ -325,6 +361,13 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     });
   }
 
+  if (!diceState) {
+    issues.push({
+      code: "invalid_dice_state",
+      message: "Scenario diceState must contain definitions, pools, and rollHistory arrays.",
+    });
+  }
+
   if (!isViewport(value.viewport)) {
     issues.push({
       code: "invalid_viewport",
@@ -359,7 +402,8 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     !entityState ||
     !assetPlacements ||
     !pawnSheets ||
-    !cardDeckState
+    !cardDeckState ||
+    !diceState
   ) {
     return issues;
   }
@@ -371,6 +415,7 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
   validatePlacements(assetPlacements, assets, assetIds, entityState, entityIds, locationIds, issues);
   validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
   validateCardDeckState(cardDeckState, assets, assetIds, issues);
+  validateDiceState(diceState, assets, assetIds, issues);
   validateStateSurfaces(
     value.locationStates as Record<string, unknown>,
     value.edgeStates as Record<string, unknown>,
@@ -455,6 +500,7 @@ function validateFrozenSetup(
   const cardDeckState = isCardDeckState(value.cardDeckState)
     ? value.cardDeckState
     : null;
+  const diceState = isDiceState(value.diceState) ? value.diceState : null;
 
   if (
     !assets ||
@@ -463,6 +509,7 @@ function validateFrozenSetup(
     !assetPlacements ||
     !pawnSheets ||
     !cardDeckState ||
+    !diceState ||
     !isRecord(value.boardState) ||
     !isRecord(value.locationStates) ||
     !isRecord(value.edgeStates) ||
@@ -490,6 +537,7 @@ function validateFrozenSetup(
   );
   validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
   validateCardDeckState(cardDeckState, assets, assetIds, issues);
+  validateDiceState(diceState, assets, assetIds, issues);
   validateStateSurfaces(
     value.locationStates as Record<string, unknown>,
     value.edgeStates as Record<string, unknown>,
@@ -867,6 +915,239 @@ function validateCardDeckState(
   }
 }
 
+function validateDiceState(
+  diceState: DiceState,
+  assets: ScenarioAsset[],
+  assetIds: Set<string>,
+  issues: ScenarioValidationIssue[],
+) {
+  const dieIds = new Set<string>();
+  const dieById = new Map<string, DieDefinition>();
+  const faceByDieAndFace = new Map<string, DieFaceRef>();
+
+  for (const definition of diceState.definitions) {
+    if (!isScenarioDieDefinition(definition)) {
+      issues.push({
+        code: "invalid_die_definition",
+        message: "Every die definition must have id, name, faces, and JSON state.",
+      });
+      continue;
+    }
+
+    if (dieIds.has(definition.id)) {
+      issues.push({
+        code: "duplicate_die_id",
+        message: `Die definition id '${definition.id}' is duplicated.`,
+        id: definition.id,
+      });
+    }
+
+    dieIds.add(definition.id);
+    dieById.set(definition.id, definition);
+
+    const faceIds = new Set<string>();
+
+    for (const face of definition.faces) {
+      if (!isScenarioDieFace(face)) {
+        issues.push({
+          code: "invalid_die_face",
+          message: `Die definition '${definition.id}' contains a malformed face ref.`,
+          id: definition.id,
+        });
+        continue;
+      }
+
+      if (faceIds.has(face.id)) {
+        issues.push({
+          code: "duplicate_die_face_id",
+          message: `Die face id '${face.id}' is duplicated in die '${definition.id}'.`,
+          id: definition.id,
+        });
+      }
+
+      faceIds.add(face.id);
+      faceByDieAndFace.set(getDieFaceKey(definition.id, face.id), face);
+
+      const asset = assets.find((candidate) => candidate.id === face.assetId);
+
+      if (!assetIds.has(face.assetId) || !asset) {
+        issues.push({
+          code: "die_face_asset_not_found",
+          message: `Die face '${face.id}' references missing asset '${face.assetId}'.`,
+          id: definition.id,
+        });
+        continue;
+      }
+
+      if (asset.category !== "TOKEN") {
+        issues.push({
+          code: "die_face_asset_category",
+          message: `Die face '${face.id}' must reference a TOKEN asset.`,
+          id: definition.id,
+        });
+      }
+
+      if (face.faceId && asset.faces && !asset.faces.includes(face.faceId)) {
+        issues.push({
+          code: "die_face_asset_face_not_found",
+          message: `Die face '${face.id}' references missing asset face '${face.faceId}'.`,
+          id: definition.id,
+        });
+      }
+    }
+  }
+
+  const poolIds = new Set<string>();
+  const poolDieIds = new Set<string>();
+  const poolById = new Map<string, DicePool>();
+
+  for (const pool of diceState.pools) {
+    if (!isScenarioDicePool(pool)) {
+      issues.push({
+        code: "invalid_dice_pool",
+        message: "Every dice pool must have id, name, dice, and JSON state.",
+      });
+      continue;
+    }
+
+    if (poolIds.has(pool.id)) {
+      issues.push({
+        code: "duplicate_dice_pool_id",
+        message: `Dice pool id '${pool.id}' is duplicated.`,
+        id: pool.id,
+      });
+    }
+
+    poolIds.add(pool.id);
+    poolById.set(pool.id, pool);
+
+    for (const poolDie of pool.dice) {
+      if (!isScenarioDicePoolDie(poolDie)) {
+        issues.push({
+          code: "invalid_dice_pool_die",
+          message: `Dice pool '${pool.id}' contains a malformed die entry.`,
+          id: pool.id,
+        });
+        continue;
+      }
+
+      if (poolDieIds.has(poolDie.id)) {
+        issues.push({
+          code: "duplicate_dice_pool_die_id",
+          message: `Dice pool die id '${poolDie.id}' is duplicated.`,
+          id: poolDie.id,
+        });
+      }
+
+      poolDieIds.add(poolDie.id);
+
+      if (!dieIds.has(poolDie.dieId)) {
+        issues.push({
+          code: "dice_pool_die_not_found",
+          message: `Dice pool '${pool.id}' references missing die '${poolDie.dieId}'.`,
+          id: pool.id,
+        });
+      }
+    }
+  }
+
+  const rollIds = new Set<string>();
+  const rollResultIds = new Set<string>();
+
+  for (const roll of diceState.rollHistory) {
+    if (!isScenarioDiceRoll(roll)) {
+      issues.push({
+        code: "invalid_dice_roll",
+        message: "Every dice roll must have id, poolId, mode, rolledAt, results, and JSON state.",
+      });
+      continue;
+    }
+
+    if (rollIds.has(roll.id)) {
+      issues.push({
+        code: "duplicate_dice_roll_id",
+        message: `Dice roll id '${roll.id}' is duplicated.`,
+        id: roll.id,
+      });
+    }
+
+    rollIds.add(roll.id);
+
+    if (!poolById.has(roll.poolId)) {
+      issues.push({
+        code: "dice_roll_pool_not_found",
+        message: `Dice roll '${roll.id}' references missing pool '${roll.poolId}'.`,
+        id: roll.id,
+      });
+    }
+
+    for (const result of roll.results) {
+      if (!isScenarioDiceRollResult(result)) {
+        issues.push({
+          code: "invalid_dice_roll_result",
+          message: `Dice roll '${roll.id}' contains a malformed result.`,
+          id: roll.id,
+        });
+        continue;
+      }
+
+      if (rollResultIds.has(result.id)) {
+        issues.push({
+          code: "duplicate_dice_roll_result_id",
+          message: `Dice roll result id '${result.id}' is duplicated.`,
+          id: result.id,
+        });
+      }
+
+      rollResultIds.add(result.id);
+
+      const die = dieById.get(result.dieId);
+
+      if (!die) {
+        issues.push({
+          code: "dice_roll_die_not_found",
+          message: `Dice roll result '${result.id}' references missing die '${result.dieId}'.`,
+          id: result.id,
+        });
+        continue;
+      }
+
+      const face = faceByDieAndFace.get(getDieFaceKey(result.dieId, result.faceRefId));
+
+      if (!face) {
+        issues.push({
+          code: "dice_roll_face_not_found",
+          message: `Dice roll result '${result.id}' references missing face '${result.faceRefId}'.`,
+          id: result.id,
+        });
+        continue;
+      }
+
+      if (
+        result.assetId !== face.assetId ||
+        (result.faceId ?? undefined) !== (face.faceId ?? undefined)
+      ) {
+        issues.push({
+          code: "dice_roll_face_not_found",
+          message: `Dice roll result '${result.id}' does not match face '${result.faceRefId}'.`,
+          id: result.id,
+        });
+      }
+    }
+  }
+
+  if (
+    diceState.lastRollId !== undefined &&
+    !diceState.rollHistory.some((roll) => roll.id === diceState.lastRollId)
+  ) {
+    issues.push({
+      code: "invalid_dice_state",
+      message: `Last dice roll '${diceState.lastRollId}' is not in rollHistory.`,
+      id: diceState.lastRollId,
+    });
+  }
+}
+
 function getPawnSheetAssetIds(sheet: ScenarioPawnSheet) {
   return [
     ...(sheet.characterCardAssetId ? [sheet.characterCardAssetId] : []),
@@ -892,6 +1173,16 @@ function isCardDeckState(value: unknown): value is CardDeckState {
   return isRecord(value) && Array.isArray(value.zones);
 }
 
+function isDiceState(value: unknown): value is DiceState {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.definitions) &&
+    Array.isArray(value.pools) &&
+    Array.isArray(value.rollHistory) &&
+    (value.lastRollId === undefined || isNonEmptyString(value.lastRollId))
+  );
+}
+
 function isScenarioCardZone(value: unknown): value is CardZone {
   return (
     isRecord(value) &&
@@ -911,6 +1202,76 @@ function isScenarioCardRef(value: unknown): value is CardRef {
     (value.faceId === undefined || isNonEmptyString(value.faceId)) &&
     (value.label === undefined || isNonEmptyString(value.label)) &&
     typeof value.faceUp === "boolean" &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioDieDefinition(value: unknown): value is DieDefinition {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.name) &&
+    Array.isArray(value.faces) &&
+    value.faces.length > 0 &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioDieFace(value: unknown): value is DieFaceRef {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.assetId) &&
+    (value.faceId === undefined || isNonEmptyString(value.faceId)) &&
+    (value.label === undefined || isNonEmptyString(value.label)) &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioDicePool(value: unknown): value is DicePool {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.name) &&
+    Array.isArray(value.dice) &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioDicePoolDie(value: unknown): value is DicePoolDie {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.dieId) &&
+    Number.isInteger(value.count) &&
+    Number(value.count) > 0 &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioDiceRoll(value: unknown): value is DiceRoll {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.poolId) &&
+    isDiceRollMode(String(value.mode)) &&
+    isNonEmptyString(value.rolledAt) &&
+    Array.isArray(value.results) &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioDiceRollResult(value: unknown): value is DiceRollResult {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.poolDieId) &&
+    isNonEmptyString(value.dieId) &&
+    isNonEmptyString(value.faceRefId) &&
+    isNonEmptyString(value.assetId) &&
+    (value.faceId === undefined || isNonEmptyString(value.faceId)) &&
+    (value.label === undefined || isNonEmptyString(value.label)) &&
+    typeof value.isOverride === "boolean" &&
     isRecord(value.state)
   );
 }
@@ -953,6 +1314,7 @@ function normalizeScenarioPackage(value: unknown): unknown {
     ...value,
     mode: value.mode ?? "edit",
     cardDeckState: value.cardDeckState ?? createEmptyCardDeckState(),
+    diceState: value.diceState ?? createEmptyDiceState(),
     boardState: value.boardState ?? {},
     locationStates: value.locationStates ?? {},
     edgeStates: value.edgeStates ?? {},
@@ -968,6 +1330,7 @@ function normalizeFrozenSetup(value: unknown): unknown {
   return {
     ...value,
     cardDeckState: value.cardDeckState ?? createEmptyCardDeckState(),
+    diceState: value.diceState ?? createEmptyDiceState(),
     boardState: value.boardState ?? {},
     locationStates: value.locationStates ?? {},
     edgeStates: value.edgeStates ?? {},
@@ -991,6 +1354,10 @@ function getArray<T>(value: unknown): T[] | null {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function getDieFaceKey(dieId: string, faceRefId: string) {
+  return `${dieId}::${faceRefId}`;
 }
 
 function isFiniteNumber(value: unknown): value is number {

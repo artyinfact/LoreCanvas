@@ -7,6 +7,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Database,
+  Dices,
   Download,
   FileInput,
   FolderOpen,
@@ -48,6 +49,12 @@ import {
 } from "../engine/entity";
 import { CARD_ZONE_KINDS, searchCards } from "../engine/cardDeck";
 import type { CardDeckState, CardRef, CardZoneKind } from "../engine/cardDeck";
+import type {
+  DicePool,
+  DiceRoll,
+  DiceState,
+  DieFaceRef,
+} from "../engine/dice";
 import type { BoardEdge, BoardLocation } from "../engine/board";
 import type {
   AssetPlacement,
@@ -86,7 +93,13 @@ const TOOL_OPTIONS: Array<{
   { id: "edge", label: "Add Edge", Icon: Network },
 ];
 
-type WorkbenchTab = "locations" | "edges" | "objects" | "cards" | "board";
+type WorkbenchTab =
+  | "locations"
+  | "edges"
+  | "objects"
+  | "cards"
+  | "dice"
+  | "board";
 export type LocationSortField = "name" | "region";
 export type SortDirection = "asc" | "desc";
 
@@ -104,6 +117,7 @@ const WORKBENCH_TABS: Array<{
   { id: "edges", label: "Edges", Icon: Network },
   { id: "objects", label: "Objects", Icon: CreditCard },
   { id: "cards", label: "Cards", Icon: CreditCard },
+  { id: "dice", label: "Dice", Icon: Dices },
   { id: "board", label: "Board State", Icon: Database },
 ];
 
@@ -340,6 +354,7 @@ export function App() {
           category,
           file,
           index,
+          sourcePath: relativePath,
           url,
         });
 
@@ -1146,6 +1161,7 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
   const edgeStates = useBoardStore((state) => state.edgeStates);
   const entityState = useBoardStore((state) => state.entityState);
   const cardDeckState = useBoardStore((state) => state.cardDeckState);
+  const diceState = useBoardStore((state) => state.diceState);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
@@ -1184,6 +1200,31 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
   const shuffleCardZone = useBoardStore((state) => state.shuffleCardZone);
   const flipCardsInZone = useBoardStore((state) => state.flipCardsInZone);
   const reorderCardInZone = useBoardStore((state) => state.reorderCardInZone);
+  const createDieDefinitionFromAsset = useBoardStore(
+    (state) => state.createDieDefinitionFromAsset,
+  );
+  const createDieDefinitionFromAssets = useBoardStore(
+    (state) => state.createDieDefinitionFromAssets,
+  );
+  const updateDieDefinition = useBoardStore((state) => state.updateDieDefinition);
+  const deleteDieDefinition = useBoardStore((state) => state.deleteDieDefinition);
+  const createDicePool = useBoardStore((state) => state.createDicePool);
+  const updateDicePool = useBoardStore((state) => state.updateDicePool);
+  const deleteDicePool = useBoardStore((state) => state.deleteDicePool);
+  const addDieToDicePool = useBoardStore((state) => state.addDieToDicePool);
+  const updateDicePoolDieCount = useBoardStore(
+    (state) => state.updateDicePoolDieCount,
+  );
+  const removeDieFromDicePool = useBoardStore(
+    (state) => state.removeDieFromDicePool,
+  );
+  const rollDicePool = useBoardStore((state) => state.rollDicePool);
+  const overrideDiceRollResult = useBoardStore(
+    (state) => state.overrideDiceRollResult,
+  );
+  const clearDiceRollHistory = useBoardStore(
+    (state) => state.clearDiceRollHistory,
+  );
 
   return (
     <section className="data-workbench" aria-label="Scenario data workbench">
@@ -1267,6 +1308,26 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
             onReorderCardInZone={reorderCardInZone}
             onShuffleCardZone={shuffleCardZone}
             onUpdateCardZone={updateCardZone}
+          />
+        ) : null}
+        {activeTab === "dice" ? (
+          <DicePoolsWorkbench
+            assets={assets}
+            diceState={diceState}
+            isSetupLocked={mode === "run"}
+            onAddDieToPool={addDieToDicePool}
+            onClearRollHistory={clearDiceRollHistory}
+            onCreateDieFromAsset={createDieDefinitionFromAsset}
+            onCreateDieFromAssets={createDieDefinitionFromAssets}
+            onCreatePool={createDicePool}
+            onDeleteDie={deleteDieDefinition}
+            onDeletePool={deleteDicePool}
+            onOverrideRollResult={overrideDiceRollResult}
+            onRemoveDieFromPool={removeDieFromDicePool}
+            onRollPool={rollDicePool}
+            onUpdateDie={updateDieDefinition}
+            onUpdatePool={updateDicePool}
+            onUpdatePoolDieCount={updateDicePoolDieCount}
           />
         ) : null}
         {activeTab === "board" ? (
@@ -2387,6 +2448,564 @@ function CardZoneCardList({
   );
 }
 
+interface DicePoolsWorkbenchProps {
+  assets: UploadedImageAsset[];
+  diceState: DiceState;
+  isSetupLocked: boolean;
+  onAddDieToPool: (
+    poolId: string,
+    dieId: string,
+    count?: number,
+  ) => string | null;
+  onClearRollHistory: () => void;
+  onCreateDieFromAsset: (assetId: string, name?: string) => string | null;
+  onCreateDieFromAssets: (name: string, assetIds: string[]) => string | null;
+  onCreatePool: (name: string) => string | null;
+  onDeleteDie: (dieId: string) => void;
+  onDeletePool: (poolId: string) => void;
+  onOverrideRollResult: (
+    rollId: string,
+    resultId: string,
+    faceRefId: string,
+  ) => void;
+  onRemoveDieFromPool: (poolId: string, poolDieId: string) => void;
+  onRollPool: (poolId: string, faceRefIds?: string[]) => string | null;
+  onUpdateDie: (
+    dieId: string,
+    patch: Partial<{
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  onUpdatePool: (
+    poolId: string,
+    patch: Partial<{
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  onUpdatePoolDieCount: (
+    poolId: string,
+    poolDieId: string,
+    count: number,
+  ) => void;
+}
+
+function DicePoolsWorkbench({
+  assets,
+  diceState,
+  isSetupLocked,
+  onAddDieToPool,
+  onClearRollHistory,
+  onCreateDieFromAsset,
+  onCreateDieFromAssets,
+  onCreatePool,
+  onDeleteDie,
+  onDeletePool,
+  onOverrideRollResult,
+  onRemoveDieFromPool,
+  onRollPool,
+  onUpdateDie,
+  onUpdatePool,
+  onUpdatePoolDieCount,
+}: DicePoolsWorkbenchProps) {
+  const dieAssets = useMemo(
+    () =>
+      assets.filter(
+        (asset) =>
+          asset.category === "TOKEN" &&
+          asset.kind === "die" &&
+          Boolean(asset.faces?.length),
+      ),
+    [assets],
+  );
+  const faceFolders = useMemo(() => getDiceFaceFolders(assets), [assets]);
+  const [selectedDieId, setSelectedDieId] = useState<string | null>(null);
+  const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
+  const [dieAssetId, setDieAssetId] = useState("");
+  const [faceFolderKey, setFaceFolderKey] = useState("");
+  const [poolName, setPoolName] = useState("");
+  const [poolDieId, setPoolDieId] = useState("");
+  const [poolDieCount, setPoolDieCount] = useState(1);
+
+  useEffect(() => {
+    setSelectedDieId((current) =>
+      current && diceState.definitions.some((definition) => definition.id === current)
+        ? current
+        : diceState.definitions[0]?.id ?? null,
+    );
+  }, [diceState.definitions]);
+
+  useEffect(() => {
+    setSelectedPoolId((current) =>
+      current && diceState.pools.some((pool) => pool.id === current)
+        ? current
+        : diceState.pools[0]?.id ?? null,
+    );
+  }, [diceState.pools]);
+
+  useEffect(() => {
+    setDieAssetId((current) =>
+      current && dieAssets.some((asset) => asset.id === current)
+        ? current
+        : dieAssets[0]?.id ?? "",
+    );
+  }, [dieAssets]);
+
+  useEffect(() => {
+    setFaceFolderKey((current) =>
+      current && faceFolders.some((folder) => folder.key === current)
+        ? current
+        : faceFolders[0]?.key ?? "",
+    );
+  }, [faceFolders]);
+
+  useEffect(() => {
+    setPoolDieId((current) =>
+      current && diceState.definitions.some((definition) => definition.id === current)
+        ? current
+        : diceState.definitions[0]?.id ?? "",
+    );
+  }, [diceState.definitions]);
+
+  const selectedDie =
+    diceState.definitions.find((definition) => definition.id === selectedDieId) ??
+    null;
+  const selectedPool =
+    diceState.pools.find((pool) => pool.id === selectedPoolId) ?? null;
+  const lastRoll = getLastRoll(diceState);
+
+  const handleCreateDieFromAsset = useCallback(() => {
+    if (!dieAssetId) {
+      return;
+    }
+
+    const dieId = onCreateDieFromAsset(dieAssetId);
+
+    if (dieId) {
+      setSelectedDieId(dieId);
+    }
+  }, [dieAssetId, onCreateDieFromAsset]);
+  const handleCreateDieFromFolder = useCallback(() => {
+    const folder = faceFolders.find((candidate) => candidate.key === faceFolderKey);
+
+    if (!folder) {
+      return;
+    }
+
+    const dieId = onCreateDieFromAssets(
+      folder.name,
+      folder.assets.map((asset) => asset.id),
+    );
+
+    if (dieId) {
+      setSelectedDieId(dieId);
+    }
+  }, [faceFolderKey, faceFolders, onCreateDieFromAssets]);
+  const handleCreatePool = useCallback(() => {
+    const poolId = onCreatePool(poolName.trim());
+
+    if (poolId) {
+      setSelectedPoolId(poolId);
+      setPoolName("");
+    }
+  }, [onCreatePool, poolName]);
+  const handleAddDieToPool = useCallback(() => {
+    if (!selectedPool || !poolDieId) {
+      return;
+    }
+
+    onAddDieToPool(selectedPool.id, poolDieId, poolDieCount);
+  }, [onAddDieToPool, poolDieCount, poolDieId, selectedPool]);
+
+  return (
+    <div className="dice-workbench">
+      <section className="dice-panel" aria-label="Dice definitions">
+        <div className="dice-panel__header">
+          <h3>Dice</h3>
+          <span>{diceState.definitions.length}</span>
+        </div>
+        <div className="dice-create-grid">
+          <select
+            aria-label="Die asset with face metadata"
+            disabled={isSetupLocked || dieAssets.length === 0}
+            onChange={(event) => setDieAssetId(event.currentTarget.value)}
+            value={dieAssetId}
+          >
+            {dieAssets.length === 0 ? <option value="">No die assets</option> : null}
+            {dieAssets.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.name} / {asset.faces?.length ?? 0} faces
+              </option>
+            ))}
+          </select>
+          <button
+            className="mini-button"
+            disabled={isSetupLocked || !dieAssetId}
+            onClick={handleCreateDieFromAsset}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={14} />
+            <span>Die</span>
+          </button>
+          <select
+            aria-label="Die face folder"
+            disabled={isSetupLocked || faceFolders.length === 0}
+            onChange={(event) => setFaceFolderKey(event.currentTarget.value)}
+            value={faceFolderKey}
+          >
+            {faceFolders.length === 0 ? (
+              <option value="">No face folders</option>
+            ) : null}
+            {faceFolders.map((folder) => (
+              <option key={folder.key} value={folder.key}>
+                {folder.name} / {folder.assets.length} faces
+              </option>
+            ))}
+          </select>
+          <button
+            className="mini-button"
+            disabled={isSetupLocked || !faceFolderKey}
+            onClick={handleCreateDieFromFolder}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={14} />
+            <span>Folder</span>
+          </button>
+        </div>
+
+        {diceState.definitions.length === 0 ? (
+          <p className="empty-state">No dice defined.</p>
+        ) : (
+          <div className="dice-list">
+            {diceState.definitions.map((definition) => (
+              <button
+                className="dice-list-item"
+                data-selected={selectedDie?.id === definition.id}
+                key={definition.id}
+                onClick={() => setSelectedDieId(definition.id)}
+                type="button"
+              >
+                <strong>{definition.name}</strong>
+                <span>{definition.faces.length} faces</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {selectedDie ? (
+          <div className="dice-detail">
+            <div className="dice-detail__heading">
+              <input
+                aria-label="Die name"
+                disabled={isSetupLocked}
+                onChange={(event) =>
+                  onUpdateDie(selectedDie.id, {
+                    name: event.currentTarget.value,
+                  })
+                }
+                value={selectedDie.name}
+              />
+              <button
+                aria-label={`Delete ${selectedDie.name}`}
+                className="icon-only"
+                disabled={isSetupLocked}
+                onClick={() => onDeleteDie(selectedDie.id)}
+                title="Delete die"
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={14} />
+              </button>
+            </div>
+            <div className="dice-face-grid">
+              {selectedDie.faces.map((face) => (
+                <div className="dice-face-chip" key={face.id}>
+                  {getFaceAsset(assets, face)?.thumbnailUrl ? (
+                    <img alt="" src={getFaceAsset(assets, face)!.thumbnailUrl} />
+                  ) : (
+                    <span aria-hidden="true" className="asset-thumb-pending">
+                      <Dices size={16} />
+                    </span>
+                  )}
+                  <span>{formatDieFaceLabel(face)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="dice-panel dice-panel--wide" aria-label="Dice pools">
+        <div className="dice-panel__header">
+          <h3>Pools</h3>
+          <span>{diceState.pools.length}</span>
+        </div>
+        <div className="dice-pool-create">
+          <input
+            aria-label="New dice pool name"
+            disabled={isSetupLocked}
+            onChange={(event) => setPoolName(event.currentTarget.value)}
+            placeholder="New pool name"
+            value={poolName}
+          />
+          <button
+            className="mini-button"
+            disabled={isSetupLocked || !poolName.trim()}
+            onClick={handleCreatePool}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={14} />
+            <span>Pool</span>
+          </button>
+        </div>
+
+        {diceState.pools.length === 0 ? (
+          <p className="empty-state">No dice pools defined.</p>
+        ) : (
+          <div className="dice-list dice-list--horizontal">
+            {diceState.pools.map((pool) => (
+              <button
+                className="dice-list-item"
+                data-selected={selectedPool?.id === pool.id}
+                key={pool.id}
+                onClick={() => setSelectedPoolId(pool.id)}
+                type="button"
+              >
+                <strong>{pool.name}</strong>
+                <span>{countPoolDice(pool)} dice</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {selectedPool ? (
+          <div className="dice-pool-detail">
+            <div className="dice-detail__heading">
+              <input
+                aria-label="Dice pool name"
+                disabled={isSetupLocked}
+                onChange={(event) =>
+                  onUpdatePool(selectedPool.id, {
+                    name: event.currentTarget.value,
+                  })
+                }
+                value={selectedPool.name}
+              />
+              <button
+                aria-label={`Delete ${selectedPool.name}`}
+                className="icon-only"
+                disabled={isSetupLocked}
+                onClick={() => onDeletePool(selectedPool.id)}
+                title="Delete pool"
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={14} />
+              </button>
+            </div>
+
+            <div className="dice-pool-actions">
+              <select
+                aria-label="Die to add"
+                disabled={isSetupLocked || diceState.definitions.length === 0}
+                onChange={(event) => setPoolDieId(event.currentTarget.value)}
+                value={poolDieId}
+              >
+                {diceState.definitions.length === 0 ? (
+                  <option value="">No dice</option>
+                ) : null}
+                {diceState.definitions.map((definition) => (
+                  <option key={definition.id} value={definition.id}>
+                    {definition.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Dice count"
+                disabled={isSetupLocked}
+                min={1}
+                onChange={(event) =>
+                  setPoolDieCount(
+                    Math.max(1, toNumber(event.currentTarget.value, 1)),
+                  )
+                }
+                type="number"
+                value={poolDieCount}
+              />
+              <button
+                className="mini-button"
+                disabled={isSetupLocked || !poolDieId}
+                onClick={handleAddDieToPool}
+                type="button"
+              >
+                <Plus aria-hidden="true" size={14} />
+                <span>Die</span>
+              </button>
+              <button
+                className="mini-button"
+                disabled={selectedPool.dice.length === 0}
+                onClick={() => onRollPool(selectedPool.id)}
+                type="button"
+              >
+                <Dices aria-hidden="true" size={14} />
+                <span>Roll</span>
+              </button>
+            </div>
+
+            {selectedPool.dice.length === 0 ? (
+              <p className="empty-state">No dice in this pool.</p>
+            ) : (
+              <div className="dice-pool-dice">
+                {selectedPool.dice.map((poolDie) => {
+                  const definition = diceState.definitions.find(
+                    (candidate) => candidate.id === poolDie.dieId,
+                  );
+
+                  return (
+                    <div className="dice-pool-die" key={poolDie.id}>
+                      <strong>{definition?.name ?? poolDie.dieId}</strong>
+                      <input
+                        aria-label={`${poolDie.id} count`}
+                        disabled={isSetupLocked}
+                        min={1}
+                        onChange={(event) =>
+                          onUpdatePoolDieCount(
+                            selectedPool.id,
+                            poolDie.id,
+                            Math.max(1, toNumber(event.currentTarget.value, 1)),
+                          )
+                        }
+                        type="number"
+                        value={poolDie.count}
+                      />
+                      <button
+                        aria-label={`Remove ${poolDie.id}`}
+                        className="icon-only"
+                        disabled={isSetupLocked}
+                        onClick={() =>
+                          onRemoveDieFromPool(selectedPool.id, poolDie.id)
+                        }
+                        title="Remove die from pool"
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        <DiceRollHistory
+          assets={assets}
+          diceState={diceState}
+          lastRoll={lastRoll}
+          onClearRollHistory={onClearRollHistory}
+          onOverrideRollResult={onOverrideRollResult}
+        />
+      </section>
+    </div>
+  );
+}
+
+interface DiceRollHistoryProps {
+  assets: UploadedImageAsset[];
+  diceState: DiceState;
+  lastRoll: DiceRoll | null;
+  onClearRollHistory: () => void;
+  onOverrideRollResult: (
+    rollId: string,
+    resultId: string,
+    faceRefId: string,
+  ) => void;
+}
+
+function DiceRollHistory({
+  assets,
+  diceState,
+  lastRoll,
+  onClearRollHistory,
+  onOverrideRollResult,
+}: DiceRollHistoryProps) {
+  return (
+    <div className="dice-roll-history" aria-label="Dice roll history">
+      <div className="dice-panel__header">
+        <h3>Last Roll</h3>
+        <button
+          className="mini-button"
+          disabled={diceState.rollHistory.length === 0}
+          onClick={onClearRollHistory}
+          type="button"
+        >
+          <RotateCcw aria-hidden="true" size={14} />
+          <span>Clear</span>
+        </button>
+      </div>
+      {lastRoll ? (
+        <>
+          <div className="dice-roll-summary">
+            <strong>{lastRoll.id}</strong>
+            <span>
+              {lastRoll.mode} / {lastRoll.results.length} results /{" "}
+              {diceState.rollHistory.length} rolls
+            </span>
+          </div>
+          <div className="dice-roll-results">
+            {lastRoll.results.map((result) => {
+              const definition = diceState.definitions.find(
+                (candidate) => candidate.id === result.dieId,
+              );
+              const face = definition?.faces.find(
+                (candidate) => candidate.id === result.faceRefId,
+              );
+              const faceAsset = face ? getFaceAsset(assets, face) : null;
+
+              return (
+                <div className="dice-roll-result" key={result.id}>
+                  {faceAsset?.thumbnailUrl ? (
+                    <img alt="" src={faceAsset.thumbnailUrl} />
+                  ) : (
+                    <span aria-hidden="true" className="asset-thumb-pending">
+                      <Dices size={16} />
+                    </span>
+                  )}
+                  <div>
+                    <strong>{definition?.name ?? result.dieId}</strong>
+                    <span>
+                      {result.label ?? result.faceRefId}
+                      {result.isOverride ? " / override" : ""}
+                    </span>
+                  </div>
+                  <select
+                    aria-label={`${result.id} face override`}
+                    onChange={(event) =>
+                      onOverrideRollResult(
+                        lastRoll.id,
+                        result.id,
+                        event.currentTarget.value,
+                      )
+                    }
+                    value={result.faceRefId}
+                  >
+                    {definition?.faces.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {formatDieFaceLabel(candidate)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <p className="empty-state">No rolls recorded.</p>
+      )}
+    </div>
+  );
+}
+
 interface BoardStateWorkbenchProps {
   boardState: JsonRecord;
   mode: ScenarioMode;
@@ -3312,6 +3931,82 @@ function getAssetPreviewUrl(asset: UploadedImageAsset) {
 
 function getFileRelativePath(file: File) {
   return (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
+}
+
+interface DiceFaceFolder {
+  assets: UploadedImageAsset[];
+  key: string;
+  name: string;
+}
+
+function getDiceFaceFolders(assets: UploadedImageAsset[]): DiceFaceFolder[] {
+  const groups = new Map<string, UploadedImageAsset[]>();
+
+  for (const asset of assets) {
+    if (asset.category !== "TOKEN" || !asset.sourcePath) {
+      continue;
+    }
+
+    const fileName = getPathFileName(asset.sourcePath);
+
+    if (/source[-_ ]?uv/i.test(fileName)) {
+      continue;
+    }
+
+    const folder = getPathFolder(asset.sourcePath);
+
+    if (!folder) {
+      continue;
+    }
+
+    const nextAssets = groups.get(folder) ?? [];
+    nextAssets.push(asset);
+    groups.set(folder, nextAssets);
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, groupAssets]) => ({
+      key,
+      name: getPathFileName(key) || key,
+      assets: [...groupAssets].sort((left, right) =>
+        (left.sourcePath ?? left.name).localeCompare(right.sourcePath ?? right.name),
+      ),
+    }))
+    .filter((group) => group.assets.length >= 2)
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function getPathFolder(path: string) {
+  const normalized = path.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+
+  return index > 0 ? normalized.slice(0, index) : "";
+}
+
+function getPathFileName(path: string) {
+  return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? "";
+}
+
+function getLastRoll(diceState: DiceState) {
+  return (
+    (diceState.lastRollId
+      ? diceState.rollHistory.find((roll) => roll.id === diceState.lastRollId)
+      : undefined) ??
+    diceState.rollHistory[diceState.rollHistory.length - 1] ??
+    null
+  );
+}
+
+function countPoolDice(pool: DicePool) {
+  return pool.dice.reduce((total, poolDie) => total + poolDie.count, 0);
+}
+
+function getFaceAsset(assets: UploadedImageAsset[], face: DieFaceRef) {
+  return assets.find((asset) => asset.id === face.assetId) ?? null;
+}
+
+function formatDieFaceLabel(face: DieFaceRef) {
+  return face.label ?? face.faceId ?? face.id;
 }
 
 function totalBytes(assets: UploadedImageAsset[]) {
