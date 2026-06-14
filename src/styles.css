@@ -1379,6 +1379,227 @@ button {
   accent-color: #2f6f73;
 }
 
+.card-workbench {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 2.4fr);
+  gap: 12px;
+}
+
+.card-zone-sidebar,
+.card-zone-detail {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.card-zone-create,
+.card-zone-fields,
+.card-zone-actions {
+  display: grid;
+  gap: 8px;
+  align-items: end;
+}
+
+.card-zone-create {
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 0.6fr) auto;
+}
+
+.card-zone-fields {
+  grid-template-columns: minmax(140px, 1fr) minmax(120px, 0.7fr) minmax(180px, 1.2fr) auto;
+}
+
+.card-zone-actions {
+  grid-template-columns: auto 80px minmax(130px, 0.8fr) auto 80px minmax(150px, 1fr) auto minmax(160px, 1fr);
+}
+
+.card-zone-create input,
+.card-zone-create select,
+.card-zone-fields input,
+.card-zone-fields select,
+.card-zone-actions input,
+.card-zone-actions select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #c8ced6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #20252b;
+  padding: 0 8px;
+  outline: none;
+}
+
+.card-zone-create input:focus,
+.card-zone-create select:focus,
+.card-zone-fields input:focus,
+.card-zone-fields select:focus,
+.card-zone-actions input:focus,
+.card-zone-actions select:focus {
+  border-color: #2f6f73;
+  box-shadow: 0 0 0 3px rgba(47, 111, 115, 0.16);
+}
+
+.card-zone-fields label,
+.card-zone-actions label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.card-zone-fields label span,
+.card-zone-actions label span {
+  color: #65707c;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.card-zone-list,
+.card-zone-card-list {
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.card-zone-list {
+  max-height: 260px;
+}
+
+.card-zone-item {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid #d3d8df;
+  border-radius: 8px;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card-zone-item:hover {
+  border-color: #87919d;
+}
+
+.card-zone-item[data-selected="true"] {
+  border-color: #2f6f73;
+  background: #e6f3f1;
+}
+
+.card-zone-item strong,
+.card-zone-item span,
+.card-zone-card strong,
+.card-zone-card span,
+.card-zone-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-zone-item strong {
+  color: #20252b;
+  font-size: 0.84rem;
+  font-weight: 860;
+}
+
+.card-zone-item span {
+  color: #65707c;
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.card-zone-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-zone-detail__header div {
+  min-width: 0;
+}
+
+.card-zone-detail__header h3 {
+  margin: 0;
+  color: #20252b;
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.card-zone-detail__header span {
+  display: block;
+  margin-top: 2px;
+  color: #65707c;
+  font-size: 0.74rem;
+  font-weight: 780;
+}
+
+.card-search {
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.card-search input {
+  min-width: 0;
+}
+
+.card-zone-card-list {
+  max-height: 330px;
+}
+
+.card-zone-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #d3d8df;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.card-zone-card img,
+.card-zone-card .asset-thumb-pending {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  background: #d9dde3;
+  object-fit: cover;
+}
+
+.card-zone-card__body {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.card-zone-card strong {
+  color: #20252b;
+  font-size: 0.82rem;
+  font-weight: 860;
+}
+
+.card-zone-card span,
+.card-zone-card small {
+  color: #65707c;
+  font-size: 0.7rem;
+  font-weight: 780;
+}
+
+.card-zone-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 6px;
+}
+
 .json-table-cell {
   width: 240px;
   display: grid;

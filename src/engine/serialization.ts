@@ -1,5 +1,7 @@
 import type { BoardState } from "./board";
 import { validateBoard } from "./board";
+import { createEmptyCardDeckState, isCardZoneKind } from "./cardDeck";
+import type { CardDeckState, CardRef, CardZone } from "./cardDeck";
 import type { EntityState, JsonRecord, ResourceCategory } from "./entity";
 import { isResourceCategory } from "./entity";
 
@@ -71,6 +73,7 @@ export interface ScenarioFrozenSetup {
   assetPlacements: ScenarioAssetPlacement[];
   entityState: EntityState;
   pawnSheets: Record<string, ScenarioPawnSheet>;
+  cardDeckState: CardDeckState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -87,6 +90,7 @@ export interface ScenarioPackage {
   assetPlacements: ScenarioAssetPlacement[];
   entityState: EntityState;
   pawnSheets: Record<string, ScenarioPawnSheet>;
+  cardDeckState: CardDeckState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -122,6 +126,14 @@ export type ScenarioValidationCode =
   | "pawn_sheet_placement_category"
   | "pawn_sheet_asset_not_found"
   | "pawn_sheet_asset_category"
+  | "invalid_card_deck_state"
+  | "invalid_card_zone"
+  | "duplicate_card_zone_id"
+  | "invalid_card_ref"
+  | "duplicate_card_ref_id"
+  | "card_ref_asset_not_found"
+  | "card_ref_asset_category"
+  | "card_ref_face_not_found"
   | "invalid_viewport"
   | "invalid_mode"
   | "invalid_board_state"
@@ -154,6 +166,7 @@ export type ScenarioPackageInput = Omit<
   | "metadata"
   | "viewport"
   | "mode"
+  | "cardDeckState"
   | "boardState"
   | "locationStates"
   | "edgeStates"
@@ -162,6 +175,7 @@ export type ScenarioPackageInput = Omit<
   metadata?: ScenarioMetadata;
   viewport?: Partial<ScenarioViewport>;
   mode?: ScenarioMode;
+  cardDeckState?: CardDeckState;
   boardState?: JsonRecord;
   locationStates?: Record<string, JsonRecord>;
   edgeStates?: Record<string, JsonRecord>;
@@ -179,6 +193,7 @@ export function createScenarioPackage(input: ScenarioPackageInput): ScenarioPack
     assetPlacements: cloneJson(input.assetPlacements),
     entityState: cloneJson(input.entityState),
     pawnSheets: cloneJson(input.pawnSheets),
+    cardDeckState: cloneJson(input.cardDeckState ?? createEmptyCardDeckState()),
     boardState: cloneJson(input.boardState ?? {}),
     locationStates: cloneJson(input.locationStates ?? {}),
     edgeStates: cloneJson(input.edgeStates ?? {}),
@@ -264,6 +279,9 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
   const pawnSheets = isRecord(value.pawnSheets)
     ? (value.pawnSheets as Record<string, unknown>)
     : null;
+  const cardDeckState = isCardDeckState(value.cardDeckState)
+    ? value.cardDeckState
+    : null;
 
   if (!assets) {
     issues.push({
@@ -300,6 +318,13 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     });
   }
 
+  if (!cardDeckState) {
+    issues.push({
+      code: "invalid_card_deck_state",
+      message: "Scenario cardDeckState must contain a zones array.",
+    });
+  }
+
   if (!isViewport(value.viewport)) {
     issues.push({
       code: "invalid_viewport",
@@ -328,7 +353,14 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     });
   }
 
-  if (!assets || !board || !entityState || !assetPlacements || !pawnSheets) {
+  if (
+    !assets ||
+    !board ||
+    !entityState ||
+    !assetPlacements ||
+    !pawnSheets ||
+    !cardDeckState
+  ) {
     return issues;
   }
 
@@ -338,6 +370,7 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
   const entityIds = validateEntities(entityState, locationIds, issues);
   validatePlacements(assetPlacements, assets, assetIds, entityState, entityIds, locationIds, issues);
   validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
+  validateCardDeckState(cardDeckState, assets, assetIds, issues);
   validateStateSurfaces(
     value.locationStates as Record<string, unknown>,
     value.edgeStates as Record<string, unknown>,
@@ -419,6 +452,9 @@ function validateFrozenSetup(
   const pawnSheets = isRecord(value.pawnSheets)
     ? (value.pawnSheets as Record<string, unknown>)
     : null;
+  const cardDeckState = isCardDeckState(value.cardDeckState)
+    ? value.cardDeckState
+    : null;
 
   if (
     !assets ||
@@ -426,6 +462,7 @@ function validateFrozenSetup(
     !entityState ||
     !assetPlacements ||
     !pawnSheets ||
+    !cardDeckState ||
     !isRecord(value.boardState) ||
     !isRecord(value.locationStates) ||
     !isRecord(value.edgeStates) ||
@@ -452,6 +489,7 @@ function validateFrozenSetup(
     issues,
   );
   validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
+  validateCardDeckState(cardDeckState, assets, assetIds, issues);
   validateStateSurfaces(
     value.locationStates as Record<string, unknown>,
     value.edgeStates as Record<string, unknown>,
@@ -494,7 +532,9 @@ function validateAssets(
       !isFiniteNumber(asset.size) ||
       !isPositiveInteger(asset.maxCopies) ||
       !isPositiveNumber(asset.placementWidth) ||
-      !isPositiveNumber(asset.placementHeight)
+      !isPositiveNumber(asset.placementHeight) ||
+      (asset.faces !== undefined &&
+        (!Array.isArray(asset.faces) || !asset.faces.every(isNonEmptyString)))
     ) {
       issues.push({
         code: "invalid_asset",
@@ -745,6 +785,88 @@ function validatePawnSheets(
   }
 }
 
+function validateCardDeckState(
+  cardDeckState: CardDeckState,
+  assets: ScenarioAsset[],
+  assetIds: Set<string>,
+  issues: ScenarioValidationIssue[],
+) {
+  const zoneIds = new Set<string>();
+  const cardIds = new Set<string>();
+
+  for (const zone of cardDeckState.zones) {
+    if (!isScenarioCardZone(zone)) {
+      issues.push({
+        code: "invalid_card_zone",
+        message: "Every card zone must have id, name, kind, cards, and JSON state.",
+      });
+      continue;
+    }
+
+    if (zoneIds.has(zone.id)) {
+      issues.push({
+        code: "duplicate_card_zone_id",
+        message: `Card zone id '${zone.id}' is duplicated.`,
+        id: zone.id,
+      });
+    }
+
+    zoneIds.add(zone.id);
+
+    for (const card of zone.cards) {
+      if (!isScenarioCardRef(card)) {
+        issues.push({
+          code: "invalid_card_ref",
+          message: `Card zone '${zone.id}' contains a malformed card ref.`,
+          id: zone.id,
+        });
+        continue;
+      }
+
+      if (cardIds.has(card.id)) {
+        issues.push({
+          code: "duplicate_card_ref_id",
+          message: `Card ref id '${card.id}' is duplicated across card zones.`,
+          id: card.id,
+        });
+      }
+
+      cardIds.add(card.id);
+
+      const asset = assets.find((candidate) => candidate.id === card.assetId);
+
+      if (!assetIds.has(card.assetId) || !asset) {
+        issues.push({
+          code: "card_ref_asset_not_found",
+          message: `Card ref '${card.id}' references missing asset '${card.assetId}'.`,
+          id: card.id,
+        });
+        continue;
+      }
+
+      if (asset.category !== "CARD") {
+        issues.push({
+          code: "card_ref_asset_category",
+          message: `Card ref '${card.id}' must reference a CARD asset.`,
+          id: card.id,
+        });
+      }
+
+      if (
+        card.faceId &&
+        asset.faces &&
+        !asset.faces.includes(card.faceId)
+      ) {
+        issues.push({
+          code: "card_ref_face_not_found",
+          message: `Card ref '${card.id}' references missing face '${card.faceId}'.`,
+          id: card.id,
+        });
+      }
+    }
+  }
+}
+
 function getPawnSheetAssetIds(sheet: ScenarioPawnSheet) {
   return [
     ...(sheet.characterCardAssetId ? [sheet.characterCardAssetId] : []),
@@ -764,6 +886,33 @@ function isBoardState(value: unknown): value is BoardState {
 
 function isEntityState(value: unknown): value is EntityState {
   return isRecord(value) && Array.isArray(value.entities);
+}
+
+function isCardDeckState(value: unknown): value is CardDeckState {
+  return isRecord(value) && Array.isArray(value.zones);
+}
+
+function isScenarioCardZone(value: unknown): value is CardZone {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.name) &&
+    isCardZoneKind(String(value.kind)) &&
+    Array.isArray(value.cards) &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioCardRef(value: unknown): value is CardRef {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.assetId) &&
+    (value.faceId === undefined || isNonEmptyString(value.faceId)) &&
+    (value.label === undefined || isNonEmptyString(value.label)) &&
+    typeof value.faceUp === "boolean" &&
+    isRecord(value.state)
+  );
 }
 
 function isScenarioPawnSheet(value: unknown): value is ScenarioPawnSheet {
@@ -803,6 +952,7 @@ function normalizeScenarioPackage(value: unknown): unknown {
   return {
     ...value,
     mode: value.mode ?? "edit",
+    cardDeckState: value.cardDeckState ?? createEmptyCardDeckState(),
     boardState: value.boardState ?? {},
     locationStates: value.locationStates ?? {},
     edgeStates: value.edgeStates ?? {},
@@ -817,6 +967,7 @@ function normalizeFrozenSetup(value: unknown): unknown {
 
   return {
     ...value,
+    cardDeckState: value.cardDeckState ?? createEmptyCardDeckState(),
     boardState: value.boardState ?? {},
     locationStates: value.locationStates ?? {},
     edgeStates: value.edgeStates ?? {},

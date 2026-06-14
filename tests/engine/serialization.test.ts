@@ -34,6 +34,18 @@ describe("F-03 scenario serialization", () => {
         },
       ],
     });
+    expect(restored.cardDeckState.zones[0]).toMatchObject({
+      id: "zone-player-deck",
+      kind: "deck",
+      cards: [
+        {
+          id: "card-ref-1",
+          assetId: "asset-card",
+          faceId: "face-1",
+          faceUp: false,
+        },
+      ],
+    });
     expect(restored.viewport).toEqual({
       boardZoom: 1.4,
       boardPan: {
@@ -72,6 +84,35 @@ describe("F-03 scenario serialization", () => {
         expect.objectContaining({ code: "placement_asset_not_found" }),
         expect.objectContaining({ code: "placement_entity_not_found" }),
         expect.objectContaining({ code: "placement_location_not_found" }),
+      ]),
+    );
+  });
+
+  it("reports invalid card deck face references", () => {
+    const invalidScenario = createSampleScenario();
+
+    invalidScenario.cardDeckState!.zones[0]!.cards[0] = {
+      ...invalidScenario.cardDeckState!.zones[0]!.cards[0]!,
+      faceId: "missing-face",
+    };
+
+    const issues = validateScenarioPackage({
+      format: "lorecanvas.scenario",
+      version: 1,
+      ...invalidScenario,
+      metadata: {},
+      viewport: {
+        boardZoom: 1,
+        boardPan: {
+          x: 0,
+          y: 0,
+        },
+      },
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "card_ref_face_not_found" }),
       ]),
     );
   });
@@ -127,6 +168,7 @@ function createSampleScenario(): ScenarioPackageInput {
         maxCopies: 3,
         placementWidth: 64,
         placementHeight: 90,
+        faces: ["face-1", "face-2"],
       },
       {
         id: "asset-token",
@@ -210,6 +252,26 @@ function createSampleScenario(): ScenarioPackageInput {
           },
         ],
       },
+    },
+    cardDeckState: {
+      zones: [
+        {
+          id: "zone-player-deck",
+          name: "Player Deck",
+          kind: "deck",
+          state: {},
+          cards: [
+            {
+              id: "card-ref-1",
+              assetId: "asset-card",
+              faceId: "face-1",
+              label: "Opening Move",
+              faceUp: false,
+              state: {},
+            },
+          ],
+        },
+      ],
     },
     viewport: {
       boardZoom: 1.4,

@@ -46,6 +46,8 @@ import {
   RESOURCE_CATEGORIES,
   RESOURCE_CATEGORY_DEFINITIONS,
 } from "../engine/entity";
+import { CARD_ZONE_KINDS, searchCards } from "../engine/cardDeck";
+import type { CardDeckState, CardRef, CardZoneKind } from "../engine/cardDeck";
 import type { BoardEdge, BoardLocation } from "../engine/board";
 import type {
   AssetPlacement,
@@ -84,7 +86,7 @@ const TOOL_OPTIONS: Array<{
   { id: "edge", label: "Add Edge", Icon: Network },
 ];
 
-type WorkbenchTab = "locations" | "edges" | "objects" | "board";
+type WorkbenchTab = "locations" | "edges" | "objects" | "cards" | "board";
 export type LocationSortField = "name" | "region";
 export type SortDirection = "asc" | "desc";
 
@@ -101,6 +103,7 @@ const WORKBENCH_TABS: Array<{
   { id: "locations", label: "Locations", Icon: MapPinPlus },
   { id: "edges", label: "Edges", Icon: Network },
   { id: "objects", label: "Objects", Icon: CreditCard },
+  { id: "cards", label: "Cards", Icon: CreditCard },
   { id: "board", label: "Board State", Icon: Database },
 ];
 
@@ -1142,6 +1145,7 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
   const locationStates = useBoardStore((state) => state.locationStates);
   const edgeStates = useBoardStore((state) => state.edgeStates);
   const entityState = useBoardStore((state) => state.entityState);
+  const cardDeckState = useBoardStore((state) => state.cardDeckState);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
@@ -1163,6 +1167,23 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
     (state) => state.updateEntityObjectState,
   );
   const moveEntityToLocation = useBoardStore((state) => state.moveEntityToLocation);
+  const createCardZone = useBoardStore((state) => state.createCardZone);
+  const updateCardZone = useBoardStore((state) => state.updateCardZone);
+  const deleteCardZone = useBoardStore((state) => state.deleteCardZone);
+  const addCardAssetToZone = useBoardStore(
+    (state) => state.addCardAssetToZone,
+  );
+  const removeCardsFromCardZone = useBoardStore(
+    (state) => state.removeCardsFromCardZone,
+  );
+  const moveCardsBetweenCardZones = useBoardStore(
+    (state) => state.moveCardsBetweenCardZones,
+  );
+  const drawCardsToZone = useBoardStore((state) => state.drawCardsToZone);
+  const dealCardsToZones = useBoardStore((state) => state.dealCardsToZones);
+  const shuffleCardZone = useBoardStore((state) => state.shuffleCardZone);
+  const flipCardsInZone = useBoardStore((state) => state.flipCardsInZone);
+  const reorderCardInZone = useBoardStore((state) => state.reorderCardInZone);
 
   return (
     <section className="data-workbench" aria-label="Scenario data workbench">
@@ -1228,6 +1249,24 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
             onSelectPlacement={selectPlacement}
             onUpdateEntityState={updateEntityObjectState}
             selectedPlacementId={selectedPlacementId}
+          />
+        ) : null}
+        {activeTab === "cards" ? (
+          <CardZonesWorkbench
+            assets={assets}
+            cardDeckState={cardDeckState}
+            isSetupLocked={mode === "run"}
+            onAddCardAssetToZone={addCardAssetToZone}
+            onCreateCardZone={createCardZone}
+            onDealCardsToZones={dealCardsToZones}
+            onDeleteCardZone={deleteCardZone}
+            onDrawCardsToZone={drawCardsToZone}
+            onFlipCardsInZone={flipCardsInZone}
+            onMoveCardsBetweenZones={moveCardsBetweenCardZones}
+            onRemoveCardsFromZone={removeCardsFromCardZone}
+            onReorderCardInZone={reorderCardInZone}
+            onShuffleCardZone={shuffleCardZone}
+            onUpdateCardZone={updateCardZone}
           />
         ) : null}
         {activeTab === "board" ? (
@@ -1839,6 +1878,511 @@ function ObjectsTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+interface CardZonesWorkbenchProps {
+  assets: UploadedImageAsset[];
+  cardDeckState: CardDeckState;
+  isSetupLocked: boolean;
+  onAddCardAssetToZone: (zoneId: string, assetId: string) => string | null;
+  onCreateCardZone: (name: string, kind: CardZoneKind) => string | null;
+  onDealCardsToZones: (
+    fromZoneId: string,
+    toZoneIds: string[],
+    countPerZone: number,
+  ) => void;
+  onDeleteCardZone: (zoneId: string) => void;
+  onDrawCardsToZone: (
+    fromZoneId: string,
+    toZoneId: string,
+    count: number,
+  ) => void;
+  onFlipCardsInZone: (
+    zoneId: string,
+    cardIds: string[],
+    faceUp?: boolean,
+  ) => void;
+  onMoveCardsBetweenZones: (
+    fromZoneId: string,
+    toZoneId: string,
+    cardIds: string[],
+    toIndex?: number,
+  ) => void;
+  onRemoveCardsFromZone: (zoneId: string, cardIds: string[]) => void;
+  onReorderCardInZone: (
+    zoneId: string,
+    cardId: string,
+    toIndex: number,
+  ) => void;
+  onShuffleCardZone: (zoneId: string, order?: string[]) => void;
+  onUpdateCardZone: (
+    zoneId: string,
+    patch: Partial<{
+      kind: CardZoneKind;
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+}
+
+function CardZonesWorkbench({
+  assets,
+  cardDeckState,
+  isSetupLocked,
+  onAddCardAssetToZone,
+  onCreateCardZone,
+  onDealCardsToZones,
+  onDeleteCardZone,
+  onDrawCardsToZone,
+  onFlipCardsInZone,
+  onMoveCardsBetweenZones,
+  onRemoveCardsFromZone,
+  onReorderCardInZone,
+  onShuffleCardZone,
+  onUpdateCardZone,
+}: CardZonesWorkbenchProps) {
+  const cardAssets = useMemo(
+    () => assets.filter((asset) => asset.category === "CARD"),
+    [assets],
+  );
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [newZoneName, setNewZoneName] = useState("");
+  const [newZoneKind, setNewZoneKind] = useState<CardZoneKind>("deck");
+  const [cardAssetId, setCardAssetId] = useState("");
+  const [targetZoneId, setTargetZoneId] = useState("");
+  const [drawCount, setDrawCount] = useState(1);
+  const [dealCount, setDealCount] = useState(1);
+  const [dealTargets, setDealTargets] = useState("");
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (
+      selectedZoneId &&
+      cardDeckState.zones.some((zone) => zone.id === selectedZoneId)
+    ) {
+      return;
+    }
+
+    setSelectedZoneId(cardDeckState.zones[0]?.id ?? null);
+  }, [cardDeckState.zones, selectedZoneId]);
+
+  useEffect(() => {
+    setCardAssetId((current) =>
+      current && cardAssets.some((asset) => asset.id === current)
+        ? current
+        : cardAssets[0]?.id ?? "",
+    );
+  }, [cardAssets]);
+
+  const selectedZone =
+    cardDeckState.zones.find((zone) => zone.id === selectedZoneId) ?? null;
+  const targetZones = selectedZone
+    ? cardDeckState.zones.filter((zone) => zone.id !== selectedZone.id)
+    : [];
+  const visibleCards = selectedZone
+    ? searchCards(cardDeckState, selectedZone.id, search)
+    : [];
+
+  useEffect(() => {
+    setTargetZoneId((current) =>
+      current && targetZones.some((zone) => zone.id === current)
+        ? current
+        : targetZones[0]?.id ?? "",
+    );
+  }, [targetZones]);
+
+  const handleCreateZone = useCallback(() => {
+    const zoneId = onCreateCardZone(newZoneName.trim(), newZoneKind);
+
+    if (zoneId) {
+      setSelectedZoneId(zoneId);
+      setNewZoneName("");
+    }
+  }, [newZoneKind, newZoneName, onCreateCardZone]);
+  const handleAddCard = useCallback(() => {
+    if (!selectedZone || !cardAssetId) {
+      return;
+    }
+
+    onAddCardAssetToZone(selectedZone.id, cardAssetId);
+  }, [cardAssetId, onAddCardAssetToZone, selectedZone]);
+  const handleDraw = useCallback(() => {
+    if (!selectedZone || !targetZoneId) {
+      return;
+    }
+
+    onDrawCardsToZone(selectedZone.id, targetZoneId, drawCount);
+  }, [drawCount, onDrawCardsToZone, selectedZone, targetZoneId]);
+  const handleDeal = useCallback(() => {
+    if (!selectedZone) {
+      return;
+    }
+
+    const targetIds = parseZoneIdList(dealTargets || targetZoneId);
+
+    if (targetIds.length === 0) {
+      return;
+    }
+
+    onDealCardsToZones(selectedZone.id, targetIds, dealCount);
+  }, [dealCount, dealTargets, onDealCardsToZones, selectedZone, targetZoneId]);
+
+  return (
+    <div className="card-workbench">
+      <section className="card-zone-sidebar" aria-label="Card zones">
+        <div className="card-zone-create">
+          <input
+            aria-label="New card zone name"
+            disabled={isSetupLocked}
+            onChange={(event) => setNewZoneName(event.currentTarget.value)}
+            placeholder="New zone name"
+            value={newZoneName}
+          />
+          <select
+            aria-label="New card zone kind"
+            disabled={isSetupLocked}
+            onChange={(event) =>
+              setNewZoneKind(event.currentTarget.value as CardZoneKind)
+            }
+            value={newZoneKind}
+          >
+            {CARD_ZONE_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {formatCardZoneKind(kind)}
+              </option>
+            ))}
+          </select>
+          <button
+            className="mini-button"
+            disabled={isSetupLocked || !newZoneName.trim()}
+            onClick={handleCreateZone}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={14} />
+            <span>Zone</span>
+          </button>
+        </div>
+        {cardDeckState.zones.length === 0 ? (
+          <p className="empty-state">Create a deck, hand, discard, or setup pile.</p>
+        ) : (
+          <div className="card-zone-list">
+            {cardDeckState.zones.map((zone) => (
+              <button
+                className="card-zone-item"
+                data-selected={selectedZone?.id === zone.id}
+                key={zone.id}
+                onClick={() => setSelectedZoneId(zone.id)}
+                type="button"
+              >
+                <strong>{zone.name}</strong>
+                <span>
+                  {formatCardZoneKind(zone.kind)} / {zone.cards.length}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card-zone-detail" aria-label="Selected card zone">
+        {selectedZone ? (
+          <>
+            <div className="card-zone-detail__header">
+              <div>
+                <h3>{selectedZone.name}</h3>
+                <span>
+                  {selectedZone.id} / {formatCardZoneKind(selectedZone.kind)} /{" "}
+                  {selectedZone.cards.length} cards
+                </span>
+              </div>
+              <button
+                aria-label={`Delete ${selectedZone.name}`}
+                className="icon-only"
+                disabled={isSetupLocked}
+                onClick={() => onDeleteCardZone(selectedZone.id)}
+                title="Delete zone"
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={15} />
+              </button>
+            </div>
+
+            <div className="card-zone-fields">
+              <label>
+                <span>Name</span>
+                <input
+                  disabled={isSetupLocked}
+                  onChange={(event) =>
+                    onUpdateCardZone(selectedZone.id, {
+                      name: event.currentTarget.value,
+                    })
+                  }
+                  value={selectedZone.name}
+                />
+              </label>
+              <label>
+                <span>Kind</span>
+                <select
+                  disabled={isSetupLocked}
+                  onChange={(event) =>
+                    onUpdateCardZone(selectedZone.id, {
+                      kind: event.currentTarget.value as CardZoneKind,
+                    })
+                  }
+                  value={selectedZone.kind}
+                >
+                  {CARD_ZONE_KINDS.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {formatCardZoneKind(kind)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Add card</span>
+                <select
+                  disabled={isSetupLocked || cardAssets.length === 0}
+                  onChange={(event) => setCardAssetId(event.currentTarget.value)}
+                  value={cardAssetId}
+                >
+                  {cardAssets.length === 0 ? (
+                    <option value="">No CARD assets</option>
+                  ) : null}
+                  {cardAssets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="mini-button"
+                disabled={isSetupLocked || !cardAssetId}
+                onClick={handleAddCard}
+                type="button"
+              >
+                <Plus aria-hidden="true" size={14} />
+                <span>Card</span>
+              </button>
+            </div>
+
+            <div className="card-zone-actions">
+              <button
+                className="mini-button"
+                disabled={selectedZone.cards.length < 2}
+                onClick={() => onShuffleCardZone(selectedZone.id)}
+                type="button"
+              >
+                <ArrowUpDown aria-hidden="true" size={14} />
+                <span>Shuffle</span>
+              </button>
+              <label>
+                <span>Draw</span>
+                <input
+                  min={1}
+                  onChange={(event) =>
+                    setDrawCount(Math.max(1, toNumber(event.currentTarget.value, 1)))
+                  }
+                  type="number"
+                  value={drawCount}
+                />
+              </label>
+              <select
+                aria-label="Draw target zone"
+                disabled={!targetZoneId}
+                onChange={(event) => setTargetZoneId(event.currentTarget.value)}
+                value={targetZoneId}
+              >
+                {targetZones.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="mini-button"
+                disabled={!targetZoneId || selectedZone.cards.length === 0}
+                onClick={handleDraw}
+                type="button"
+              >
+                <CreditCard aria-hidden="true" size={14} />
+                <span>Draw</span>
+              </button>
+              <label>
+                <span>Deal</span>
+                <input
+                  min={1}
+                  onChange={(event) =>
+                    setDealCount(Math.max(1, toNumber(event.currentTarget.value, 1)))
+                  }
+                  type="number"
+                  value={dealCount}
+                />
+              </label>
+              <input
+                aria-label="Deal target zone ids"
+                onChange={(event) => setDealTargets(event.currentTarget.value)}
+                placeholder="zone-2, zone-3"
+                value={dealTargets}
+              />
+              <button
+                className="mini-button"
+                disabled={selectedZone.cards.length === 0}
+                onClick={handleDeal}
+                type="button"
+              >
+                <CreditCard aria-hidden="true" size={14} />
+                <span>Deal</span>
+              </button>
+              <label className="card-search">
+                <Search aria-hidden="true" size={14} />
+                <input
+                  aria-label="Search cards in selected zone"
+                  onChange={(event) => setSearch(event.currentTarget.value)}
+                  placeholder="Search pile"
+                  type="search"
+                  value={search}
+                />
+              </label>
+            </div>
+
+            <CardZoneCardList
+              assets={assets}
+              cards={visibleCards}
+              isSetupLocked={isSetupLocked}
+              onFlipCard={(cardId) =>
+                onFlipCardsInZone(selectedZone.id, [cardId])
+              }
+              onMoveCard={(cardId) =>
+                targetZoneId
+                  ? onMoveCardsBetweenZones(
+                      selectedZone.id,
+                      targetZoneId,
+                      [cardId],
+                    )
+                  : undefined
+              }
+              onRemoveCard={(cardId) =>
+                onRemoveCardsFromZone(selectedZone.id, [cardId])
+              }
+              onReorderCard={(cardId, toIndex) =>
+                onReorderCardInZone(selectedZone.id, cardId, toIndex)
+              }
+              targetZoneId={targetZoneId}
+              zoneCards={selectedZone.cards}
+            />
+          </>
+        ) : (
+          <p className="empty-state">
+            Create a card zone to inspect and operate on ordered cards.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+interface CardZoneCardListProps {
+  assets: UploadedImageAsset[];
+  cards: CardRef[];
+  isSetupLocked: boolean;
+  onFlipCard: (cardId: string) => void;
+  onMoveCard: (cardId: string) => void | undefined;
+  onRemoveCard: (cardId: string) => void;
+  onReorderCard: (cardId: string, toIndex: number) => void;
+  targetZoneId: string;
+  zoneCards: CardRef[];
+}
+
+function CardZoneCardList({
+  assets,
+  cards,
+  isSetupLocked,
+  onFlipCard,
+  onMoveCard,
+  onRemoveCard,
+  onReorderCard,
+  targetZoneId,
+  zoneCards,
+}: CardZoneCardListProps) {
+  if (cards.length === 0) {
+    return <p className="empty-state">No cards match this pile view.</p>;
+  }
+
+  return (
+    <div className="card-zone-card-list">
+      {cards.map((card) => {
+        const asset = assets.find((candidate) => candidate.id === card.assetId);
+        const cardIndex = zoneCards.findIndex((candidate) => candidate.id === card.id);
+
+        return (
+          <article className="card-zone-card" key={card.id}>
+            {asset?.thumbnailUrl ? (
+              <img alt="" src={asset.thumbnailUrl} />
+            ) : (
+              <span aria-hidden="true" className="asset-thumb-pending">
+                <ImageIcon size={18} />
+              </span>
+            )}
+            <div className="card-zone-card__body">
+              <strong>{card.label ?? asset?.name ?? card.id}</strong>
+              <span>
+                {card.id} / {card.faceUp ? "face up" : "face down"}
+              </span>
+              <small>{asset?.name ?? card.assetId}</small>
+            </div>
+            <div className="card-zone-card__actions">
+              <button
+                aria-label={`Move ${card.id} up`}
+                className="icon-only"
+                disabled={cardIndex <= 0}
+                onClick={() => onReorderCard(card.id, cardIndex - 1)}
+                title="Move up"
+                type="button"
+              >
+                <ArrowUpAZ aria-hidden="true" size={14} />
+              </button>
+              <button
+                aria-label={`Move ${card.id} down`}
+                className="icon-only"
+                disabled={cardIndex < 0 || cardIndex >= zoneCards.length - 1}
+                onClick={() => onReorderCard(card.id, cardIndex + 1)}
+                title="Move down"
+                type="button"
+              >
+                <ArrowDownAZ aria-hidden="true" size={14} />
+              </button>
+              <button
+                className="mini-button"
+                onClick={() => onFlipCard(card.id)}
+                type="button"
+              >
+                <span>{card.faceUp ? "Down" : "Up"}</span>
+              </button>
+              <button
+                className="mini-button"
+                disabled={!targetZoneId}
+                onClick={() => onMoveCard(card.id)}
+                type="button"
+              >
+                <span>Move</span>
+              </button>
+              <button
+                aria-label={`Remove ${card.id}`}
+                className="icon-only"
+                disabled={isSetupLocked}
+                onClick={() => onRemoveCard(card.id)}
+                title="Remove card"
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={14} />
+              </button>
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -2746,6 +3290,17 @@ function countAssetUsage(
 
 function formatRemainingCopies(remaining: number) {
   return remaining >= 900 ? "unlimited" : `${remaining} left`;
+}
+
+function formatCardZoneKind(kind: CardZoneKind) {
+  return kind.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+}
+
+function parseZoneIdList(value: string) {
+  return value
+    .split(/[\s,]+/)
+    .map((zoneId) => zoneId.trim())
+    .filter(Boolean);
 }
 
 function getAssetPreviewUrl(asset: UploadedImageAsset) {

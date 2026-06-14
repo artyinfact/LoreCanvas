@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyBoard } from "../../src/engine/board";
+import { createEmptyCardDeckState } from "../../src/engine/cardDeck";
 import { createEmptyEntityState } from "../../src/engine/entity";
 import type { ResourceCategory } from "../../src/engine/entity";
 import {
@@ -206,6 +207,7 @@ describe("F-03 scenario store import/export", () => {
         ],
         assetPlacements: [],
         pawnSheets: {},
+        cardDeckState: createEmptyCardDeckState(),
         boardState: {},
         locationStates: {},
         edgeStates: {},
@@ -331,9 +333,22 @@ describe("F-03 scenario store import/export", () => {
       standardStackCount: 5,
       skiesDarkenPerStack: 1,
     });
+    expect(zoneCardLabels(imported.cardDeckState, "zone-shadow-discard")).toEqual([
+      "The Drums of War",
+      "The Wheels of Saruman",
+    ]);
+    expect(zoneCardLabels(imported.cardDeckState, "zone-objective-display")).toContain(
+      "Destroy the One Ring",
+    );
+    expect(zoneCardLabels(imported.cardDeckState, "zone-player-hand-1")).toHaveLength(4);
+    expect(zoneCardLabels(imported.cardDeckState, "zone-skies-darken-set-aside")).toHaveLength(5);
+    expect(zoneCardLabels(imported.cardDeckState, "zone-unused-cards")).toContain(
+      "Unused event cards",
+    );
     expect(reexported.board).toEqual(scenario.board);
     expect(reexported.entityState).toEqual(scenario.entityState);
     expect(reexported.assetPlacements).toEqual(scenario.assetPlacements);
+    expect(reexported.cardDeckState).toEqual(scenario.cardDeckState);
   });
 });
 
@@ -559,6 +574,7 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
       entities,
     },
     pawnSheets: {},
+    cardDeckState: buildLotrCardDeckState(),
     viewport: {
       boardZoom: 1,
       boardPan: {
@@ -567,6 +583,117 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
       },
     },
   });
+}
+
+function buildLotrCardDeckState() {
+  const cardAssetId = "card.collection.lotr-sliced";
+  let index = 1;
+  const card = (label: string, faceUp = false) => ({
+    id: `lotr-card-${index++}`,
+    assetId: cardAssetId,
+    label,
+    faceUp,
+    state: {
+      setupSource: "LOTRRule.pdf",
+    },
+  });
+
+  return {
+    zones: [
+      {
+        id: "zone-shadow-discard",
+        name: "Shadow Discard",
+        kind: "discard" as const,
+        state: {
+          setupRole: "shadowDiscard",
+        },
+        cards: [
+          card("The Drums of War", true),
+          card("The Wheels of Saruman", true),
+        ],
+      },
+      {
+        id: "zone-shadow-deck",
+        name: "Shadow Deck",
+        kind: "deck" as const,
+        state: {
+          setupRole: "shadowDeck",
+          unresolvedRandomDeployments: 9,
+        },
+        cards: Array.from({ length: 12 }, (_value, cardIndex) =>
+          card(`Remaining shadow card ${cardIndex + 1}`),
+        ),
+      },
+      {
+        id: "zone-objective-display",
+        name: "Objective Display",
+        kind: "objective" as const,
+        state: {
+          setupRole: "objectiveDisplay",
+        },
+        cards: [
+          card("Destroy the One Ring", true),
+          card("Selected objective 1", true),
+          card("Selected objective 2", true),
+          card("Selected objective 3", true),
+        ],
+      },
+      {
+        id: "zone-skies-darken-set-aside",
+        name: "Skies Darken Set Aside",
+        kind: "setAside" as const,
+        state: {
+          setupRole: "skiesDarken",
+        },
+        cards: Array.from({ length: 5 }, (_value, cardIndex) =>
+          card(`Skies Darken ${cardIndex + 1}`),
+        ),
+      },
+      {
+        id: "zone-player-deck",
+        name: "Player Deck",
+        kind: "deck" as const,
+        state: {
+          setupRole: "playerDeck",
+          eventCardsSelectedByPlayerCount: true,
+        },
+        cards: [
+          card("Selected event card 1"),
+          card("Selected event card 2"),
+          card("Region card 1"),
+          card("Region card 2"),
+          card("Region card 3"),
+          card("Region card 4"),
+        ],
+      },
+      {
+        id: "zone-player-hand-1",
+        name: "Player 1 Starting Hand",
+        kind: "hand" as const,
+        state: {
+          setupRole: "startingHand",
+        },
+        cards: [
+          card("Starting hand card 1"),
+          card("Starting hand card 2"),
+          card("Starting hand card 3"),
+          card("Starting hand card 4"),
+        ],
+      },
+      {
+        id: "zone-unused-cards",
+        name: "Unused Cards",
+        kind: "unused" as const,
+        state: {
+          setupRole: "outOfPlay",
+        },
+        cards: [
+          card("Unused event cards"),
+          card("Unused Skies Darken cards"),
+        ],
+      },
+    ],
+  };
 }
 
 function manifestEntryToAsset(entry: ManifestEntry): ScenarioAsset {
@@ -652,6 +779,17 @@ function findEntityState(
   entityId: string,
 ) {
   return entities.find((entity) => entity.id === entityId)?.state;
+}
+
+function zoneCardLabels(
+  cardDeckState: ScenarioPackage["cardDeckState"],
+  zoneId: string,
+) {
+  return (
+    cardDeckState.zones
+      .find((zone) => zone.id === zoneId)
+      ?.cards.map((card) => card.label ?? card.id) ?? []
+  );
 }
 
 const SETUP_LOCATIONS = [

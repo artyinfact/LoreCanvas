@@ -388,7 +388,7 @@
       "priority": 5,
       "title": "Manual Card Decks, Piles, and Zones",
       "description": "Close the biggest manual setup gap by adding a generic card-zone model before movement validation. CARD assets and card-slice collections must be representable as ordered card refs inside named zones such as deck, discard, hand, display, objective area, unused box, and temporary setup piles. The model must support manual setup operations for create zone, order cards, shuffle with deterministic test injection or explicit saved order, draw/deal/move cards between zones, flip face up/down, inspect a pile, and serialize through .lorecanvas packages. It must stay generic: no hard-coded LOTR deck names, card effects, or automatic rule resolution. LOTRRule.pdf setup coverage should drive validation: special shadow cards start in shadow discard, the remaining shadow cards form the shadow deck, objective cards are faceup in an objective display, Skies Darken cards can be set aside, event cards can be selected by player count, event and region cards can form the player deck, starting hands can be dealt, and unused cards can be kept out of play.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "F-03-ScenarioLoadSave",
         "F-04-ManualScenarioPrototype",
@@ -396,7 +396,34 @@
         "F-04D-MapEditorPolish"
       ],
       "verification": "npx vitest run tests/engine/cardDeck.test.ts tests/state/cardDeckStore.test.ts tests/engine/serialization.test.ts; browser verification for manual deck/zone editing, draw/deal/move/flip, save, load, and run-mode snapshot restore",
-      "evidence": null
+      "evidence": {
+        "completedAt": "2026-06-14",
+        "localVerification": [
+          "npm.cmd exec -- vitest run tests/engine/cardDeck.test.ts tests/state/cardDeckStore.test.ts tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts (4 files / 12 tests)",
+          "npm.cmd run check-types",
+          "npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/state/editRunMode.test.ts tests/state/scenarioStore.test.ts tests/state/cardDeckStore.test.ts tests/engine/cardDeck.test.ts tests/engine/serialization.test.ts (6 files / 34 tests)",
+          "npm.cmd run test (15 files / 62 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (harness valid, TypeScript green, 15 files / 62 tests)"
+        ],
+        "coverage": [
+          "src/engine/cardDeck.ts implements a generic ordered card-zone model with deck, discard, hand, display, objective, set-aside, unused, and setup zone kinds.",
+          "The card engine supports create/update/remove zones, add/remove card refs, move, draw, round-robin deal, flip face up/down, reorder, explicit/deterministic shuffle, search, and asset cleanup/counting without game-specific branches.",
+          "src/state/boardStore.ts stores cardDeckState, exposes edit/run-aware card-zone actions, includes card refs in asset copy counts, removes refs when CARD assets are deleted or recategorized, and freezes cardDeckState in setup snapshots.",
+          "src/engine/serialization.ts and src/state/scenarioStore.ts serialize/restore cardDeckState and validate card-zone ids, card refs, CARD asset references, duplicate card ids, and optional face ids.",
+          "src/ui/App.tsx adds a Cards workbench tab for creating zones, selecting/renaming/kind-editing zones, adding CARD assets, shuffling, drawing, dealing, moving, flipping, reordering, removing, and searching pile contents.",
+          "tests/state/scenarioStore.test.ts extends the local LOTR setup fixture snapshot with generic card zones for shadow discard/deck, objective display, Skies Darken set-aside, player deck, starting hand, and unused cards."
+        ],
+        "browserVerification": [
+          "Started Vite dev server at http://127.0.0.1:5173 and verified the app loaded with title LoreCanvas, no blocking dialog, and no console warn/error entries.",
+          "Opened Data Workbench through the map toolbar, selected the Cards tab, and confirmed the Card zones and Selected card zone regions rendered.",
+          "Created a Shadow Deck zone through the UI and confirmed the selected-zone detail panel exposed CARD asset insertion, Shuffle, Draw, Deal, and Search controls.",
+          "With no CARD assets imported in the empty browser scenario, Card/Shuffle/Draw/Deal controls correctly remained disabled while zone creation and inspection stayed interactive.",
+          "Browser Use blocked javascript: localStorage seeding by security policy, so browser verification did not bypass the app to seed CARD assets. File upload is not exposed by the Browser API in this flow; card data operations are covered by Vitest and serialization tests.",
+          "Browser screenshot capture timed out twice with Page.captureScreenshot, so no screenshot artifact was recorded for this pass."
+        ],
+        "notes": "F-05 closes the first card/deck setup gap for pure manual tabletop setup. The implementation is generic and does not encode LOTR card names, effects, or automatic setup resolution; LOTR requirements are represented only in ignored local fixture tests."
+      }
     },
     {
       "id": "F-06-DicePoolsAndRollState",

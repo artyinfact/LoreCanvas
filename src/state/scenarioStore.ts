@@ -19,6 +19,7 @@ import type {
 } from "./boardStore";
 import { revokeUnusedAssetObjectUrls, useBoardStore } from "./boardStore";
 import type { BoardState } from "../engine/board";
+import type { CardDeckState } from "../engine/cardDeck";
 import type { EntityState } from "../engine/entity";
 
 export interface BoardStoreScenarioState {
@@ -28,6 +29,7 @@ export interface BoardStoreScenarioState {
   assets: UploadedImageAsset[];
   assetPlacements: AssetPlacement[];
   pawnSheets: Record<string, PawnSheet>;
+  cardDeckState: CardDeckState;
   boardState: Record<string, unknown>;
   locationStates: Record<string, Record<string, unknown>>;
   edgeStates: Record<string, Record<string, unknown>>;
@@ -43,6 +45,7 @@ export type BoardStoreScenarioInput = Pick<
   | "assets"
   | "assetPlacements"
   | "pawnSheets"
+  | "cardDeckState"
   | "mode"
   | "boardState"
   | "locationStates"
@@ -64,6 +67,7 @@ export function exportBoardStoreScenario(
     assetPlacements: state.assetPlacements,
     entityState: state.entityState,
     pawnSheets: state.pawnSheets,
+    cardDeckState: state.cardDeckState,
     boardState: state.boardState,
     locationStates: state.locationStates,
     edgeStates: state.edgeStates,
@@ -74,6 +78,7 @@ export function exportBoardStoreScenario(
           assetPlacements: state.frozenSetup.assetPlacements,
           entityState: state.frozenSetup.entityState,
           pawnSheets: state.frozenSetup.pawnSheets,
+          cardDeckState: state.frozenSetup.cardDeckState,
           boardState: state.frozenSetup.boardState,
           locationStates: state.frozenSetup.locationStates,
           edgeStates: state.frozenSetup.edgeStates,
@@ -107,6 +112,7 @@ export function importBoardStoreScenario(
     assets: scenario.assets,
     assetPlacements: scenario.assetPlacements,
     pawnSheets: scenario.pawnSheets,
+    cardDeckState: scenario.cardDeckState,
     boardState: scenario.boardState,
     locationStates: scenario.locationStates,
     edgeStates: scenario.edgeStates,
@@ -117,6 +123,7 @@ export function importBoardStoreScenario(
           assetPlacements: scenario.frozenSetup.assetPlacements,
           entityState: scenario.frozenSetup.entityState,
           pawnSheets: scenario.frozenSetup.pawnSheets,
+          cardDeckState: scenario.frozenSetup.cardDeckState,
           boardState: scenario.frozenSetup.boardState,
           locationStates: scenario.frozenSetup.locationStates,
           edgeStates: scenario.frozenSetup.edgeStates,

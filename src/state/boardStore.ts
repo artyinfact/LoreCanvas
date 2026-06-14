@@ -12,6 +12,23 @@ import {
 } from "../engine/board";
 import type { BoardEdge, BoardLocation, BoardState } from "../engine/board";
 import {
+  addCardsToZone,
+  addCardZone as addCardZoneToState,
+  countCardsByAssetId,
+  createEmptyCardDeckState,
+  dealCards,
+  drawCards,
+  flipCards,
+  moveCardsBetweenZones,
+  removeCardsByAssetId,
+  removeCardsFromZone,
+  removeCardZone,
+  reorderCardInZone,
+  shuffleCardZone as shuffleCardZoneState,
+  updateCardZone as updateCardZoneState,
+} from "../engine/cardDeck";
+import type { CardDeckState, CardZoneKind } from "../engine/cardDeck";
+import {
   canPlaceAssetForCategory,
   clearLocationBindings,
   createEmptyEntityState,
@@ -42,6 +59,12 @@ export interface UploadedImageAsset {
   maxCopies: number;
   placementWidth: number;
   placementHeight: number;
+  sourcePath?: string;
+  manifestPath?: string;
+  sourceUrl?: string;
+  sourceHash?: string;
+  kind?: string;
+  faces?: string[];
 }
 
 export interface AssetMediaPatch {
@@ -97,6 +120,7 @@ export interface BoardStore {
   assets: UploadedImageAsset[];
   assetPlacements: AssetPlacement[];
   pawnSheets: Record<string, PawnSheet>;
+  cardDeckState: CardDeckState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -165,6 +189,37 @@ export interface BoardStore {
     assetId: string,
     delta: number,
   ) => void;
+  createCardZone: (name: string, kind: CardZoneKind) => string | null;
+  updateCardZone: (
+    zoneId: string,
+    patch: Partial<{
+      kind: CardZoneKind;
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  deleteCardZone: (zoneId: string) => void;
+  addCardAssetToZone: (zoneId: string, assetId: string) => string | null;
+  removeCardsFromCardZone: (zoneId: string, cardIds: string[]) => void;
+  moveCardsBetweenCardZones: (
+    fromZoneId: string,
+    toZoneId: string,
+    cardIds: string[],
+    toIndex?: number,
+  ) => void;
+  drawCardsToZone: (fromZoneId: string, toZoneId: string, count: number) => void;
+  dealCardsToZones: (
+    fromZoneId: string,
+    toZoneIds: string[],
+    countPerZone: number,
+  ) => void;
+  shuffleCardZone: (zoneId: string, order?: string[]) => void;
+  flipCardsInZone: (
+    zoneId: string,
+    cardIds: string[],
+    faceUp?: boolean,
+  ) => void;
+  reorderCardInZone: (zoneId: string, cardId: string, toIndex: number) => void;
   setBoardZoom: (zoom: number) => void;
   setBoardPan: (pan: BoardPan) => void;
   resetBoardView: () => void;
@@ -194,6 +249,7 @@ export interface FrozenSetupSnapshot {
   assets: UploadedImageAsset[];
   assetPlacements: AssetPlacement[];
   pawnSheets: Record<string, PawnSheet>;
+  cardDeckState: CardDeckState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -208,6 +264,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
   assets: [],
   assetPlacements: [],
   pawnSheets: {},
+  cardDeckState: createEmptyCardDeckState(),
   boardState: {},
   locationStates: {},
   edgeStates: {},
@@ -391,6 +448,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           removePawnSheetsByPlacementId(state.pawnSheets, removedPlacementIds),
           assetId,
         ),
+        cardDeckState: removeCardsByAssetId(state.cardDeckState, assetId),
         selectedAssetId:
           state.selectedAssetId === assetId ? null : state.selectedAssetId,
         selectedPlacementId:
@@ -477,6 +535,10 @@ export const useBoardStore = create<BoardStore>((set) => ({
                 (placement) => placement.assetId !== assetId,
               ),
         ),
+        cardDeckState:
+          category === "CARD"
+            ? state.cardDeckState
+            : removeCardsByAssetId(state.cardDeckState, assetId),
         entityState: {
           entities: state.entityState.entities
             .filter((entity) => !removedEntityIds.has(entity.id))
@@ -591,6 +653,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
           state.pawnSheets,
           removedPlacementIds,
         ),
+        cardDeckState: removeCardsByAssetId(state.cardDeckState, assetId),
         selectedAssetId: asset.id,
         selectedPlacementId:
           state.selectedPlacementId &&
@@ -1359,6 +1422,258 @@ export const useBoardStore = create<BoardStore>((set) => ({
         lastError: null,
       };
     }),
+  createCardZone: (name, kind) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const id = createSequentialId(
+        "zone",
+        state.cardDeckState.zones.map((zone) => zone.id),
+      );
+
+      try {
+        const cardDeckState = addCardZoneToState(state.cardDeckState, {
+          id,
+          name,
+          kind,
+        });
+
+        createdId = id;
+
+        return {
+          cardDeckState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  updateCardZone: (zoneId, patch) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          cardDeckState: updateCardZoneState(state.cardDeckState, zoneId, patch),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  deleteCardZone: (zoneId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          cardDeckState: removeCardZone(state.cardDeckState, zoneId),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  addCardAssetToZone: (zoneId, assetId) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const asset = state.assets.find((candidate) => candidate.id === assetId);
+
+      if (!asset) {
+        return {
+          lastError: `Image asset '${assetId}' was not found.`,
+        };
+      }
+
+      if (asset.category !== "CARD") {
+        return {
+          lastError: `${asset.category} assets cannot be added to card zones.`,
+        };
+      }
+
+      if (countAssetUsage(state, assetId) >= getAssetCopyLimit(state, assetId)) {
+        return {
+          lastError: getAssetLimitMessage(state, assetId),
+        };
+      }
+
+      const cardId = createSequentialId(
+        "card",
+        getCardDeckCardIds(state.cardDeckState),
+      );
+
+      try {
+        const cardDeckState = addCardsToZone(state.cardDeckState, zoneId, [
+          {
+            id: cardId,
+            assetId,
+            label: asset.name,
+            faceUp: false,
+          },
+        ]);
+
+        createdId = cardId;
+
+        return {
+          cardDeckState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  removeCardsFromCardZone: (zoneId, cardIds) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          cardDeckState: removeCardsFromZone(state.cardDeckState, zoneId, cardIds),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  moveCardsBetweenCardZones: (fromZoneId, toZoneId, cardIds, toIndex) =>
+    set((state) => {
+      try {
+        return {
+          cardDeckState: moveCardsBetweenZones(state.cardDeckState, {
+            cardIds,
+            fromZoneId,
+            toIndex,
+            toZoneId,
+          }),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  drawCardsToZone: (fromZoneId, toZoneId, count) =>
+    set((state) => {
+      try {
+        return {
+          cardDeckState: drawCards(state.cardDeckState, {
+            count,
+            fromZoneId,
+            toZoneId,
+          }),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  dealCardsToZones: (fromZoneId, toZoneIds, countPerZone) =>
+    set((state) => {
+      try {
+        return {
+          cardDeckState: dealCards(state.cardDeckState, {
+            countPerZone,
+            fromZoneId,
+            toZoneIds,
+          }),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  shuffleCardZone: (zoneId, order) =>
+    set((state) => {
+      try {
+        return {
+          cardDeckState: shuffleCardZoneState(state.cardDeckState, zoneId, {
+            order,
+          }),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  flipCardsInZone: (zoneId, cardIds, faceUp) =>
+    set((state) => {
+      try {
+        return {
+          cardDeckState: flipCards(state.cardDeckState, zoneId, cardIds, faceUp),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  reorderCardInZone: (zoneId, cardId, toIndex) =>
+    set((state) => {
+      try {
+        return {
+          cardDeckState: reorderCardInZone(
+            state.cardDeckState,
+            zoneId,
+            cardId,
+            toIndex,
+          ),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
   setBoardZoom: (zoom) =>
     set({
       boardZoom: clampNumber(zoom, 0.5, 4),
@@ -1719,7 +2034,7 @@ function validatePawnSheetAsset(
 }
 
 function countAssetUsage(
-  state: Pick<BoardStore, "assetPlacements" | "pawnSheets">,
+  state: Pick<BoardStore, "assetPlacements" | "pawnSheets" | "cardDeckState">,
   assetId: string,
 ) {
   let count = state.assetPlacements.filter(
@@ -1737,6 +2052,8 @@ function countAssetUsage(
     count +=
       sheet.counters.find((counter) => counter.assetId === assetId)?.count ?? 0;
   }
+
+  count += countCardsByAssetId(state.cardDeckState, assetId);
 
   return count;
 }
@@ -1759,6 +2076,12 @@ function getAssetLimitMessage(
   return asset
     ? `${asset.name} has reached its ${asset.maxCopies} copy limit.`
     : `Image asset '${assetId}' was not found.`;
+}
+
+function getCardDeckCardIds(cardDeckState: CardDeckState) {
+  return cardDeckState.zones.flatMap((zone) =>
+    zone.cards.map((card) => card.id),
+  );
 }
 
 function reconcilePawnSheets(
@@ -1823,6 +2146,7 @@ function createFrozenSetupSnapshot(
     | "assets"
     | "assetPlacements"
     | "pawnSheets"
+    | "cardDeckState"
     | "boardState"
     | "locationStates"
     | "edgeStates"
@@ -1836,6 +2160,7 @@ function createFrozenSetupSnapshot(
     assets: state.assets,
     assetPlacements: state.assetPlacements,
     pawnSheets: state.pawnSheets,
+    cardDeckState: state.cardDeckState,
     boardState: state.boardState,
     locationStates: state.locationStates,
     edgeStates: state.edgeStates,

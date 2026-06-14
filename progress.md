@@ -367,3 +367,16 @@
 - Browser plugin smoke verification against `http://127.0.0.1:5173/`: Maker page loaded, Creation and Context rails rendered, Pixi canvas mounted at `638 x 498` CSS pixels / `1276 x 996` backing pixels, and console errors were 0. Screenshot capture timed out; no browser-side file-upload validation was run in this pass.
 - Current next pending feature remains `F-05-CardDeckZones`.
 - No git staging, commit, or push was performed.
+
+## 2026-06-14 F-05 Card Deck Zones
+
+- Completed `F-05-CardDeckZones` as the first manual setup component after the LOTR setup harness replan.
+- Added `src/engine/cardDeck.ts`, a generic ordered card-zone engine for deck, discard, hand, display, objective, set-aside, unused, and setup piles. It supports zone create/update/remove, add/remove refs, move, draw, round-robin deal, flip, reorder, explicit/deterministic shuffle, search, asset cleanup, and asset copy counting without game-specific branches.
+- Added `cardDeckState` to the board store, frozen setup snapshots, `.lorecanvas` serialization, and scenario import/export. Store actions are edit/run aware: setup creation stays blocked in Run mode, while runtime card movement/flip/shuffle/draw/deal can mutate the running snapshot without changing the frozen setup.
+- Added a Cards tab to the Data Workbench. It can create zones, inspect/rename/change zone kind, add CARD assets to zones, shuffle, draw, deal, search a pile, reorder cards, flip cards, move cards between zones, and remove cards in Edit mode.
+- Extended the ignored local LOTR setup fixture snapshot with generic card zones: shadow discard, shadow deck, objective display, Skies Darken set-aside, player deck, starting hand, and unused cards. Product code still has no LOTR-specific branches.
+- Verification passed before final harness: `npm.cmd exec -- vitest run tests/engine/cardDeck.test.ts tests/state/cardDeckStore.test.ts tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts` (4 files / 12 tests), `npm.cmd run check-types`, focused store/engine run (6 files / 34 tests), `npm.cmd run test` (15 files / 62 tests), and `npm.cmd run build`.
+- Browser plugin verification against `http://127.0.0.1:5173/`: app loaded with title `LoreCanvas`, no blocking dialog, console warn/error count 0, Data Workbench opened, Cards tab rendered, and a `Shadow Deck` zone was created through the UI. The selected-zone panel exposed CARD insertion, Shuffle, Draw, Deal, and Search controls; with no CARD assets imported, Card/Shuffle/Draw/Deal correctly stayed disabled.
+- Browser Use blocked `javascript:` localStorage seeding by security policy, and the Browser API for this flow does not expose file upload, so browser validation did not seed CARD assets. Card data workflows are covered by Vitest and serialization tests instead. Browser screenshot capture also timed out twice with `Page.captureScreenshot`.
+- Final verification passed: `.\init.ps1` reported valid harness state, TypeScript green, and 15 Vitest files / 62 tests passed. Current next pending feature is `F-06-DicePoolsAndRollState`.
+- No git staging, commit, or push was performed.
