@@ -21,15 +21,16 @@ import type {
 } from "../../src/engine/serialization";
 import {
   applyScenarioPackageToBoardStore,
+  exportBoardStorePortableScenario,
   exportBoardStoreScenario,
   importBoardStoreScenario,
 } from "../../src/state/scenarioStore";
 import { useBoardStore } from "../../src/state/boardStore";
 
-const LOTR_PACK_DIR = path.resolve("local-fixtures/lotr/LotR-FotF");
-const LOTR_MANIFEST_PATH = path.join(LOTR_PACK_DIR, "manifest.json");
-const LOTR_RULE_PATH = path.join(LOTR_PACK_DIR, "LOTRRule.pdf");
-const LOTR_DICE_PLAN_PATH = path.join(LOTR_PACK_DIR, "dice-face-plan.json");
+export const LOTR_PACK_DIR = path.resolve("local-fixtures/lotr/LotR-FotF");
+export const LOTR_MANIFEST_PATH = path.join(LOTR_PACK_DIR, "manifest.json");
+export const LOTR_RULE_PATH = path.join(LOTR_PACK_DIR, "LOTRRule.pdf");
+export const LOTR_DICE_PLAN_PATH = path.join(LOTR_PACK_DIR, "dice-face-plan.json");
 
 describe("F-03 scenario store import/export", () => {
   beforeEach(() => {
@@ -163,6 +164,102 @@ describe("F-03 scenario store import/export", () => {
       boardPan: {
         x: 20,
         y: -10,
+      },
+    });
+  });
+
+  it("exports a portable scenario package with embedded asset data", async () => {
+    const board = {
+      background: {
+        assetId: "asset-board",
+        name: "Board.png",
+        url: "blob:board",
+        mimeType: "image/png",
+      },
+      locations: [],
+      edges: [],
+    };
+    const asset = {
+      id: "asset-board",
+      category: "BOARD" as const,
+      name: "Board.png",
+      url: "blob:board",
+      thumbnailUrl: "blob:board-thumb",
+      mimeType: "image/png",
+      size: 100,
+      maxCopies: 1,
+      placementWidth: 64,
+      placementHeight: 64,
+    };
+    const loadAssetData = vi.fn(async () => ({
+      thumbnailUrl: "data:image/png;base64,thumbnail",
+      url: "data:image/png;base64,board",
+    }));
+
+    const portable = await exportBoardStorePortableScenario(
+      {
+        mode: "run",
+        assets: [asset],
+        board,
+        assetPlacements: [],
+        entityState: createEmptyEntityState(),
+        pawnSheets: {},
+        cardDeckState: createEmptyCardDeckState(),
+        diceState: createEmptyDiceState(),
+        slotState: createEmptySlotState(),
+        stackState: createEmptyStackState(),
+        boardState: {},
+        locationStates: {},
+        edgeStates: {},
+        frozenSetup: {
+          assets: [asset],
+          board,
+          assetPlacements: [],
+          entityState: createEmptyEntityState(),
+          pawnSheets: {},
+          cardDeckState: createEmptyCardDeckState(),
+          diceState: createEmptyDiceState(),
+          slotState: createEmptySlotState(),
+          stackState: createEmptyStackState(),
+          boardState: {},
+          locationStates: {},
+          edgeStates: {},
+          boardZoom: 1,
+          boardPan: { x: 0, y: 0 },
+        },
+        boardZoom: 1,
+        boardPan: { x: 0, y: 0 },
+      },
+      {
+        title: "Portable Scenario",
+      },
+      loadAssetData,
+    );
+
+    expect(loadAssetData).toHaveBeenCalledTimes(1);
+    expect(portable.assets[0]).toMatchObject({
+      thumbnailUrl: "data:image/png;base64,thumbnail",
+      url: "data:image/png;base64,board",
+    });
+    expect(portable.board.background?.url).toBe("data:image/png;base64,board");
+    expect(portable.frozenSetup?.assets[0]).toMatchObject({
+      thumbnailUrl: "data:image/png;base64,thumbnail",
+      url: "data:image/png;base64,board",
+    });
+    expect(portable.frozenSetup?.board.background?.url).toBe(
+      "data:image/png;base64,board",
+    );
+    expect(importBoardStoreScenario(serializeScenarioPackage(portable))).toMatchObject({
+      mode: "run",
+      assets: [
+        expect.objectContaining({
+          url: "data:image/png;base64,board",
+        }),
+      ],
+      board: {
+        background: expect.objectContaining({
+          url: "data:image/png;base64,board",
+        }),
       },
     });
   });
@@ -315,12 +412,22 @@ describe("F-03 scenario store import/export", () => {
     expect(entityLocation(imported.entityState.entities, "entity-eye-of-sauron")).toBe(
       "loc-eriador",
     );
-    expect(entityLocation(imported.entityState.entities, "entity-threat-rate-marker")).toBe(
-      "loc-threat-track-dot",
-    );
-    expect(entityLocation(imported.entityState.entities, "entity-hope-marker")).toBe(
-      "loc-hope-track-dot",
-    );
+    expect(
+      entityLocation(imported.entityState.entities, "entity-threat-rate-marker"),
+    ).toBeUndefined();
+    expect(
+      entityLocation(imported.entityState.entities, "entity-hope-marker"),
+    ).toBeUndefined();
+    expect(
+      imported.assetPlacements.find(
+        (placement) => placement.id === "placement-threat-rate-marker",
+      ),
+    ).not.toHaveProperty("locationId");
+    expect(
+      imported.assetPlacements.find(
+        (placement) => placement.id === "placement-hope-marker",
+      ),
+    ).not.toHaveProperty("locationId");
     expect(imported.slotState.slots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -445,7 +552,7 @@ describe("F-03 scenario store import/export", () => {
   });
 });
 
-interface ManifestEntry {
+export interface ManifestEntry {
   id: string;
   category: ResourceCategory;
   displayName?: string;
@@ -459,7 +566,7 @@ interface ManifestEntry {
   faces?: string[];
 }
 
-interface Manifest {
+export interface Manifest {
   packageName: string;
   entries: ManifestEntry[];
 }
@@ -480,7 +587,7 @@ interface StackInput {
   army?: string;
 }
 
-function readManifest(): Manifest {
+export function readManifest(): Manifest {
   return JSON.parse(readFileSync(LOTR_MANIFEST_PATH, "utf8")) as Manifest;
 }
 
@@ -488,7 +595,7 @@ function readDiceFacePlan(): DiceFacePlan {
   return JSON.parse(readFileSync(LOTR_DICE_PLAN_PATH, "utf8")) as DiceFacePlan;
 }
 
-function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
+export function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
   const assets = manifest.entries.map(manifestEntryToAsset);
   const placements: ScenarioAssetPlacement[] = [];
   const entities = [];
@@ -540,16 +647,18 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
 
   const placeStack = (
     input: StackInput,
-    options: { createStack?: boolean } = {},
+    options: { bindLocation?: boolean; createStack?: boolean } = {},
   ) => {
     const placementId = `placement-${input.id}`;
     const entityId = `entity-${input.id}`;
     const category = assetCategory(assets, input.assetId);
+    const bindLocation = options.bindLocation ?? true;
     const state = {
       assetId: input.assetId,
       placementId,
       role: input.role,
       count: input.count,
+      setupAnchorLocationId: input.locationId,
       ...(input.army ? { army: input.army } : {}),
       setupSource: "LOTRRule.pdf",
     };
@@ -559,7 +668,7 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
       assetId: input.assetId,
       category,
       entityId,
-      locationId: input.locationId,
+      ...(bindLocation ? { locationId: input.locationId } : {}),
       x: locationPoint(input.locationId).x,
       y: locationPoint(input.locationId).y,
       width: 56,
@@ -568,7 +677,7 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
     entities.push({
       id: entityId,
       type: category,
-      locationId: input.locationId,
+      ...(bindLocation ? { locationId: input.locationId } : {}),
       state:
         options.createStack === false
           ? state
@@ -634,7 +743,12 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
   }
 
   for (const marker of MARKERS) {
-    placeStack(marker, { createStack: false });
+    const isLocationMarker = marker.id === "eye-of-sauron";
+
+    placeStack(marker, {
+      bindLocation: isLocationMarker,
+      createStack: false,
+    });
     slots.push({
       id: `slot-${marker.id}`,
       name: marker.role,

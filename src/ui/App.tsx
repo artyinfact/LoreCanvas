@@ -25,6 +25,7 @@ import {
   Play,
   Pencil,
   RotateCcw,
+  Save,
   Search,
   Shield,
   Trash2,
@@ -71,8 +72,10 @@ import type { Entity, JsonRecord, ResourceCategory } from "../engine/entity";
 import { serializeScenarioPackage } from "../engine/serialization";
 import {
   applyScenarioPackageToBoardStore,
+  exportBoardStorePortableScenario,
   exportBoardStoreScenario,
 } from "../state/scenarioStore";
+import type { PortableAssetData } from "../state/scenarioStore";
 import {
   createImportBatchId,
   createImportedImageAsset,
@@ -423,6 +426,47 @@ export function App() {
       setLastError(getErrorMessage(error));
     }
   }, [setLastError]);
+  const handleExportScenarioFile = useCallback(async () => {
+    try {
+      const scenario = await exportBoardStorePortableScenario(
+        useBoardStore.getState(),
+        {
+          exportedAt: new Date().toISOString(),
+        },
+        loadPortableAssetData,
+      );
+
+      downloadTextFile(
+        getScenarioFileName(scenario.metadata.title),
+        serializeScenarioPackage(scenario),
+        "application/lorecanvas+json",
+      );
+    } catch (error) {
+      setLastError(getErrorMessage(error));
+    }
+  }, [setLastError]);
+  const handleImportScenarioFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+
+      input.value = "";
+
+      if (!file) {
+        return;
+      }
+
+      try {
+        const source = await file.text();
+
+        applyScenarioPackageToBoardStore(source);
+        localStorage.setItem(LOCAL_SCENARIO_STORAGE_KEY, source);
+      } catch (error) {
+        setLastError(getErrorMessage(error));
+      }
+    },
+    [setLastError],
+  );
   const [collapsedSections, setCollapsedSections] = useState<
     Record<string, boolean>
   >({});
@@ -514,7 +558,7 @@ export function App() {
             onClick={handleSaveScenario}
             type="button"
           >
-            <Download aria-hidden="true" size={17} />
+            <Save aria-hidden="true" size={17} />
             <span>Save</span>
           </button>
           <button
@@ -525,6 +569,24 @@ export function App() {
             <FileInput aria-hidden="true" size={17} />
             <span>Load</span>
           </button>
+          <button
+            className="icon-button"
+            onClick={handleExportScenarioFile}
+            type="button"
+          >
+            <Download aria-hidden="true" size={17} />
+            <span>Export</span>
+          </button>
+          <label className="icon-button scenario-import-button">
+            <Upload aria-hidden="true" size={17} />
+            <span>Import</span>
+            <input
+              accept=".lorecanvas,application/json,application/lorecanvas+json"
+              aria-label="Import scenario package"
+              onChange={handleImportScenarioFile}
+              type="file"
+            />
+          </label>
         </div>
       </header>
 
@@ -5354,6 +5416,88 @@ function getTokenPlacementCount(entity: Entity | null) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.max(0, Math.trunc(value))
     : 1;
+}
+
+async function loadPortableAssetData(
+  asset: UploadedImageAsset,
+): Promise<PortableAssetData | null> {
+  const data: PortableAssetData = {};
+
+  if (isObjectUrl(asset.url)) {
+    data.url = await readUrlAsDataUrl(asset.url);
+  }
+
+  if (asset.thumbnailUrl && isObjectUrl(asset.thumbnailUrl)) {
+    data.thumbnailUrl = await readUrlAsDataUrl(asset.thumbnailUrl);
+  }
+
+  return data.url || data.thumbnailUrl ? data : null;
+}
+
+function isObjectUrl(url: string) {
+  return url.startsWith("blob:");
+}
+
+async function readUrlAsDataUrl(url: string) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Unable to read asset '${url}' for export.`);
+  }
+
+  return blobToDataUrl(await response.blob());
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.addEventListener("load", () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error("Unable to encode asset for export."));
+    });
+    reader.addEventListener("error", () => {
+      reject(reader.error ?? new Error("Unable to encode asset for export."));
+    });
+    reader.readAsDataURL(blob);
+  });
+}
+
+function downloadTextFile(
+  filename: string,
+  contents: string,
+  mimeType: string,
+) {
+  const blob = new Blob([contents], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function getScenarioFileName(title: unknown) {
+  const rawTitle =
+    typeof title === "string" && title.trim()
+      ? title.trim()
+      : "lorecanvas-scenario";
+  const base = rawTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  return `${base || "lorecanvas-scenario"}-${stamp}.lorecanvas`;
 }
 
 function getStateBoolean(state: JsonRecord, key: string) {

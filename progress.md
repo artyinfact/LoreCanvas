@@ -423,3 +423,25 @@
 - Browser plugin smoke verification against `http://127.0.0.1:5173/`: app loaded with title `LoreCanvas`, Data Workbench opened, Slots and Stacks tabs rendered, Slots showed the new slot form/prompt, Stacks showed asset search, supply-zone input, and stack prompt, and browser console warn/error count was 0.
 - Implementation note: fixed a real merge bug found by `tests/state/pawnStackStore.test.ts`; full-stack moves into an occupied matching container now preserve the updated target entity count after deleting the source visual.
 - No git staging, commit, or push was performed.
+
+## 2026-06-14 F-09 LOTR Manual Setup Validation
+
+- Completed `F-09-LOTR-ManualSetupValidation` by adding `tests/e2e/lotr-manual-setup.test.ts`.
+- The E2E imports the ignored local LotR-FotF manifest, builds the existing generic setup snapshot, applies it to the board store, and validates the setup surface end to end: board/background, Locations, Edges, card zones/decks/hands/display/set-aside/unused piles, dice definitions and pools, tile/marker slots, pawn/token stacks, supply pools, and unresolved random shadow deployment instructions.
+- Updated the LOTR fixture representation for manual track tokens: threat and hope markers are now TOKEN placements without `locationId`, owned by generic track slots. This preserves free/global token placement behavior and avoids treating those tokens like PAWN objects that must bind to graph Locations. The Eye marker remains Location-owned in Eriador.
+- The F-09 E2E enters Run mode, verifies the frozen setup snapshot matches the edit setup, mutates runtime stack/card state, confirms frozen setup is unchanged, serializes the running scenario, imports it back, reapplies it to the store, and confirms both runtime state and frozen setup survive the round-trip.
+- The E2E scans `src/**/*.ts` and `src/**/*.tsx` for LOTR-specific terms such as `lotr`, `sauron`, `mordor`, `gondor`, `nazgul`, `frodo`, and `saruman`, confirming product code still has no fixture-specific branches.
+- Added ready-to-use file package export/import on top of the existing browser-local Save/Load:
+  - `src/state/scenarioStore.ts` now exposes `exportBoardStorePortableScenario`, embedding uploaded `blob:` asset URLs and matching board background URLs as `data:` URLs for current and frozen setup assets.
+  - `src/ui/App.tsx` keeps local `Save` / `Load` and adds topbar `Export` / `Import` controls for `.lorecanvas` files.
+  - Focused Vitest coverage proves portable export embeds current assets, frozen setup assets, and board backgrounds.
+  - Browser plugin could load the page and inspect controls, but Codex in-app Browser does not support downloads. Playwright CLI fallback verified upload Board image -> Export `.lorecanvas` -> exported asset/background are `data:image/svg+xml;base64,...` -> clear/reload -> Import file -> Images1 restored, with no framework overlay and no console warn/error. Screenshot artifact: `C:\Users\xyzg\AppData\Local\Temp\lorecanvas-qa-fileflow-20260614231300\imported-fileflow.png`.
+- Verification passed so far:
+  - `npm.cmd exec -- vitest run tests/e2e/lotr-manual-setup.test.ts` -> 1 file / 5 tests
+  - `npm.cmd exec -- vitest run tests/state/scenarioStore.test.ts tests/engine/serialization.test.ts tests/state/boardStore.test.ts` -> 3 files / 29 tests
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 22 files / 90 tests
+  - `npm.cmd run build`
+  - `.\init.ps1` -> harness valid, TypeScript green, 22 files / 90 tests
+- Current next pending feature is `F-10-MovementValidation`.
+- No git staging, commit, or push was performed.

@@ -546,7 +546,7 @@
       "priority": 9,
       "title": "LOTR FotF Manual Setup Validation",
       "description": "Use the ignored local fixture local-fixtures/lotr/LotR-FotF to validate that the generic manual setup surface can express the setup section of LOTRRule.pdf end to end. The test must import the manifest, create the board, Locations, Edges, card zones/decks, dice definitions, tile/marker slots, pawn stacks, supply pools, objective display, player hands, set-aside/unused cards, and unresolved random setup instructions where human choice or randomness is required. It must then enter Run mode, freeze setup, round-trip through save/load, and prove no product code contains LOTR-specific branches. This is setup validation only; it must not implement movement validation, automatic shadow-card resolution, battle/search rules, tracker automation, rule triggers, or Cut-in rendering.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "F-03-ScenarioLoadSave",
         "F-04-ManualScenarioPrototype",
@@ -556,7 +556,27 @@
         "F-08-PawnStacksAndSupply"
       ],
       "verification": "npx vitest run tests/e2e/lotr-manual-setup.test.ts",
-      "evidence": null
+      "evidence": {
+        "completedAt": "2026-06-14",
+        "localVerification": [
+          "npm.cmd exec -- vitest run tests/e2e/lotr-manual-setup.test.ts (1 file / 5 tests, including the reused scenario-store fixture tests)",
+          "npm.cmd exec -- vitest run tests/state/scenarioStore.test.ts tests/engine/serialization.test.ts tests/state/boardStore.test.ts (3 files / 29 tests)",
+          "npm.cmd run check-types",
+          "npm.cmd run test (22 files / 90 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (harness valid, TypeScript green, 22 files / 90 tests)"
+        ],
+        "coverage": [
+          "tests/e2e/lotr-manual-setup.test.ts imports the ignored LotR-FotF manifest, builds the generic setup scenario, applies it to the board store, and validates board background, Locations, Edges, card zones, dice definitions/pools, slot state, stack state, supply pools, and unresolved random shadow setup instructions.",
+          "The LOTR fixture now represents threat and hope track markers as TOKEN placements without locationId while preserving track-slot ownership, proving global/manual setup tokens are not forced into graph Locations like PAWN objects.",
+          "The E2E enters Run mode and verifies the frozen setup snapshot equals the edit-mode setup for assets, board, placements, entities, cardDeckState, diceState, slotState, stackState, state maps, and viewport.",
+          "The E2E mutates runtime stack and card state, confirms the frozen setup is unchanged, serializes the running scenario, imports it back, reapplies it to the store, and confirms runtime plus frozen setup survive the round-trip.",
+          "src/state/scenarioStore.ts exposes exportBoardStorePortableScenario for file export; uploaded blob: asset URLs and matching board backgrounds are embedded as data: URLs in current and frozen setup assets, with focused Vitest coverage.",
+          "src/ui/App.tsx keeps browser-local Save/Load and adds topbar Export/Import .lorecanvas file controls. Playwright CLI fallback verified uploading a Board image, exporting a .lorecanvas file with data: asset/background URLs, clearing/reloading the page, importing the file, and restoring Images1 without console warn/error or framework overlay.",
+          "The E2E recursively scans src/**/*.ts and src/**/*.tsx for LOTR-specific terms such as lotr, sauron, mordor, gondor, nazgul, frodo, and saruman to prove product code still has no fixture-specific branches."
+        ],
+        "notes": "F-09 does not add movement validation, automatic setup parsing, shadow-card resolution, battle/search rules, tracker automation, rule triggers, or Cut-in rendering. Product implementation remains generic; LOTR semantics stay in ignored local fixture tests. The ready-to-use manual path now has real .lorecanvas file export/import in addition to browser-local Save/Load."
+      }
     },
     {
       "id": "F-10-MovementValidation",
