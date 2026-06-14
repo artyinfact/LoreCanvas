@@ -393,3 +393,33 @@
 - Browser plugin verification against `http://127.0.0.1:5173/`: app loaded with title `LoreCanvas`, Data Workbench opened, Dice tab rendered die metadata/face-folder/pool/Last Roll regions, `Smoke Pool` was created through the UI, and browser console warn/error count was 0. With no TOKEN dice assets imported in the empty browser scenario, die creation and roll controls correctly stayed disabled; folder/face asset workflows are covered by Vitest and fixture tests. Browser screenshot capture timed out, so no screenshot artifact was recorded.
 - Final verification passed: `.\init.ps1` reported valid harness state, TypeScript green, and 17 Vitest files / 69 tests passed. Current next pending feature is `F-07-TileMarkerSlots`.
 - No git staging, commit, or push was performed.
+
+## 2026-06-14 F-07 Tile/Marker Slots And F-08 Pawn Stacks
+
+- Completed `F-07-TileMarkerSlots` and `F-08-PawnStacksAndSupply` as the remaining generic manual setup surfaces before the full LOTR validation pass.
+- Corrected `feature_list.json` so the already-evidenced `F-06-DicePoolsAndRollState` is marked `completed`; `F-09-LOTR-ManualSetupValidation` is now the next pending feature.
+- Added `src/engine/slot.ts`, a generic slot model for Location, track, and display slots. Slots can assign, clear, and move TILE/TOKEN assets while preserving named owner metadata and arbitrary state.
+- Added `src/engine/stack.ts`, a generic PAWN/TOKEN stack model with supply zones, count/capacity validation, split, merge, move, and asset/container cleanup.
+- Extended `src/state/boardStore.ts` with `slotState` and `stackState`, including managed visual placements/entities, Location-owned slot/stack sync, count badge synchronization, partial stack moves, stack merges, and cleanup on asset/Location/placement deletion.
+- Extended `src/engine/serialization.ts` and `src/state/scenarioStore.ts` so `.lorecanvas` packages preserve and validate slot/stack state and frozen setup snapshots, while legacy packages normalize to empty slot/stack state.
+- Updated `src/ui/App.tsx`, `src/ui/BoardCanvas.tsx`, and `src/styles.css` with new Data Workbench tabs:
+  - `Slots` creates Location/track/display slots, assigns TILE/TOKEN assets, moves slot assets, selects managed placements, and deletes slots.
+  - `Stacks` has a searchable PAWN/TOKEN asset picker, honors the selected left-rail asset, manages supply zones, creates stacks, adjusts counts, moves all or part of a stack, selects mapped visuals, and resizes mapped stack placements.
+  - BoardCanvas now renders count badges for any placement with numeric `entity.state.count`, including PAWN stacks.
+- Extended the ignored LOTR setup fixture snapshot in `tests/state/scenarioStore.test.ts`: Eye/hope/threat markers are represented through generic slots; friendly/shadow/Nazgul setup groups and friendly/shadow supplies are represented through generic stackState. Product code still has no LOTR-specific branches.
+- Added focused coverage:
+  - `tests/engine/slot.test.ts`
+  - `tests/engine/stack.test.ts`
+  - `tests/state/slotStore.test.ts`
+  - `tests/state/pawnStackStore.test.ts`
+  - updated `tests/engine/serialization.test.ts` and `tests/state/scenarioStore.test.ts`
+- Verification passed:
+  - `npm.cmd exec -- vitest run tests/engine/slot.test.ts tests/engine/stack.test.ts tests/state/slotStore.test.ts tests/state/pawnStackStore.test.ts tests/engine/serialization.test.ts` -> 5 files / 20 tests
+  - `npm.cmd exec -- vitest run tests/state/scenarioStore.test.ts tests/engine/serialization.test.ts tests/state/slotStore.test.ts tests/state/pawnStackStore.test.ts` -> 4 files / 15 tests
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 21 files / 84 tests
+  - `npm.cmd run build`
+  - `.\init.ps1` -> harness valid, TypeScript green, 21 files / 84 tests
+- Browser plugin smoke verification against `http://127.0.0.1:5173/`: app loaded with title `LoreCanvas`, Data Workbench opened, Slots and Stacks tabs rendered, Slots showed the new slot form/prompt, Stacks showed asset search, supply-zone input, and stack prompt, and browser console warn/error count was 0.
+- Implementation note: fixed a real merge bug found by `tests/state/pawnStackStore.test.ts`; full-stack moves into an occupied matching container now preserve the updated target entity count after deleting the source visual.
+- No git staging, commit, or push was performed.

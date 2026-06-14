@@ -430,7 +430,7 @@
       "priority": 6,
       "title": "Manual Dice Pools and Roll State",
       "description": "Add generic dice setup and manual roll state for board games that use custom dice. TOKEN assets with die metadata must define named dice, ordered face refs, and reusable dice pools. Run mode must support manual or deterministic-test rolling, preserving last result, roll history, and selected face overrides without resolving game-specific effects. Serialization must preserve dice definitions and current roll state. LOTR fixture validation should use local-fixtures/lotr/LotR-FotF/dice-face-plan.json to represent combat and search dice faces, then prove a scenario can record search and battle rolls generically without implementing LOTR search or battle rules.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "F-03-ScenarioLoadSave",
         "F-04-ManualScenarioPrototype"
@@ -468,30 +468,78 @@
       "priority": 7,
       "title": "Manual Tile and Marker Slots",
       "description": "Make TILE and marker setup explicit instead of relying only on freeform placed images. Add generic slot state for board Locations, tracks, and display zones so a tile or marker can be bound to a named slot, replaced, cleared, or moved while keeping a visual placement in sync. This must cover terrain/condition overlays, haven or stronghold replacements, track markers, and display slots without adding game-specific semantics. LOTRRule.pdf setup coverage should prove threat and hope markers can start on dotted track slots, the Eye marker can start in Eriador, haven/stronghold tile assets can remain available for later replacement, and objective/card display areas can own named slots.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "F-01-GraphBoard",
         "F-02-EntitySystem",
         "F-03-ScenarioLoadSave",
         "F-04B-MakerWorkbenchV1"
       ],
-      "verification": "npx vitest run tests/engine/slot.test.ts tests/state/boardStore.test.ts tests/engine/serialization.test.ts; browser verification for assigning, replacing, clearing, and saving Location/track/display slots",
-      "evidence": null
+      "verification": "npx vitest run tests/engine/slot.test.ts tests/state/slotStore.test.ts tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts; browser verification for assigning, replacing, clearing, and saving Location/track/display slots",
+      "evidence": {
+        "completedAt": "2026-06-14",
+        "localVerification": [
+          "npm.cmd exec -- vitest run tests/engine/slot.test.ts tests/engine/stack.test.ts tests/state/slotStore.test.ts tests/state/pawnStackStore.test.ts tests/engine/serialization.test.ts (5 files / 20 tests)",
+          "npm.cmd exec -- vitest run tests/state/scenarioStore.test.ts tests/engine/serialization.test.ts tests/state/slotStore.test.ts tests/state/pawnStackStore.test.ts (4 files / 15 tests)",
+          "npm.cmd run check-types",
+          "npm.cmd run test (21 files / 84 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (harness valid, TypeScript green, 21 files / 84 tests)"
+        ],
+        "coverage": [
+          "src/engine/slot.ts implements generic Location, track, and display slots for TILE/TOKEN assets with assign, clear, move, owner cleanup, and asset-reference cleanup.",
+          "src/state/boardStore.ts stores slotState, creates managed visual placements/entities for slot assignments, syncs Location-owned slots when Locations move, and removes slot visuals when assets, slots, or owning Locations are deleted.",
+          "src/engine/serialization.ts and src/state/scenarioStore.ts serialize/restore slotState, normalize legacy packages to an empty slot state, and validate slot owner, asset, category, placement, and placement-match references.",
+          "src/ui/App.tsx adds a Slots workbench tab for creating Location/track/display slots, assigning TILE/TOKEN assets, moving assigned assets between slots, selecting the visual placement, and deleting slots.",
+          "tests/state/scenarioStore.test.ts now represents the ignored LOTR setup markers as generic slots: Eye of Sauron in Eriador, threat marker on the threat track, hope marker on the hope track, plus display slots for objective/tile reserve setup."
+        ],
+        "browserVerification": [
+          "Started Vite dev server at http://127.0.0.1:5173 and verified the app loaded with title LoreCanvas.",
+          "Opened Data Workbench through the map toolbar and confirmed tabs include Locations, Edges, Objects, Slots, Stacks, Cards, Dice, and Board State.",
+          "Selected the Slots tab and confirmed the new slot name input and empty-slot creation prompt rendered.",
+          "Browser console warn/error count was 0 during the Slots/Stacks smoke path."
+        ],
+        "notes": "F-07 is generic tile/marker slot setup only. It does not implement LOTR-specific tile rules, automatic stronghold replacement, tracker automation, or visual effects."
+      }
     },
     {
       "id": "F-08-PawnStacksAndSupply",
       "priority": 8,
       "title": "Manual Pawn Stacks and Supply Pools",
       "description": "Promote count-bearing PAWN/TOKEN objects from loose JSON fields into a generic manual stack workflow. Edit mode must create setup stacks at Locations or supply zones, set count and capacity, split/merge stacks, and bind visual placements to Location state. Run mode must move or adjust stacks without mutating the frozen setup. The feature must remain category/state driven and not encode LOTR troop rules. LOTRRule.pdf setup coverage should validate fixed friendly troop stacks, remaining friendly supply by army, fixed shadow troop stacks, remaining shadow supply, Nazgul stacks, Eye/marker objects, and character pawn starting placements from character cards.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "F-02-EntitySystem",
         "F-03-ScenarioLoadSave",
         "F-04-ManualScenarioPrototype",
         "F-04B-MakerWorkbenchV1"
       ],
-      "verification": "npx vitest run tests/engine/stack.test.ts tests/state/pawnStackStore.test.ts tests/engine/serialization.test.ts; browser verification for create/split/merge/move stack, supply adjustment, save, load, and run-mode restore",
-      "evidence": null
+      "verification": "npx vitest run tests/engine/stack.test.ts tests/state/pawnStackStore.test.ts tests/engine/serialization.test.ts tests/state/scenarioStore.test.ts; browser verification for create/split/merge/move stack, supply adjustment, save, load, and run-mode restore",
+      "evidence": {
+        "completedAt": "2026-06-14",
+        "localVerification": [
+          "npm.cmd exec -- vitest run tests/engine/slot.test.ts tests/engine/stack.test.ts tests/state/slotStore.test.ts tests/state/pawnStackStore.test.ts tests/engine/serialization.test.ts (5 files / 20 tests)",
+          "npm.cmd exec -- vitest run tests/state/scenarioStore.test.ts tests/engine/serialization.test.ts tests/state/slotStore.test.ts tests/state/pawnStackStore.test.ts (4 files / 15 tests)",
+          "npm.cmd run check-types",
+          "npm.cmd run test (21 files / 84 tests)",
+          "npm.cmd run build",
+          ".\\init.ps1 (harness valid, TypeScript green, 21 files / 84 tests)"
+        ],
+        "coverage": [
+          "src/engine/stack.ts implements generic PAWN/TOKEN stacks, supply zones, positive count/capacity validation, split, merge, move, count adjustment, and asset/container cleanup.",
+          "src/state/boardStore.ts stores stackState, creates counted visual placements/entities for Location stacks, keeps entity count badges synchronized, supports partial stack moves, merges matching target stacks, deletes visuals when count reaches zero, and recreates/removes visuals when stacks move between map Locations and supply zones.",
+          "src/ui/BoardCanvas.tsx renders count badges for any placement with numeric entity.state.count, including PAWN stacks and TOKEN stacks.",
+          "src/ui/App.tsx adds a Stacks workbench tab with searchable PAWN/TOKEN asset picker, selected left-rail asset preselection, supply-zone management, create stack controls, +/- count controls, partial move count + target controls, placement selection, and size controls for mapped stack visuals.",
+          "src/engine/serialization.ts and src/state/scenarioStore.ts serialize/restore stackState and validate supply zones, stack assets, PAWN/TOKEN category, containers, placements, entities, and placement-match references.",
+          "tests/state/scenarioStore.test.ts now represents the ignored LOTR setup troop/Nazgul stacks and remaining friendly/shadow supplies through generic stackState without product-level LOTR branches."
+        ],
+        "browserVerification": [
+          "Started Vite dev server at http://127.0.0.1:5173 and verified the app loaded with title LoreCanvas.",
+          "Opened Data Workbench, selected the Stacks tab, and confirmed the searchable pawn/token asset input, supply-zone input, and empty stack prompt rendered.",
+          "Browser console warn/error count was 0 during the Slots/Stacks smoke path."
+        ],
+        "notes": "F-08 is generic manual stack and supply management. It does not implement movement validation, automatic LOTR setup resolution, battle/search rules, tracker automation, or game-specific troop behavior."
+      }
     },
     {
       "id": "F-09-LOTR-ManualSetupValidation",

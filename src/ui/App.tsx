@@ -55,6 +55,9 @@ import type {
   DiceState,
   DieFaceRef,
 } from "../engine/dice";
+import { SLOT_OWNER_TYPES } from "../engine/slot";
+import type { BoardSlot, SlotOwnerType } from "../engine/slot";
+import type { PawnStack, StackContainerRef, StackState } from "../engine/stack";
 import type { BoardEdge, BoardLocation } from "../engine/board";
 import type {
   AssetPlacement,
@@ -97,6 +100,8 @@ type WorkbenchTab =
   | "locations"
   | "edges"
   | "objects"
+  | "slots"
+  | "stacks"
   | "cards"
   | "dice"
   | "board";
@@ -116,6 +121,8 @@ const WORKBENCH_TABS: Array<{
   { id: "locations", label: "Locations", Icon: MapPinPlus },
   { id: "edges", label: "Edges", Icon: Network },
   { id: "objects", label: "Objects", Icon: CreditCard },
+  { id: "slots", label: "Slots", Icon: MapPinPlus },
+  { id: "stacks", label: "Stacks", Icon: Shield },
   { id: "cards", label: "Cards", Icon: CreditCard },
   { id: "dice", label: "Dice", Icon: Dices },
   { id: "board", label: "Board State", Icon: Database },
@@ -139,6 +146,7 @@ export function App() {
   const mode = useBoardStore((state) => state.mode);
   const board = useBoardStore((state) => state.board);
   const entityState = useBoardStore((state) => state.entityState);
+  const stackState = useBoardStore((state) => state.stackState);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
   const pawnSheets = useBoardStore((state) => state.pawnSheets);
@@ -186,6 +194,10 @@ export function App() {
   const adjustTokenPlacementCount = useBoardStore(
     (state) => state.adjustTokenPlacementCount,
   );
+  const adjustPawnStackCount = useBoardStore(
+    (state) => state.adjustPawnStackCount,
+  );
+  const deletePawnStack = useBoardStore((state) => state.deletePawnStack);
   const deleteLocation = useBoardStore((state) => state.deleteLocation);
   const deleteEdgeById = useBoardStore((state) => state.deleteEdgeById);
   const deleteSelectedPlacement = useBoardStore(
@@ -217,9 +229,16 @@ export function App() {
         (entity) => entity.id === selectedPlacement.entityId,
       ) ?? null
     : null;
+  const selectedStack =
+    selectedEntity?.state.stackId !== undefined
+      ? stackState.stacks.find(
+          (stack) => stack.id === selectedEntity.state.stackId,
+        ) ?? null
+      : null;
   const isBoundPawnSelected = Boolean(
     selectedPlacement?.category === "PAWN" &&
       selectedPlacement.locationId &&
+      !selectedStack &&
       selectedPlacementAsset,
   );
   const selectedPawnSheet = selectedPlacement
@@ -801,7 +820,17 @@ export function App() {
                 moveEntityToLocation={moveEntityToLocation}
               />
             ) : null}
-            {isBoundPawnSelected &&
+            {selectedStack && selectedPlacement && selectedPlacementAsset ? (
+              <StackPlacementContext
+                deleteStack={deletePawnStack}
+                isSetupLocked={mode === "run"}
+                placement={selectedPlacement}
+                placementAsset={selectedPlacementAsset}
+                stack={selectedStack}
+                adjustStackCount={adjustPawnStackCount}
+                updateAssetPlacement={updateAssetPlacement}
+              />
+            ) : isBoundPawnSelected &&
             selectedPlacement &&
             selectedPlacementAsset &&
             selectedPawnSheet ? (
@@ -1148,6 +1177,111 @@ function SelectedPlacementContext({
   );
 }
 
+interface StackPlacementContextProps {
+  adjustStackCount: (stackId: string, delta: number) => void;
+  deleteStack: (stackId: string) => void;
+  isSetupLocked: boolean;
+  placement: AssetPlacement;
+  placementAsset: UploadedImageAsset;
+  stack: PawnStack;
+  updateAssetPlacement: (
+    placementId: string,
+    patch: Partial<Pick<AssetPlacement, "width" | "height">>,
+  ) => void;
+}
+
+function StackPlacementContext({
+  adjustStackCount,
+  deleteStack,
+  isSetupLocked,
+  placement,
+  placementAsset,
+  stack,
+  updateAssetPlacement,
+}: StackPlacementContextProps) {
+  return (
+    <section className="selected-placement-context" aria-label="Stack object">
+      <div className="selected-piece-card">
+        <img alt="" src={getAssetPreviewUrl(placementAsset)} />
+        <div>
+          <strong>{stack.name}</strong>
+          <span>
+            {placementAsset.name} / {stack.container.type}:{stack.container.id}
+          </span>
+        </div>
+      </div>
+      <p className="binding-pill">Stack {stack.id}</p>
+      <div className="coordinate-row">
+        <span>X {formatCoordinate(placement.x)}</span>
+        <span>Y {formatCoordinate(placement.y)}</span>
+      </div>
+      <div className="counter-adjust token-placement-count">
+        <span>Count</span>
+        <button
+          aria-label="Decrease stack count"
+          className="icon-only icon-only--neutral"
+          onClick={() => adjustStackCount(stack.id, -1)}
+          title="Decrease stack count"
+          type="button"
+        >
+          <Minus aria-hidden="true" size={15} />
+        </button>
+        <strong>{stack.count}</strong>
+        <button
+          aria-label="Increase stack count"
+          className="icon-only icon-only--neutral"
+          onClick={() => adjustStackCount(stack.id, 1)}
+          title="Increase stack count"
+          type="button"
+        >
+          <Plus aria-hidden="true" size={15} />
+        </button>
+      </div>
+      <div className="piece-controls piece-controls--wide">
+        <label>
+          <span>W</span>
+          <input
+            disabled={isSetupLocked}
+            min={12}
+            max={640}
+            onChange={(event) =>
+              updateAssetPlacement(placement.id, {
+                width: toNumber(event.currentTarget.value, placement.width),
+              })
+            }
+            type="number"
+            value={placement.width}
+          />
+        </label>
+        <label>
+          <span>H</span>
+          <input
+            disabled={isSetupLocked}
+            min={12}
+            max={640}
+            onChange={(event) =>
+              updateAssetPlacement(placement.id, {
+                height: toNumber(event.currentTarget.value, placement.height),
+              })
+            }
+            type="number"
+            value={placement.height}
+          />
+        </label>
+      </div>
+      <button
+        className="danger-button"
+        disabled={isSetupLocked}
+        onClick={() => deleteStack(stack.id)}
+        type="button"
+      >
+        <Trash2 aria-hidden="true" size={15} />
+        <span>Delete stack</span>
+      </button>
+    </section>
+  );
+}
+
 interface DataWorkbenchProps {
   activeTab: WorkbenchTab;
   onTabChange: (tab: WorkbenchTab) => void;
@@ -1162,8 +1296,11 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
   const entityState = useBoardStore((state) => state.entityState);
   const cardDeckState = useBoardStore((state) => state.cardDeckState);
   const diceState = useBoardStore((state) => state.diceState);
+  const slotState = useBoardStore((state) => state.slotState);
+  const stackState = useBoardStore((state) => state.stackState);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
+  const selectedAssetId = useBoardStore((state) => state.selectedAssetId);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const selectedEdgeId = useBoardStore((state) => state.selectedEdgeId);
@@ -1224,6 +1361,25 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
   );
   const clearDiceRollHistory = useBoardStore(
     (state) => state.clearDiceRollHistory,
+  );
+  const createSlot = useBoardStore((state) => state.createSlot);
+  const updateSlot = useBoardStore((state) => state.updateSlot);
+  const deleteSlot = useBoardStore((state) => state.deleteSlot);
+  const assignAssetToSlot = useBoardStore((state) => state.assignAssetToSlot);
+  const clearSlot = useBoardStore((state) => state.clearSlot);
+  const moveSlotAsset = useBoardStore((state) => state.moveSlotAsset);
+  const createSupplyZone = useBoardStore((state) => state.createSupplyZone);
+  const updateSupplyZone = useBoardStore((state) => state.updateSupplyZone);
+  const deleteSupplyZone = useBoardStore((state) => state.deleteSupplyZone);
+  const createPawnStack = useBoardStore((state) => state.createPawnStack);
+  const updatePawnStack = useBoardStore((state) => state.updatePawnStack);
+  const adjustPawnStackCount = useBoardStore(
+    (state) => state.adjustPawnStackCount,
+  );
+  const movePawnStack = useBoardStore((state) => state.movePawnStack);
+  const deletePawnStack = useBoardStore((state) => state.deletePawnStack);
+  const updateAssetPlacement = useBoardStore(
+    (state) => state.updateAssetPlacement,
   );
 
   return (
@@ -1290,6 +1446,46 @@ function DataWorkbench({ activeTab, onTabChange }: DataWorkbenchProps) {
             onSelectPlacement={selectPlacement}
             onUpdateEntityState={updateEntityObjectState}
             selectedPlacementId={selectedPlacementId}
+          />
+        ) : null}
+        {activeTab === "slots" ? (
+          <SlotsWorkbench
+            assets={assets}
+            assetPlacements={assetPlacements}
+            isSetupLocked={mode === "run"}
+            locations={board.locations}
+            onAssignAsset={assignAssetToSlot}
+            onClearSlot={clearSlot}
+            onCreateSlot={createSlot}
+            onDeleteSlot={deleteSlot}
+            onMoveSlotAsset={moveSlotAsset}
+            onSelectPlacement={selectPlacement}
+            onUpdateSlot={updateSlot}
+            selectedLocationId={selectedLocationId}
+            selectedPlacementId={selectedPlacementId}
+            slots={slotState.slots}
+          />
+        ) : null}
+        {activeTab === "stacks" ? (
+          <StacksWorkbench
+            assets={assets}
+            assetPlacements={assetPlacements}
+            isSetupLocked={mode === "run"}
+            locations={board.locations}
+            onAdjustStackCount={adjustPawnStackCount}
+            onCreateStack={createPawnStack}
+            onCreateSupplyZone={createSupplyZone}
+            onDeleteStack={deletePawnStack}
+            onDeleteSupplyZone={deleteSupplyZone}
+            onMoveStack={movePawnStack}
+            onSelectPlacement={selectPlacement}
+            onUpdateAssetPlacement={updateAssetPlacement}
+            onUpdateStack={updatePawnStack}
+            onUpdateSupplyZone={updateSupplyZone}
+            selectedAssetId={selectedAssetId}
+            selectedLocationId={selectedLocationId}
+            selectedPlacementId={selectedPlacementId}
+            stackState={stackState}
           />
         ) : null}
         {activeTab === "cards" ? (
@@ -1941,6 +2137,1083 @@ function ObjectsTable({
       </table>
     </div>
   );
+}
+
+interface SlotsWorkbenchProps {
+  assets: UploadedImageAsset[];
+  assetPlacements: AssetPlacement[];
+  isSetupLocked: boolean;
+  locations: BoardLocation[];
+  onAssignAsset: (slotId: string, assetId: string) => void;
+  onClearSlot: (slotId: string) => void;
+  onCreateSlot: (
+    name: string,
+    ownerType: SlotOwnerType,
+    ownerId: string,
+    x?: number,
+    y?: number,
+  ) => string | null;
+  onDeleteSlot: (slotId: string) => void;
+  onMoveSlotAsset: (fromSlotId: string, toSlotId: string) => void;
+  onSelectPlacement: (placementId: string | null) => void;
+  onUpdateSlot: (
+    slotId: string,
+    patch: Partial<{
+      name: string;
+      ownerType: SlotOwnerType;
+      ownerId: string;
+      x: number;
+      y: number;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  selectedLocationId: string | null;
+  selectedPlacementId: string | null;
+  slots: BoardSlot[];
+}
+
+function SlotsWorkbench({
+  assets,
+  assetPlacements,
+  isSetupLocked,
+  locations,
+  onAssignAsset,
+  onClearSlot,
+  onCreateSlot,
+  onDeleteSlot,
+  onMoveSlotAsset,
+  onSelectPlacement,
+  onUpdateSlot,
+  selectedLocationId,
+  selectedPlacementId,
+  slots,
+}: SlotsWorkbenchProps) {
+  const slotAssets = useMemo(
+    () => assets.filter((asset) => asset.category === "TILE" || asset.category === "TOKEN"),
+    [assets],
+  );
+  const [newName, setNewName] = useState("");
+  const [ownerType, setOwnerType] = useState<SlotOwnerType>("location");
+  const [ownerId, setOwnerId] = useState(
+    selectedLocationId ?? locations[0]?.id ?? "",
+  );
+  const [xPercent, setXPercent] = useState(50);
+  const [yPercent, setYPercent] = useState(50);
+
+  useEffect(() => {
+    if (ownerType !== "location") {
+      return;
+    }
+
+    setOwnerId((current) =>
+      current && locations.some((location) => location.id === current)
+        ? current
+        : selectedLocationId ?? locations[0]?.id ?? "",
+    );
+  }, [locations, ownerType, selectedLocationId]);
+
+  const handleOwnerTypeChange = useCallback(
+    (nextOwnerType: SlotOwnerType) => {
+      setOwnerType(nextOwnerType);
+      setOwnerId(
+        nextOwnerType === "location"
+          ? selectedLocationId ?? locations[0]?.id ?? ""
+          : nextOwnerType === "track"
+            ? "global-track"
+            : "display",
+      );
+    },
+    [locations, selectedLocationId],
+  );
+  const canCreate =
+    !isSetupLocked &&
+    ownerId.trim().length > 0 &&
+    (ownerType !== "location" || locations.length > 0);
+  const handleCreateSlot = useCallback(() => {
+    if (!canCreate) {
+      return;
+    }
+
+    const createdId = onCreateSlot(
+      newName.trim() || `${getSlotOwnerLabel(ownerType)} slot`,
+      ownerType,
+      ownerId.trim(),
+      xPercent / 100,
+      yPercent / 100,
+    );
+
+    if (createdId) {
+      setNewName("");
+    }
+  }, [
+    canCreate,
+    newName,
+    onCreateSlot,
+    ownerId,
+    ownerType,
+    xPercent,
+    yPercent,
+  ]);
+
+  return (
+    <div className="slot-workbench">
+      <div className="slot-create-row">
+        <input
+          aria-label="New slot name"
+          disabled={isSetupLocked}
+          onChange={(event) => setNewName(event.currentTarget.value)}
+          placeholder="Slot name"
+          value={newName}
+        />
+        <select
+          aria-label="New slot owner type"
+          disabled={isSetupLocked}
+          onChange={(event) =>
+            handleOwnerTypeChange(event.currentTarget.value as SlotOwnerType)
+          }
+          value={ownerType}
+        >
+          {SLOT_OWNER_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {getSlotOwnerLabel(type)}
+            </option>
+          ))}
+        </select>
+        {ownerType === "location" ? (
+          <select
+            aria-label="New slot location owner"
+            disabled={isSetupLocked || locations.length === 0}
+            onChange={(event) => setOwnerId(event.currentTarget.value)}
+            value={ownerId}
+          >
+            {locations.length === 0 ? (
+              <option value="">No locations</option>
+            ) : null}
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            aria-label="New slot owner id"
+            disabled={isSetupLocked}
+            onChange={(event) => setOwnerId(event.currentTarget.value)}
+            placeholder="Owner id"
+            value={ownerId}
+          />
+        )}
+        <label>
+          <span>X</span>
+          <input
+            disabled={isSetupLocked || ownerType === "location"}
+            max={100}
+            min={0}
+            onChange={(event) =>
+              setXPercent(toNumber(event.currentTarget.value, xPercent))
+            }
+            type="number"
+            value={xPercent}
+          />
+        </label>
+        <label>
+          <span>Y</span>
+          <input
+            disabled={isSetupLocked || ownerType === "location"}
+            max={100}
+            min={0}
+            onChange={(event) =>
+              setYPercent(toNumber(event.currentTarget.value, yPercent))
+            }
+            type="number"
+            value={yPercent}
+          />
+        </label>
+        <button
+          className="mini-button"
+          disabled={!canCreate}
+          onClick={handleCreateSlot}
+          type="button"
+        >
+          <Plus aria-hidden="true" size={14} />
+          <span>Slot</span>
+        </button>
+      </div>
+
+      {slots.length === 0 ? (
+        <p className="empty-state">
+          Create fixed slots for tile markers, progress tokens, and display
+          markers that should stay attached to a location, track, or setup area.
+        </p>
+      ) : (
+        <div className="workbench-table-scroll">
+          <table className="workbench-table workbench-table--slots">
+            <thead>
+              <tr>
+                <th scope="col">Slot</th>
+                <th scope="col">Owner</th>
+                <th scope="col">X</th>
+                <th scope="col">Y</th>
+                <th scope="col">Asset</th>
+                <th scope="col">Move</th>
+                <th scope="col">Placement</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {slots.map((slot) => {
+                const placement = slot.placementId
+                  ? assetPlacements.find(
+                      (candidate) => candidate.id === slot.placementId,
+                    ) ?? null
+                  : null;
+                const ownerLocation =
+                  slot.ownerType === "location"
+                    ? locations.find((location) => location.id === slot.ownerId) ??
+                      null
+                    : null;
+                const otherSlots = slots.filter((candidate) => candidate.id !== slot.id);
+
+                return (
+                  <tr
+                    data-selected={selectedPlacementId === slot.placementId}
+                    key={slot.id}
+                    onClick={() => onSelectPlacement(slot.placementId ?? null)}
+                  >
+                    <th scope="row">
+                      <input
+                        aria-label={`${slot.id} name`}
+                        disabled={isSetupLocked}
+                        onChange={(event) =>
+                          onUpdateSlot(slot.id, { name: event.currentTarget.value })
+                        }
+                        value={slot.name}
+                      />
+                    </th>
+                    <td>
+                      <div className="slot-owner-cell">
+                        <select
+                          aria-label={`${slot.id} owner type`}
+                          disabled={isSetupLocked}
+                          onChange={(event) => {
+                            const nextOwnerType = event.currentTarget
+                              .value as SlotOwnerType;
+
+                            onUpdateSlot(slot.id, {
+                              ownerType: nextOwnerType,
+                              ownerId:
+                                nextOwnerType === "location"
+                                  ? selectedLocationId ??
+                                    locations[0]?.id ??
+                                    slot.ownerId
+                                  : slot.ownerId,
+                            });
+                          }}
+                          value={slot.ownerType}
+                        >
+                          {SLOT_OWNER_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {getSlotOwnerLabel(type)}
+                            </option>
+                          ))}
+                        </select>
+                        {slot.ownerType === "location" ? (
+                          <select
+                            aria-label={`${slot.id} location owner`}
+                            disabled={isSetupLocked || locations.length === 0}
+                            onChange={(event) =>
+                              onUpdateSlot(slot.id, {
+                                ownerId: event.currentTarget.value,
+                              })
+                            }
+                            value={slot.ownerId}
+                          >
+                            {locations.map((location) => (
+                              <option key={location.id} value={location.id}>
+                                {location.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            aria-label={`${slot.id} owner id`}
+                            disabled={isSetupLocked}
+                            onChange={(event) =>
+                              onUpdateSlot(slot.id, {
+                                ownerId: event.currentTarget.value,
+                              })
+                            }
+                            value={slot.ownerId}
+                          />
+                        )}
+                        <small>
+                          {ownerLocation
+                            ? `${ownerLocation.id} follows node`
+                            : formatSlotOwner(slot)}
+                        </small>
+                      </div>
+                    </td>
+                    <td>
+                      <input
+                        aria-label={`${slot.id} x`}
+                        disabled={isSetupLocked || slot.ownerType === "location"}
+                        max={100}
+                        min={0}
+                        onChange={(event) =>
+                          onUpdateSlot(slot.id, {
+                            x: toNormalizedPercent(
+                              event.currentTarget.value,
+                              slot.x,
+                            ),
+                          })
+                        }
+                        type="number"
+                        value={toPercentNumber(slot.x)}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        aria-label={`${slot.id} y`}
+                        disabled={isSetupLocked || slot.ownerType === "location"}
+                        max={100}
+                        min={0}
+                        onChange={(event) =>
+                          onUpdateSlot(slot.id, {
+                            y: toNormalizedPercent(
+                              event.currentTarget.value,
+                              slot.y,
+                            ),
+                          })
+                        }
+                        type="number"
+                        value={toPercentNumber(slot.y)}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`${slot.id} assigned asset`}
+                        disabled={isSetupLocked || slotAssets.length === 0}
+                        onChange={(event) => {
+                          const assetId = event.currentTarget.value;
+
+                          if (assetId) {
+                            onAssignAsset(slot.id, assetId);
+                            return;
+                          }
+
+                          onClearSlot(slot.id);
+                        }}
+                        value={slot.assetId ?? ""}
+                      >
+                        <option value="">Empty</option>
+                        {slotAssets.map((asset) => (
+                          <option key={asset.id} value={asset.id}>
+                            {asset.name} / {asset.category}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`${slot.id} move asset target`}
+                        disabled={isSetupLocked || !slot.assetId || otherSlots.length === 0}
+                        onChange={(event) => {
+                          const targetSlotId = event.currentTarget.value;
+
+                          if (targetSlotId) {
+                            onMoveSlotAsset(slot.id, targetSlotId);
+                            event.currentTarget.value = "";
+                          }
+                        }}
+                        value=""
+                      >
+                        <option value="">Move to...</option>
+                        {otherSlots.map((targetSlot) => (
+                          <option key={targetSlot.id} value={targetSlot.id}>
+                            {targetSlot.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      {placement ? (
+                        <button
+                          className="mini-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onSelectPlacement(placement.id);
+                          }}
+                          type="button"
+                        >
+                          <MousePointer2 aria-hidden="true" size={14} />
+                          <span>{placement.id}</span>
+                        </button>
+                      ) : (
+                        <span className="muted-cell">No placement</span>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        aria-label={`Delete ${slot.id}`}
+                        className="icon-only"
+                        disabled={isSetupLocked}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDeleteSlot(slot.id);
+                        }}
+                        title="Delete slot"
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface StacksWorkbenchProps {
+  assets: UploadedImageAsset[];
+  assetPlacements: AssetPlacement[];
+  isSetupLocked: boolean;
+  locations: BoardLocation[];
+  onAdjustStackCount: (stackId: string, delta: number) => void;
+  onCreateStack: (
+    assetId: string,
+    container: StackContainerRef,
+    count: number,
+    capacity?: number,
+    name?: string,
+  ) => string | null;
+  onCreateSupplyZone: (name: string) => string | null;
+  onDeleteStack: (stackId: string) => void;
+  onDeleteSupplyZone: (zoneId: string) => void;
+  onMoveStack: (
+    stackId: string,
+    target: StackContainerRef,
+    count?: number,
+  ) => string | null;
+  onSelectPlacement: (placementId: string | null) => void;
+  onUpdateAssetPlacement: (
+    placementId: string,
+    patch: Partial<Pick<AssetPlacement, "width" | "height">>,
+  ) => void;
+  onUpdateStack: (
+    stackId: string,
+    patch: Partial<{
+      name: string;
+      count: number;
+      capacity: number;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  onUpdateSupplyZone: (
+    zoneId: string,
+    patch: Partial<{
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  selectedAssetId: string | null;
+  selectedLocationId: string | null;
+  selectedPlacementId: string | null;
+  stackState: StackState;
+}
+
+function StacksWorkbench({
+  assets,
+  assetPlacements,
+  isSetupLocked,
+  locations,
+  onAdjustStackCount,
+  onCreateStack,
+  onCreateSupplyZone,
+  onDeleteStack,
+  onDeleteSupplyZone,
+  onMoveStack,
+  onSelectPlacement,
+  onUpdateAssetPlacement,
+  onUpdateStack,
+  onUpdateSupplyZone,
+  selectedAssetId,
+  selectedLocationId,
+  selectedPlacementId,
+  stackState,
+}: StacksWorkbenchProps) {
+  const stackAssets = useMemo(
+    () => assets.filter((asset) => asset.category === "PAWN" || asset.category === "TOKEN"),
+    [assets],
+  );
+  const containerOptions = useMemo(
+    () => getStackContainerOptions(locations, stackState),
+    [locations, stackState],
+  );
+  const [assetSearch, setAssetSearch] = useState("");
+  const [stackAssetId, setStackAssetId] = useState("");
+  const [targetKey, setTargetKey] = useState("");
+  const [newCount, setNewCount] = useState(1);
+  const [supplyName, setSupplyName] = useState("");
+  const selectedAsset =
+    stackAssets.find((asset) => asset.id === stackAssetId) ?? null;
+  const visibleAssets = useMemo(() => {
+    const query = assetSearch.trim().toLowerCase();
+
+    if (!query) {
+      return stackAssets;
+    }
+
+    return stackAssets.filter((asset) =>
+      `${asset.name} ${asset.id} ${asset.category}`.toLowerCase().includes(query),
+    );
+  }, [assetSearch, stackAssets]);
+
+  useEffect(() => {
+    setStackAssetId((current) => {
+      if (
+        selectedAssetId &&
+        stackAssets.some((asset) => asset.id === selectedAssetId)
+      ) {
+        return selectedAssetId;
+      }
+
+      return current && stackAssets.some((asset) => asset.id === current)
+        ? current
+        : stackAssets[0]?.id ?? "";
+    });
+  }, [selectedAssetId, stackAssets]);
+
+  useEffect(() => {
+    setTargetKey((current) => {
+      if (current && containerOptions.some((option) => option.key === current)) {
+        return current;
+      }
+
+      const selectedLocationKey = selectedLocationId
+        ? `location:${selectedLocationId}`
+        : "";
+
+      return (
+        containerOptions.find((option) => option.key === selectedLocationKey)
+          ?.key ??
+        containerOptions[0]?.key ??
+        ""
+      );
+    });
+  }, [containerOptions, selectedLocationId]);
+
+  const handleCreateSupplyZone = useCallback(() => {
+    const zoneId = onCreateSupplyZone(supplyName.trim() || "Supply");
+
+    if (zoneId) {
+      setSupplyName("");
+      setTargetKey(`supply:${zoneId}`);
+    }
+  }, [onCreateSupplyZone, supplyName]);
+  const handleCreateStack = useCallback(() => {
+    const target = parseStackContainerOption(targetKey, containerOptions);
+
+    if (!selectedAsset || !target) {
+      return;
+    }
+
+    onCreateStack(selectedAsset.id, target.container, newCount, undefined, selectedAsset.name);
+  }, [containerOptions, newCount, onCreateStack, selectedAsset, targetKey]);
+
+  return (
+    <div className="stack-workbench">
+      <section className="stack-panel stack-panel--assets" aria-label="Stack assets">
+        <div className="dice-panel__header">
+          <h3>Assets</h3>
+          <span>{stackAssets.length}</span>
+        </div>
+        <label className="token-quick-search">
+          <Search aria-hidden="true" size={14} />
+          <input
+            aria-label="Search pawn or token stack assets"
+            onChange={(event) => setAssetSearch(event.currentTarget.value)}
+            placeholder="Search pawn/token"
+            type="search"
+            value={assetSearch}
+          />
+        </label>
+        <div className="stack-asset-grid">
+          {visibleAssets.length > 0 ? (
+            visibleAssets.map((asset) => (
+              <button
+                className="token-quick-item"
+                data-selected={stackAssetId === asset.id}
+                disabled={isSetupLocked}
+                key={asset.id}
+                onClick={() => setStackAssetId(asset.id)}
+                title={asset.name}
+                type="button"
+              >
+                {asset.thumbnailUrl ? (
+                  <img
+                    alt=""
+                    decoding="async"
+                    loading="lazy"
+                    src={asset.thumbnailUrl}
+                  />
+                ) : (
+                  <span aria-hidden="true" className="asset-thumb-pending">
+                    <ImageIcon size={18} />
+                  </span>
+                )}
+                <span>{asset.name}</span>
+                <small>{asset.category}</small>
+              </button>
+            ))
+          ) : (
+            <p className="empty-state">No matching pawn or token assets.</p>
+          )}
+        </div>
+        <div className="stack-create-row">
+          <select
+            aria-label="New stack target"
+            disabled={isSetupLocked || containerOptions.length === 0}
+            onChange={(event) => setTargetKey(event.currentTarget.value)}
+            value={targetKey}
+          >
+            {containerOptions.length === 0 ? (
+              <option value="">Create a location or supply zone</option>
+            ) : null}
+            {containerOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <input
+            aria-label="New stack count"
+            disabled={isSetupLocked}
+            min={1}
+            onChange={(event) =>
+              setNewCount(Math.max(1, Math.trunc(toNumber(event.currentTarget.value, 1))))
+            }
+            type="number"
+            value={newCount}
+          />
+          <button
+            className="mini-button"
+            disabled={
+              isSetupLocked || !selectedAsset || !targetKey || containerOptions.length === 0
+            }
+            onClick={handleCreateStack}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={14} />
+            <span>Stack</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="stack-panel stack-panel--supply" aria-label="Supply zones">
+        <div className="dice-panel__header">
+          <h3>Supply</h3>
+          <span>{stackState.supplyZones.length}</span>
+        </div>
+        <div className="supply-zone-create">
+          <input
+            aria-label="New supply zone name"
+            disabled={isSetupLocked}
+            onChange={(event) => setSupplyName(event.currentTarget.value)}
+            placeholder="Supply zone"
+            value={supplyName}
+          />
+          <button
+            className="mini-button"
+            disabled={isSetupLocked}
+            onClick={handleCreateSupplyZone}
+            type="button"
+          >
+            <Plus aria-hidden="true" size={14} />
+            <span>Zone</span>
+          </button>
+        </div>
+        {stackState.supplyZones.length === 0 ? (
+          <p className="empty-state">No off-board supply zones.</p>
+        ) : (
+          <div className="supply-zone-list">
+            {stackState.supplyZones.map((zone) => (
+              <div className="supply-zone-row" key={zone.id}>
+                <input
+                  aria-label={`${zone.id} supply zone name`}
+                  disabled={isSetupLocked}
+                  onChange={(event) =>
+                    onUpdateSupplyZone(zone.id, {
+                      name: event.currentTarget.value,
+                    })
+                  }
+                  value={zone.name}
+                />
+                <button
+                  aria-label={`Delete ${zone.name}`}
+                  className="icon-only"
+                  disabled={isSetupLocked}
+                  onClick={() => onDeleteSupplyZone(zone.id)}
+                  title="Delete supply zone"
+                  type="button"
+                >
+                  <Trash2 aria-hidden="true" size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="stack-panel stack-panel--wide" aria-label="Pawn and token stacks">
+        <div className="dice-panel__header">
+          <h3>Stacks</h3>
+          <span>{stackState.stacks.length}</span>
+        </div>
+        {stackState.stacks.length === 0 ? (
+          <p className="empty-state">
+            Create pawn or token stacks from uploaded assets, then move all or part
+            of a stack between locations and supply zones.
+          </p>
+        ) : (
+          <div className="stack-list">
+            {stackState.stacks.map((stack) => {
+              const asset = assets.find((candidate) => candidate.id === stack.assetId);
+              const placement = stack.placementId
+                ? assetPlacements.find(
+                    (candidate) => candidate.id === stack.placementId,
+                  ) ?? null
+                : null;
+
+              return (
+                <StackWorkbenchRow
+                  asset={asset ?? null}
+                  containerOptions={containerOptions}
+                  isSetupLocked={isSetupLocked}
+                  key={stack.id}
+                  onAdjustCount={onAdjustStackCount}
+                  onDeleteStack={onDeleteStack}
+                  onMoveStack={onMoveStack}
+                  onSelectPlacement={onSelectPlacement}
+                  onUpdateAssetPlacement={onUpdateAssetPlacement}
+                  onUpdateStack={onUpdateStack}
+                  placement={placement}
+                  selectedPlacementId={selectedPlacementId}
+                  stack={stack}
+                />
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+interface StackWorkbenchRowProps {
+  asset: UploadedImageAsset | null;
+  containerOptions: StackContainerOption[];
+  isSetupLocked: boolean;
+  onAdjustCount: (stackId: string, delta: number) => void;
+  onDeleteStack: (stackId: string) => void;
+  onMoveStack: (
+    stackId: string,
+    target: StackContainerRef,
+    count?: number,
+  ) => string | null;
+  onSelectPlacement: (placementId: string | null) => void;
+  onUpdateAssetPlacement: (
+    placementId: string,
+    patch: Partial<Pick<AssetPlacement, "width" | "height">>,
+  ) => void;
+  onUpdateStack: (
+    stackId: string,
+    patch: Partial<{
+      name: string;
+      count: number;
+      capacity: number;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  placement: AssetPlacement | null;
+  selectedPlacementId: string | null;
+  stack: PawnStack;
+}
+
+function StackWorkbenchRow({
+  asset,
+  containerOptions,
+  isSetupLocked,
+  onAdjustCount,
+  onDeleteStack,
+  onMoveStack,
+  onSelectPlacement,
+  onUpdateAssetPlacement,
+  onUpdateStack,
+  placement,
+  selectedPlacementId,
+  stack,
+}: StackWorkbenchRowProps) {
+  const availableTargets = useMemo(
+    () =>
+      containerOptions.filter(
+        (option) =>
+          option.container.type !== stack.container.type ||
+          option.container.id !== stack.container.id,
+      ),
+    [containerOptions, stack.container.id, stack.container.type],
+  );
+  const [moveTargetKey, setMoveTargetKey] = useState("");
+  const [moveCount, setMoveCount] = useState(1);
+
+  useEffect(() => {
+    setMoveTargetKey((current) =>
+      current && availableTargets.some((option) => option.key === current)
+        ? current
+        : availableTargets[0]?.key ?? "",
+    );
+  }, [availableTargets]);
+
+  useEffect(() => {
+    setMoveCount((current) => Math.max(1, Math.min(current, stack.count)));
+  }, [stack.count]);
+
+  const containerLabel =
+    containerOptions.find(
+      (option) =>
+        option.container.type === stack.container.type &&
+        option.container.id === stack.container.id,
+    )?.label ?? `${stack.container.type}:${stack.container.id}`;
+  const handleMove = useCallback(() => {
+    const target = parseStackContainerOption(moveTargetKey, containerOptions);
+
+    if (!target) {
+      return;
+    }
+
+    onMoveStack(stack.id, target.container, Math.min(moveCount, stack.count));
+  }, [containerOptions, moveCount, moveTargetKey, onMoveStack, stack.count, stack.id]);
+
+  return (
+    <article
+      className="stack-row"
+      data-selected={selectedPlacementId === placement?.id}
+    >
+      <div className="stack-row__identity">
+        {asset?.thumbnailUrl ? (
+          <img alt="" decoding="async" loading="lazy" src={asset.thumbnailUrl} />
+        ) : (
+          <span aria-hidden="true" className="asset-thumb-pending">
+            <ImageIcon size={18} />
+          </span>
+        )}
+        <div>
+          <input
+            aria-label={`${stack.id} stack name`}
+            disabled={isSetupLocked}
+            onChange={(event) =>
+              onUpdateStack(stack.id, { name: event.currentTarget.value })
+            }
+            value={stack.name}
+          />
+          <span>{asset?.name ?? stack.assetId}</span>
+          <small>{containerLabel}</small>
+        </div>
+      </div>
+
+      <div className="stack-row__count">
+        <button
+          aria-label={`Decrease ${stack.name}`}
+          className="icon-only icon-only--neutral"
+          onClick={() => onAdjustCount(stack.id, -1)}
+          title="Decrease count"
+          type="button"
+        >
+          <Minus aria-hidden="true" size={14} />
+        </button>
+        <input
+          aria-label={`${stack.id} count`}
+          min={1}
+          onChange={(event) =>
+            onUpdateStack(stack.id, {
+              count: Math.max(1, Math.trunc(toNumber(event.currentTarget.value, 1))),
+            })
+          }
+          type="number"
+          value={stack.count}
+        />
+        <button
+          aria-label={`Increase ${stack.name}`}
+          className="icon-only icon-only--neutral"
+          onClick={() => onAdjustCount(stack.id, 1)}
+          title="Increase count"
+          type="button"
+        >
+          <Plus aria-hidden="true" size={14} />
+        </button>
+      </div>
+
+      <div className="stack-row__move">
+        <input
+          aria-label={`${stack.id} move count`}
+          min={1}
+          max={stack.count}
+          onChange={(event) =>
+            setMoveCount(
+              Math.max(
+                1,
+                Math.min(
+                  stack.count,
+                  Math.trunc(toNumber(event.currentTarget.value, 1)),
+                ),
+              ),
+            )
+          }
+          type="number"
+          value={moveCount}
+        />
+        <select
+          aria-label={`${stack.id} move target`}
+          disabled={availableTargets.length === 0}
+          onChange={(event) => setMoveTargetKey(event.currentTarget.value)}
+          value={moveTargetKey}
+        >
+          {availableTargets.length === 0 ? (
+            <option value="">No target</option>
+          ) : null}
+          {availableTargets.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <button
+          className="mini-button"
+          disabled={!moveTargetKey || availableTargets.length === 0}
+          onClick={handleMove}
+          type="button"
+        >
+          <span>Move</span>
+        </button>
+      </div>
+
+      <div className="stack-row__placement">
+        {placement ? (
+          <>
+            <button
+              className="mini-button"
+              onClick={() => onSelectPlacement(placement.id)}
+              type="button"
+            >
+              <MousePointer2 aria-hidden="true" size={14} />
+              <span>{placement.id}</span>
+            </button>
+            <label>
+              <span>W</span>
+              <input
+                disabled={isSetupLocked}
+                min={12}
+                max={640}
+                onChange={(event) =>
+                  onUpdateAssetPlacement(placement.id, {
+                    width: toNumber(event.currentTarget.value, placement.width),
+                  })
+                }
+                type="number"
+                value={placement.width}
+              />
+            </label>
+            <label>
+              <span>H</span>
+              <input
+                disabled={isSetupLocked}
+                min={12}
+                max={640}
+                onChange={(event) =>
+                  onUpdateAssetPlacement(placement.id, {
+                    height: toNumber(event.currentTarget.value, placement.height),
+                  })
+                }
+                type="number"
+                value={placement.height}
+              />
+            </label>
+          </>
+        ) : (
+          <span className="muted-cell">Off-board</span>
+        )}
+      </div>
+
+      <button
+        aria-label={`Delete ${stack.name}`}
+        className="icon-only"
+        disabled={isSetupLocked}
+        onClick={() => onDeleteStack(stack.id)}
+        title="Delete stack"
+        type="button"
+      >
+        <Trash2 aria-hidden="true" size={15} />
+      </button>
+    </article>
+  );
+}
+
+interface StackContainerOption {
+  container: StackContainerRef;
+  key: string;
+  label: string;
+}
+
+function getStackContainerOptions(
+  locations: BoardLocation[],
+  stackState: StackState,
+): StackContainerOption[] {
+  return [
+    ...locations.map((location) => ({
+      key: `location:${location.id}`,
+      label: `Location: ${location.name}`,
+      container: {
+        type: "location" as const,
+        id: location.id,
+      },
+    })),
+    ...stackState.supplyZones.map((zone) => ({
+      key: `supply:${zone.id}`,
+      label: `Supply: ${zone.name}`,
+      container: {
+        type: "supply" as const,
+        id: zone.id,
+      },
+    })),
+  ];
+}
+
+function parseStackContainerOption(
+  key: string,
+  options: StackContainerOption[],
+) {
+  return options.find((option) => option.key === key) ?? null;
+}
+
+function getSlotOwnerLabel(ownerType: SlotOwnerType) {
+  if (ownerType === "location") {
+    return "Location";
+  }
+
+  if (ownerType === "track") {
+    return "Track";
+  }
+
+  return "Display";
+}
+
+function formatSlotOwner(slot: BoardSlot) {
+  return `${getSlotOwnerLabel(slot.ownerType)}:${slot.ownerId}`;
 }
 
 interface CardZonesWorkbenchProps {

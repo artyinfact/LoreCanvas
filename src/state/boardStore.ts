@@ -46,6 +46,43 @@ import {
 } from "../engine/dice";
 import type { DiceState } from "../engine/dice";
 import {
+  addSlot,
+  assignSlotAsset,
+  clearSlotAsset,
+  createEmptySlotState,
+  findSlot,
+  isSlotAssetCategory,
+  moveSlotAsset as moveSlotAssetState,
+  removeSlot,
+  removeSlotAssetsByAssetId,
+  removeSlotsByOwner,
+  updateSlot as updateSlotState,
+} from "../engine/slot";
+import type { BoardSlot, SlotOwnerType, SlotState } from "../engine/slot";
+import {
+  addPawnStack,
+  addSupplyZone,
+  adjustPawnStackCount as adjustPawnStackCountState,
+  createEmptyStackState,
+  findMatchingStack,
+  findPawnStack,
+  isStackAssetCategory,
+  mergePawnStacks,
+  movePawnStack as movePawnStackState,
+  removePawnStack as removePawnStackState,
+  removeStacksByAssetId,
+  removeStacksByContainer,
+  removeSupplyZone,
+  splitPawnStack,
+  updatePawnStack as updatePawnStackState,
+  updateSupplyZone as updateSupplyZoneState,
+} from "../engine/stack";
+import type {
+  PawnStack,
+  StackContainerRef,
+  StackState,
+} from "../engine/stack";
+import {
   canPlaceAssetForCategory,
   clearLocationBindings,
   createEmptyEntityState,
@@ -139,6 +176,8 @@ export interface BoardStore {
   pawnSheets: Record<string, PawnSheet>;
   cardDeckState: CardDeckState;
   diceState: DiceState;
+  slotState: SlotState;
+  stackState: StackState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -281,6 +320,60 @@ export interface BoardStore {
     faceRefId: string,
   ) => void;
   clearDiceRollHistory: () => void;
+  createSlot: (
+    name: string,
+    ownerType: SlotOwnerType,
+    ownerId: string,
+    x?: number,
+    y?: number,
+  ) => string | null;
+  updateSlot: (
+    slotId: string,
+    patch: Partial<{
+      name: string;
+      ownerType: SlotOwnerType;
+      ownerId: string;
+      x: number;
+      y: number;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  deleteSlot: (slotId: string) => void;
+  assignAssetToSlot: (slotId: string, assetId: string) => void;
+  clearSlot: (slotId: string) => void;
+  moveSlotAsset: (fromSlotId: string, toSlotId: string) => void;
+  createSupplyZone: (name: string) => string | null;
+  updateSupplyZone: (
+    zoneId: string,
+    patch: Partial<{
+      name: string;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  deleteSupplyZone: (zoneId: string) => void;
+  createPawnStack: (
+    assetId: string,
+    container: StackContainerRef,
+    count: number,
+    capacity?: number,
+    name?: string,
+  ) => string | null;
+  updatePawnStack: (
+    stackId: string,
+    patch: Partial<{
+      name: string;
+      count: number;
+      capacity: number;
+      state: JsonRecord;
+    }>,
+  ) => void;
+  adjustPawnStackCount: (stackId: string, delta: number) => void;
+  movePawnStack: (
+    stackId: string,
+    target: StackContainerRef,
+    count?: number,
+  ) => string | null;
+  deletePawnStack: (stackId: string) => void;
   setBoardZoom: (zoom: number) => void;
   setBoardPan: (pan: BoardPan) => void;
   resetBoardView: () => void;
@@ -312,6 +405,8 @@ export interface FrozenSetupSnapshot {
   pawnSheets: Record<string, PawnSheet>;
   cardDeckState: CardDeckState;
   diceState: DiceState;
+  slotState: SlotState;
+  stackState: StackState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -328,6 +423,8 @@ export const useBoardStore = create<BoardStore>((set) => ({
   pawnSheets: {},
   cardDeckState: createEmptyCardDeckState(),
   diceState: createEmptyDiceState(),
+  slotState: createEmptySlotState(),
+  stackState: createEmptyStackState(),
   boardState: {},
   locationStates: {},
   edgeStates: {},
@@ -513,6 +610,8 @@ export const useBoardStore = create<BoardStore>((set) => ({
         ),
         cardDeckState: removeCardsByAssetId(state.cardDeckState, assetId),
         diceState: removeDiceReferencesByAssetId(state.diceState, assetId),
+        slotState: removeSlotAssetsByAssetId(state.slotState, assetId),
+        stackState: removeStacksByAssetId(state.stackState, assetId),
         selectedAssetId:
           state.selectedAssetId === assetId ? null : state.selectedAssetId,
         selectedPlacementId:
@@ -563,6 +662,17 @@ export const useBoardStore = create<BoardStore>((set) => ({
       const removedEntityIds = new Set(
         removedPlacements.map((placement) => placement.entityId),
       );
+      const nextSlotState = isSlotAssetCategory(category)
+        ? state.slotState
+        : removeSlotAssetsByAssetId(state.slotState, assetId);
+      const nextStackState = isStackAssetCategory(category)
+        ? {
+            ...state.stackState,
+            stacks: state.stackState.stacks.map((stack) =>
+              stack.assetId === assetId ? { ...stack, category } : stack,
+            ),
+          }
+        : removeStacksByAssetId(state.stackState, assetId);
 
       return {
         assets: nextAssets,
@@ -607,6 +717,8 @@ export const useBoardStore = create<BoardStore>((set) => ({
           category === "TOKEN"
             ? state.diceState
             : removeDiceReferencesByAssetId(state.diceState, assetId),
+        slotState: nextSlotState,
+        stackState: nextStackState,
         entityState: {
           entities: state.entityState.entities
             .filter((entity) => !removedEntityIds.has(entity.id))
@@ -723,6 +835,8 @@ export const useBoardStore = create<BoardStore>((set) => ({
         ),
         cardDeckState: removeCardsByAssetId(state.cardDeckState, assetId),
         diceState: removeDiceReferencesByAssetId(state.diceState, assetId),
+        slotState: removeSlotAssetsByAssetId(state.slotState, assetId),
+        stackState: removeStacksByAssetId(state.stackState, assetId),
         selectedAssetId: asset.id,
         selectedPlacementId:
           state.selectedPlacementId &&
@@ -816,8 +930,15 @@ export const useBoardStore = create<BoardStore>((set) => ({
       }
 
       try {
+        const nextBoard = updateLocation(state.board, locationId, { x, y });
+        const nextLocation = nextBoard.locations.find(
+          (location) => location.id === locationId,
+        )!;
+        const synced = syncLocationOwnedSurfaces(state, locationId, nextLocation);
+
         return {
-          board: updateLocation(state.board, locationId, { x, y }),
+          board: nextBoard,
+          ...synced,
           selectedLocationId: locationId,
           selectedPlacementId: null,
           selectedEdgeId: null,
@@ -838,8 +959,18 @@ export const useBoardStore = create<BoardStore>((set) => ({
       }
 
       try {
+        const nextBoard = updateLocation(state.board, locationId, patch);
+        const nextLocation = nextBoard.locations.find(
+          (location) => location.id === locationId,
+        )!;
+        const synced =
+          patch.x !== undefined || patch.y !== undefined
+            ? syncLocationOwnedSurfaces(state, locationId, nextLocation)
+            : {};
+
         return {
-          board: updateLocation(state.board, locationId, patch),
+          board: nextBoard,
+          ...synced,
           selectedLocationId: locationId,
           selectedPlacementId: null,
           selectedEdgeId: null,
@@ -863,28 +994,69 @@ export const useBoardStore = create<BoardStore>((set) => ({
         const removedEdgeIds = getConnectedEdgeIds(state.board.edges, locationId);
         const selectedLocationId =
           state.selectedLocationId === locationId ? null : state.selectedLocationId;
+        const removedSlotPlacementIds = getSlotPlacementIdsByOwner(
+          state.slotState,
+          "location",
+          locationId,
+        );
+        const removedStackPlacementIds = getStackPlacementIdsByContainer(
+          state.stackState,
+          {
+            type: "location",
+            id: locationId,
+          },
+        );
+        const removedManagedPlacementIds = new Set([
+          ...removedSlotPlacementIds,
+          ...removedStackPlacementIds,
+        ]);
+        const removedManagedEntityIds = new Set(
+          state.assetPlacements
+            .filter((placement) => removedManagedPlacementIds.has(placement.id))
+            .map((placement) => placement.entityId),
+        );
+        const unboundEntityState = clearLocationBindings(
+          state.entityState,
+          locationId,
+        );
 
         return {
           board: removeLocation(state.board, locationId),
           locationStates: omitRecordKey(state.locationStates, locationId),
           edgeStates: omitRecordKeys(state.edgeStates, removedEdgeIds),
-          entityState: clearLocationBindings(state.entityState, locationId),
-          assetPlacements: state.assetPlacements.map((placement) => {
-            if (placement.locationId !== locationId) {
-              return placement;
-            }
-
-            const { locationId: _locationId, ...unboundPlacement } = placement;
-            return unboundPlacement;
+          slotState: removeSlotsByOwner(state.slotState, "location", locationId),
+          stackState: removeStacksByContainer(state.stackState, {
+            type: "location",
+            id: locationId,
           }),
+          entityState: {
+            entities: unboundEntityState.entities.filter(
+              (entity) => !removedManagedEntityIds.has(entity.id),
+            ),
+          },
+          assetPlacements: state.assetPlacements
+            .filter((placement) => !removedManagedPlacementIds.has(placement.id))
+            .map((placement) => {
+              if (placement.locationId !== locationId) {
+                return placement;
+              }
+
+              const { locationId: _locationId, ...unboundPlacement } = placement;
+              return unboundPlacement;
+            }),
+          pawnSheets: removePawnSheetsByPlacementId(
+            state.pawnSheets,
+            removedManagedPlacementIds,
+          ),
           selectedLocationId,
           selectedPlacementId:
             state.selectedPlacementId &&
-            state.assetPlacements.some(
-              (placement) =>
-                placement.id === state.selectedPlacementId &&
-                placement.locationId === locationId,
-            )
+            (removedManagedPlacementIds.has(state.selectedPlacementId) ||
+              state.assetPlacements.some(
+                (placement) =>
+                  placement.id === state.selectedPlacementId &&
+                  placement.locationId === locationId,
+              ))
               ? null
               : state.selectedPlacementId,
           selectedEdgeId:
@@ -1248,8 +1420,20 @@ export const useBoardStore = create<BoardStore>((set) => ({
         width: clampInteger(patch.width ?? placement.width, 12, 640),
         height: clampInteger(patch.height ?? placement.height, 12, 640),
       };
+      const slotState = {
+        slots: state.slotState.slots.map((slot) =>
+          slot.placementId === placementId
+            ? {
+                ...slot,
+                x: nextPlacement.x,
+                y: nextPlacement.y,
+              }
+            : slot,
+        ),
+      };
 
       return {
+        slotState,
         assetPlacements: state.assetPlacements.map((candidate) =>
           candidate.id === placementId ? nextPlacement : candidate,
         ),
@@ -1344,12 +1528,31 @@ export const useBoardStore = create<BoardStore>((set) => ({
       const nextEntityState = placement
         ? removeEntity(state.entityState, placement.entityId)
         : state.entityState;
+      const nextSlotState = {
+        slots: state.slotState.slots.map((slot) => {
+          if (slot.placementId !== state.selectedPlacementId) {
+            return slot;
+          }
+
+          const { assetId: _assetId, placementId: _placementId, ...clearedSlot } =
+            slot;
+          return clearedSlot;
+        }),
+      };
+      const nextStackState = {
+        ...state.stackState,
+        stacks: state.stackState.stacks.filter(
+          (stack) => stack.placementId !== state.selectedPlacementId,
+        ),
+      };
 
       return {
         entityState: nextEntityState,
         assetPlacements: state.assetPlacements.filter(
           (placement) => placement.id !== state.selectedPlacementId,
         ),
+        slotState: nextSlotState,
+        stackState: nextStackState,
         pawnSheets: removePawnSheetsByPlacementId(
           state.pawnSheets,
           new Set([state.selectedPlacementId]),
@@ -2115,6 +2318,680 @@ export const useBoardStore = create<BoardStore>((set) => ({
       diceState: clearDiceRollHistoryState(state.diceState),
       lastError: null,
     })),
+  createSlot: (name, ownerType, ownerId, x, y) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const position = resolveSlotPosition(state, {
+        ownerType,
+        ownerId,
+        x,
+        y,
+      });
+
+      if (!position) {
+        return {
+          lastError:
+            ownerType === "location"
+              ? `Location '${ownerId}' was not found.`
+              : "Slot coordinates must be inside the board.",
+        };
+      }
+
+      const id = createSequentialId(
+        "slot",
+        state.slotState.slots.map((slot) => slot.id),
+      );
+
+      try {
+        const slotState = addSlot(state.slotState, {
+          id,
+          name,
+          ownerType,
+          ownerId,
+          x: position.x,
+          y: position.y,
+        });
+
+        createdId = id;
+
+        return {
+          slotState,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  updateSlot: (slotId, patch) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const slot = findSlot(state.slotState, slotId);
+
+      if (!slot) {
+        return {
+          lastError: `Slot '${slotId}' was not found.`,
+        };
+      }
+
+      const ownerType = patch.ownerType ?? slot.ownerType;
+      const ownerId = patch.ownerId ?? slot.ownerId;
+      const position = resolveSlotPosition(state, {
+        ownerType,
+        ownerId,
+        x: patch.x ?? slot.x,
+        y: patch.y ?? slot.y,
+      });
+
+      if (!position) {
+        return {
+          lastError:
+            ownerType === "location"
+              ? `Location '${ownerId}' was not found.`
+              : "Slot coordinates must be inside the board.",
+        };
+      }
+
+      try {
+        const slotState = updateSlotState(state.slotState, slotId, {
+          ...patch,
+          ownerType,
+          ownerId,
+          x: position.x,
+          y: position.y,
+        });
+        const synced = syncSlotVisual(state, {
+          ...slot,
+          ...patch,
+          ownerType,
+          ownerId,
+          x: position.x,
+          y: position.y,
+        });
+
+        return {
+          slotState,
+          ...synced,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  deleteSlot: (slotId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const slot = findSlot(state.slotState, slotId);
+
+      if (!slot) {
+        return {
+          lastError: `Slot '${slotId}' was not found.`,
+        };
+      }
+
+      try {
+        const removed = removeManagedPlacement(state, slot.placementId);
+
+        return {
+          slotState: removeSlot(state.slotState, slotId),
+          ...removed,
+          selectedPlacementId:
+            state.selectedPlacementId && state.selectedPlacementId === slot.placementId
+              ? null
+              : state.selectedPlacementId,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  assignAssetToSlot: (slotId, assetId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const slot = findSlot(state.slotState, slotId);
+      const asset = state.assets.find((candidate) => candidate.id === assetId);
+
+      if (!slot) {
+        return {
+          lastError: `Slot '${slotId}' was not found.`,
+        };
+      }
+
+      if (!asset) {
+        return {
+          lastError: `Image asset '${assetId}' was not found.`,
+        };
+      }
+
+      if (!isSlotAssetCategory(asset.category)) {
+        return {
+          lastError: `${asset.category} assets cannot be assigned to slots.`,
+        };
+      }
+
+      if (isAssetCopyLimitReached(state, asset, slot.placementId)) {
+        return {
+          lastError: getAssetLimitMessage(state, assetId),
+        };
+      }
+
+      try {
+        const baseState = {
+          ...state,
+          ...removeManagedPlacement(state, slot.placementId),
+        };
+        const position = getSlotVisualPoint(baseState, slot);
+        const placement = createManagedPlacement(baseState, asset, position.x, position.y, {
+          locationId: slot.ownerType === "location" ? slot.ownerId : undefined,
+          entityState: {
+            slotId: slot.id,
+            slotOwnerType: slot.ownerType,
+            slotOwnerId: slot.ownerId,
+          },
+        });
+        const slotState = assignSlotAsset(
+          baseState.slotState,
+          slot.id,
+          asset.id,
+          placement.placement.id,
+        );
+
+        return {
+          slotState,
+          entityState: {
+            entities: [...baseState.entityState.entities, placement.entity],
+          },
+          assetPlacements: [
+            ...baseState.assetPlacements,
+            placement.placement,
+          ],
+          pawnSheets: placement.pawnSheet
+            ? {
+                ...baseState.pawnSheets,
+                [placement.placement.id]: placement.pawnSheet,
+              }
+            : baseState.pawnSheets,
+          selectedLocationId: null,
+          selectedPlacementId: placement.placement.id,
+          selectedEdgeId: null,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  clearSlot: (slotId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const slot = findSlot(state.slotState, slotId);
+
+      if (!slot) {
+        return {
+          lastError: `Slot '${slotId}' was not found.`,
+        };
+      }
+
+      try {
+        const removed = removeManagedPlacement(state, slot.placementId);
+
+        return {
+          slotState: clearSlotAsset(state.slotState, slotId),
+          ...removed,
+          selectedPlacementId:
+            state.selectedPlacementId && state.selectedPlacementId === slot.placementId
+              ? null
+              : state.selectedPlacementId,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  moveSlotAsset: (fromSlotId, toSlotId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const fromSlot = findSlot(state.slotState, fromSlotId);
+      const toSlot = findSlot(state.slotState, toSlotId);
+
+      if (!fromSlot || !toSlot) {
+        return {
+          lastError: "Both source and target slots must exist.",
+        };
+      }
+
+      if (!fromSlot.assetId || !fromSlot.placementId) {
+        return {
+          lastError: `Slot '${fromSlotId}' has no placed asset to move.`,
+        };
+      }
+
+      try {
+        const baseState = {
+          ...state,
+          ...removeManagedPlacement(state, toSlot.placementId),
+        };
+        const targetPoint = getSlotVisualPoint(baseState, toSlot);
+        const slotState = moveSlotAssetState(
+          baseState.slotState,
+          fromSlotId,
+          toSlotId,
+        );
+
+        return {
+          slotState,
+          assetPlacements: baseState.assetPlacements.map((placement) => {
+            if (placement.id !== fromSlot.placementId) {
+              return placement;
+            }
+
+            const movedPlacement = {
+              ...placement,
+              x: targetPoint.x,
+              y: targetPoint.y,
+            };
+
+            return toSlot.ownerType === "location"
+              ? { ...movedPlacement, locationId: toSlot.ownerId }
+              : removePlacementLocation(movedPlacement);
+          }),
+          entityState: {
+            entities: baseState.entityState.entities.map((entity) => {
+              if (entity.state.placementId !== fromSlot.placementId) {
+                return entity;
+              }
+
+              const movedEntity = {
+                ...entity,
+                state: {
+                  ...entity.state,
+                  slotId: toSlot.id,
+                  slotOwnerType: toSlot.ownerType,
+                  slotOwnerId: toSlot.ownerId,
+                },
+              };
+
+              return toSlot.ownerType === "location"
+                ? { ...movedEntity, locationId: toSlot.ownerId }
+                : removeEntityLocation(movedEntity);
+            }),
+          },
+          selectedPlacementId: fromSlot.placementId,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  createSupplyZone: (name) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const id = createSequentialId(
+        "supply",
+        state.stackState.supplyZones.map((zone) => zone.id),
+      );
+
+      try {
+        createdId = id;
+
+        return {
+          stackState: addSupplyZone(state.stackState, {
+            id,
+            name,
+          }),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  updateSupplyZone: (zoneId, patch) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      try {
+        return {
+          stackState: updateSupplyZoneState(state.stackState, zoneId, patch),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  deleteSupplyZone: (zoneId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const removedPlacementIds = getStackPlacementIdsByContainer(
+        state.stackState,
+        {
+          type: "supply",
+          id: zoneId,
+        },
+      );
+
+      try {
+        const removed = removeManagedPlacements(state, removedPlacementIds);
+
+        return {
+          stackState: removeSupplyZone(state.stackState, zoneId),
+          ...removed,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  createPawnStack: (assetId, container, count, capacity, name) => {
+    let createdId: string | null = null;
+
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const asset = state.assets.find((candidate) => candidate.id === assetId);
+
+      if (!asset) {
+        return {
+          lastError: `Image asset '${assetId}' was not found.`,
+        };
+      }
+
+      if (!isStackAssetCategory(asset.category)) {
+        return {
+          lastError: `${asset.category} assets cannot be used as pawn stacks.`,
+        };
+      }
+
+      const containerError = validateStackContainer(state, container);
+
+      if (containerError) {
+        return {
+          lastError: containerError,
+        };
+      }
+
+      if (container.type === "location" && isAssetCopyLimitReached(state, asset)) {
+        return {
+          lastError: getAssetLimitMessage(state, asset.id),
+        };
+      }
+
+      try {
+        const id = createSequentialId(
+          "stack",
+          state.stackState.stacks.map((stack) => stack.id),
+        );
+        const visual =
+          container.type === "location"
+            ? createStackVisual(state, asset, id, container.id, count)
+            : null;
+        const stackState = addPawnStack(state.stackState, {
+          id,
+          name: name?.trim() || asset.name,
+          assetId: asset.id,
+          category: asset.category,
+          container,
+          count,
+          ...(capacity !== undefined ? { capacity } : {}),
+          ...(visual ? { placementId: visual.placement.id } : {}),
+          ...(visual ? { entityId: visual.entity.id } : {}),
+        });
+
+        createdId = id;
+
+        return {
+          stackState,
+          entityState: visual
+            ? {
+                entities: [...state.entityState.entities, visual.entity],
+              }
+            : state.entityState,
+          assetPlacements: visual
+            ? [...state.assetPlacements, visual.placement]
+            : state.assetPlacements,
+          pawnSheets:
+            visual?.pawnSheet && visual.placement.category === "PAWN"
+              ? {
+                  ...state.pawnSheets,
+                  [visual.placement.id]: visual.pawnSheet,
+                }
+              : state.pawnSheets,
+          selectedLocationId: null,
+          selectedPlacementId: visual?.placement.id ?? state.selectedPlacementId,
+          selectedEdgeId: null,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return createdId;
+  },
+  updatePawnStack: (stackId, patch) =>
+    set((state) => {
+      if (
+        state.mode === "run" &&
+        (patch.name !== undefined ||
+          patch.capacity !== undefined ||
+          patch.state !== undefined)
+      ) {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const stack = findPawnStack(state.stackState, stackId);
+
+      if (!stack) {
+        return {
+          lastError: `Stack '${stackId}' was not found.`,
+        };
+      }
+
+      try {
+        const stackState = updatePawnStackState(state.stackState, stackId, patch);
+        const nextCount = patch.count ?? stack.count;
+
+        return {
+          stackState,
+          entityState: updateStackEntityCount(
+            state.entityState,
+            stack.entityId,
+            nextCount,
+          ),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  adjustPawnStackCount: (stackId, delta) =>
+    set((state) => {
+      const stack = findPawnStack(state.stackState, stackId);
+
+      if (!stack) {
+        return {
+          lastError: `Stack '${stackId}' was not found.`,
+        };
+      }
+
+      try {
+        const nextCount = stack.count + Math.trunc(delta);
+
+        if (nextCount <= 0) {
+          const removed = removeManagedPlacement(state, stack.placementId);
+
+          return {
+            stackState: removePawnStackState(state.stackState, stackId),
+            ...removed,
+            lastError: null,
+          };
+        }
+
+        return {
+          stackState: adjustPawnStackCountState(
+            state.stackState,
+            stackId,
+            Math.trunc(delta),
+          ),
+          entityState: updateStackEntityCount(
+            state.entityState,
+            stack.entityId,
+            nextCount,
+          ),
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
+  movePawnStack: (stackId, target, count) => {
+    let resultId: string | null = null;
+
+    set((state) => {
+      const stack = findPawnStack(state.stackState, stackId);
+
+      if (!stack) {
+        return {
+          lastError: `Stack '${stackId}' was not found.`,
+        };
+      }
+
+      const containerError = validateStackContainer(state, target);
+
+      if (containerError) {
+        return {
+          lastError: containerError,
+        };
+      }
+
+      try {
+        const result = moveStackWithVisuals(state, stack, target, count);
+        resultId = result.stackId;
+
+        return {
+          ...result.patch,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    });
+
+    return resultId;
+  },
+  deletePawnStack: (stackId) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const stack = findPawnStack(state.stackState, stackId);
+
+      if (!stack) {
+        return {
+          lastError: `Stack '${stackId}' was not found.`,
+        };
+      }
+
+      try {
+        const removed = removeManagedPlacement(state, stack.placementId);
+
+        return {
+          stackState: removePawnStackState(state.stackState, stackId),
+          ...removed,
+          lastError: null,
+        };
+      } catch (error) {
+        return {
+          lastError: getErrorMessage(error),
+        };
+      }
+    }),
   setBoardZoom: (zoom) =>
     set({
       boardZoom: clampNumber(zoom, 0.5, 4),
@@ -2615,6 +3492,626 @@ function removeAssetFromPawnSheet(sheet: PawnSheet, assetId: string): PawnSheet 
   };
 }
 
+function resolveSlotPosition(
+  state: Pick<BoardStore, "board">,
+  input: {
+    ownerType: SlotOwnerType;
+    ownerId: string;
+    x?: number;
+    y?: number;
+  },
+) {
+  if (input.ownerType === "location") {
+    const location = state.board.locations.find(
+      (candidate) => candidate.id === input.ownerId,
+    );
+
+    return location ? { x: location.x, y: location.y } : null;
+  }
+
+  const x = input.x ?? 0.5;
+  const y = input.y ?? 0.5;
+
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) {
+    return null;
+  }
+
+  return {
+    x,
+    y,
+  };
+}
+
+function getSlotVisualPoint(
+  state: Pick<BoardStore, "board">,
+  slot: BoardSlot,
+) {
+  if (slot.ownerType !== "location") {
+    return {
+      x: slot.x,
+      y: slot.y,
+    };
+  }
+
+  const location = state.board.locations.find(
+    (candidate) => candidate.id === slot.ownerId,
+  );
+
+  return location
+    ? { x: location.x, y: location.y }
+    : {
+        x: slot.x,
+        y: slot.y,
+      };
+}
+
+function createManagedPlacement(
+  state: Pick<BoardStore, "assetPlacements" | "entityState" | "pawnSheets">,
+  asset: UploadedImageAsset,
+  x: number,
+  y: number,
+  options: {
+    entityState?: JsonRecord;
+    locationId?: string;
+  } = {},
+) {
+  const id = createSequentialId(
+    `${asset.category.toLowerCase()}-copy`,
+    state.assetPlacements.map((placement) => placement.id),
+  );
+  const entityId = createSequentialId(
+    "entity",
+    state.entityState.entities.map((entity) => entity.id),
+  );
+  const placement: AssetPlacement = {
+    id,
+    assetId: asset.id,
+    category: asset.category,
+    entityId,
+    ...(options.locationId ? { locationId: options.locationId } : {}),
+    x: clampNumber(x, 0, 1),
+    y: clampNumber(y, 0, 1),
+    width: asset.placementWidth,
+    height: asset.placementHeight,
+  };
+  const entity = {
+    id: entityId,
+    type: asset.category,
+    ...(options.locationId ? { locationId: options.locationId } : {}),
+    state: {
+      assetId: asset.id,
+      category: asset.category,
+      placementId: id,
+      ...(options.entityState ?? {}),
+    },
+  };
+
+  return {
+    placement,
+    entity,
+    pawnSheet: asset.category === "PAWN" ? createEmptyPawnSheet() : null,
+  };
+}
+
+function createStackVisual(
+  state: Pick<BoardStore, "assetPlacements" | "board" | "entityState" | "pawnSheets">,
+  asset: UploadedImageAsset,
+  stackId: string,
+  locationId: string,
+  count: number,
+) {
+  const location = state.board.locations.find(
+    (candidate) => candidate.id === locationId,
+  );
+
+  if (!location) {
+    throw new Error(`Location '${locationId}' was not found.`);
+  }
+
+  return createManagedPlacement(state, asset, location.x, location.y, {
+    locationId,
+    entityState: {
+      stackId,
+      count,
+    },
+  });
+}
+
+function removeManagedPlacement(
+  state: Pick<
+    BoardStore,
+    "assetPlacements" | "entityState" | "pawnSheets" | "selectedPlacementId"
+  >,
+  placementId?: string,
+) {
+  return removeManagedPlacements(state, placementId ? new Set([placementId]) : new Set());
+}
+
+function removeManagedPlacements(
+  state: Pick<
+    BoardStore,
+    "assetPlacements" | "entityState" | "pawnSheets" | "selectedPlacementId"
+  >,
+  placementIds: ReadonlySet<string>,
+) {
+  if (placementIds.size === 0) {
+    return {
+      entityState: state.entityState,
+      assetPlacements: state.assetPlacements,
+      pawnSheets: state.pawnSheets,
+      selectedPlacementId: state.selectedPlacementId,
+    };
+  }
+
+  const entityIds = new Set(
+    state.assetPlacements
+      .filter((placement) => placementIds.has(placement.id))
+      .map((placement) => placement.entityId),
+  );
+
+  return {
+    entityState: {
+      entities: state.entityState.entities.filter(
+        (entity) => !entityIds.has(entity.id),
+      ),
+    },
+    assetPlacements: state.assetPlacements.filter(
+      (placement) => !placementIds.has(placement.id),
+    ),
+    pawnSheets: removePawnSheetsByPlacementId(state.pawnSheets, new Set(placementIds)),
+    selectedPlacementId:
+      state.selectedPlacementId && placementIds.has(state.selectedPlacementId)
+        ? null
+        : state.selectedPlacementId,
+  };
+}
+
+function syncSlotVisual(
+  state: Pick<BoardStore, "assetPlacements" | "board" | "entityState">,
+  slot: BoardSlot,
+) {
+  if (!slot.placementId) {
+    return {};
+  }
+
+  const point = getSlotVisualPoint(state, slot);
+
+  return {
+    assetPlacements: state.assetPlacements.map((placement) => {
+      if (placement.id !== slot.placementId) {
+        return placement;
+      }
+
+      const movedPlacement = {
+        ...placement,
+        x: point.x,
+        y: point.y,
+      };
+
+      return slot.ownerType === "location"
+        ? { ...movedPlacement, locationId: slot.ownerId }
+        : removePlacementLocation(movedPlacement);
+    }),
+    entityState: {
+      entities: state.entityState.entities.map((entity) => {
+        if (entity.state.placementId !== slot.placementId) {
+          return entity;
+        }
+
+        const movedEntity = {
+          ...entity,
+          state: {
+            ...entity.state,
+            slotId: slot.id,
+            slotOwnerType: slot.ownerType,
+            slotOwnerId: slot.ownerId,
+          },
+        };
+
+        return slot.ownerType === "location"
+          ? { ...movedEntity, locationId: slot.ownerId }
+          : removeEntityLocation(movedEntity);
+      }),
+    },
+  };
+}
+
+function syncLocationOwnedSurfaces(
+  state: Pick<
+    BoardStore,
+    "assetPlacements" | "entityState" | "slotState" | "stackState"
+  >,
+  locationId: string,
+  location: BoardLocation,
+) {
+  const slotPlacementIds = getSlotPlacementIdsByOwner(
+    state.slotState,
+    "location",
+    locationId,
+  );
+  const stackPlacementIds = getStackPlacementIdsByContainer(state.stackState, {
+    type: "location",
+    id: locationId,
+  });
+  const managedPlacementIds = new Set([
+    ...slotPlacementIds,
+    ...stackPlacementIds,
+  ]);
+  const managedEntityIds = new Set(
+    state.assetPlacements
+      .filter((placement) => managedPlacementIds.has(placement.id))
+      .map((placement) => placement.entityId),
+  );
+
+  return {
+    slotState: {
+      slots: state.slotState.slots.map((slot) =>
+        slot.ownerType === "location" && slot.ownerId === locationId
+          ? {
+              ...slot,
+              x: location.x,
+              y: location.y,
+            }
+          : slot,
+      ),
+    },
+    assetPlacements: state.assetPlacements.map((placement) =>
+      managedPlacementIds.has(placement.id)
+        ? {
+            ...placement,
+            locationId,
+            x: location.x,
+            y: location.y,
+          }
+        : placement,
+    ),
+    entityState: {
+      entities: state.entityState.entities.map((entity) =>
+        managedEntityIds.has(entity.id)
+          ? {
+              ...entity,
+              locationId,
+            }
+          : entity,
+      ),
+    },
+  };
+}
+
+function getSlotPlacementIdsByOwner(
+  slotState: SlotState,
+  ownerType: SlotOwnerType,
+  ownerId: string,
+) {
+  return new Set(
+    slotState.slots
+      .filter((slot) => slot.ownerType === ownerType && slot.ownerId === ownerId)
+      .map((slot) => slot.placementId)
+      .filter(isNonNullableString),
+  );
+}
+
+function getStackPlacementIdsByContainer(
+  stackState: StackState,
+  container: StackContainerRef,
+) {
+  return new Set(
+    stackState.stacks
+      .filter(
+        (stack) =>
+          stack.container.type === container.type &&
+          stack.container.id === container.id,
+      )
+      .map((stack) => stack.placementId)
+      .filter(isNonNullableString),
+  );
+}
+
+function validateStackContainer(
+  state: Pick<BoardStore, "board" | "stackState">,
+  container: StackContainerRef,
+) {
+  if (container.type === "location") {
+    return state.board.locations.some((location) => location.id === container.id)
+      ? null
+      : `Location '${container.id}' was not found.`;
+  }
+
+  return state.stackState.supplyZones.some((zone) => zone.id === container.id)
+    ? null
+    : `Supply zone '${container.id}' was not found.`;
+}
+
+function isAssetCopyLimitReached(
+  state: Pick<BoardStore, "assetPlacements">,
+  asset: UploadedImageAsset,
+  exceptPlacementId?: string,
+) {
+  return (
+    state.assetPlacements.filter(
+      (placement) =>
+        placement.assetId === asset.id && placement.id !== exceptPlacementId,
+    ).length >= asset.maxCopies
+  );
+}
+
+function updateStackEntityCount(
+  entityState: EntityState,
+  entityId: string | undefined,
+  count: number,
+): EntityState {
+  if (!entityId) {
+    return entityState;
+  }
+
+  return {
+    entities: entityState.entities.map((entity) =>
+      entity.id === entityId
+        ? {
+            ...entity,
+            state: {
+              ...entity.state,
+              count,
+            },
+          }
+        : entity,
+    ),
+  };
+}
+
+function moveStackWithVisuals(
+  state: Pick<
+    BoardStore,
+    | "assetPlacements"
+    | "assets"
+    | "board"
+    | "entityState"
+    | "pawnSheets"
+    | "selectedPlacementId"
+    | "stackState"
+  >,
+  stack: PawnStack,
+  target: StackContainerRef,
+  count?: number,
+) {
+  const moveCount = count === undefined ? stack.count : Math.trunc(count);
+
+  if (!Number.isInteger(moveCount) || moveCount <= 0 || moveCount > stack.count) {
+    throw new Error("Move count must be between 1 and the source stack count.");
+  }
+
+  const asset = state.assets.find((candidate) => candidate.id === stack.assetId);
+
+  if (!asset || !isStackAssetCategory(asset.category)) {
+    throw new Error(`Stack asset '${stack.assetId}' was not found.`);
+  }
+
+  const matching = findMatchingStack(
+    state.stackState,
+    stack.assetId,
+    stack.category,
+    target,
+    stack.id,
+  );
+
+  if (matching) {
+    const stackState = mergePawnStacks(state.stackState, {
+      sourceStackId: stack.id,
+      targetStackId: matching.id,
+      count: moveCount,
+    });
+    let entityState = updateStackEntityCount(
+      state.entityState,
+      matching.entityId,
+      matching.count + moveCount,
+    );
+    let assetPlacements = state.assetPlacements;
+    let pawnSheets = state.pawnSheets;
+    let selectedPlacementId = state.selectedPlacementId;
+
+    if (moveCount === stack.count) {
+      const removed = removeManagedPlacement(
+        {
+          ...state,
+          entityState,
+        },
+        stack.placementId,
+      );
+      entityState = removed.entityState;
+      assetPlacements = removed.assetPlacements;
+      pawnSheets = removed.pawnSheets;
+      selectedPlacementId = removed.selectedPlacementId;
+    } else {
+      entityState = updateStackEntityCount(
+        entityState,
+        stack.entityId,
+        stack.count - moveCount,
+      );
+    }
+
+    return {
+      stackId: matching.id,
+      patch: {
+        stackState,
+        entityState,
+        assetPlacements,
+        pawnSheets,
+        selectedPlacementId,
+      },
+    };
+  }
+
+  if (moveCount === stack.count) {
+    let stackState = movePawnStackState(state.stackState, stack.id, target);
+    let entityState = state.entityState;
+    let assetPlacements = state.assetPlacements;
+    let pawnSheets = state.pawnSheets;
+    let selectedPlacementId = state.selectedPlacementId;
+
+    if (target.type === "location") {
+      const location = getLocationOrThrow(state.board, target.id);
+
+      if (stack.placementId && stack.entityId) {
+        assetPlacements = assetPlacements.map((placement) =>
+          placement.id === stack.placementId
+            ? {
+                ...placement,
+                locationId: target.id,
+                x: location.x,
+                y: location.y,
+              }
+            : placement,
+        );
+        entityState = {
+          entities: entityState.entities.map((entity) =>
+            entity.id === stack.entityId
+              ? {
+                  ...entity,
+                  locationId: target.id,
+                  state: {
+                    ...entity.state,
+                    count: stack.count,
+                    stackId: stack.id,
+                  },
+                }
+              : entity,
+          ),
+        };
+        selectedPlacementId = stack.placementId;
+      } else {
+        const visual = createStackVisual(
+          { ...state, assetPlacements, entityState, pawnSheets },
+          asset,
+          stack.id,
+          target.id,
+          stack.count,
+        );
+        assetPlacements = [...assetPlacements, visual.placement];
+        entityState = {
+          entities: [...entityState.entities, visual.entity],
+        };
+        pawnSheets =
+          visual.pawnSheet && visual.placement.category === "PAWN"
+            ? {
+                ...pawnSheets,
+                [visual.placement.id]: visual.pawnSheet,
+              }
+            : pawnSheets;
+        selectedPlacementId = visual.placement.id;
+        stackState = updatePawnStackState(stackState, stack.id, {
+          placementId: visual.placement.id,
+          entityId: visual.entity.id,
+        });
+      }
+    } else if (stack.placementId) {
+      const removed = removeManagedPlacement(state, stack.placementId);
+      entityState = removed.entityState;
+      assetPlacements = removed.assetPlacements;
+      pawnSheets = removed.pawnSheets;
+      selectedPlacementId = removed.selectedPlacementId;
+      stackState = updatePawnStackState(stackState, stack.id, {
+        placementId: "",
+        entityId: "",
+      });
+    }
+
+    return {
+      stackId: stack.id,
+      patch: {
+        stackState,
+        entityState,
+        assetPlacements,
+        pawnSheets,
+        selectedPlacementId,
+      },
+    };
+  }
+
+  const newStackId = createSequentialId(
+    "stack",
+    state.stackState.stacks.map((candidate) => candidate.id),
+  );
+  let visual:
+    | ReturnType<typeof createManagedPlacement>
+    | ReturnType<typeof createStackVisual>
+    | null = null;
+
+  if (target.type === "location") {
+    visual = createStackVisual(state, asset, newStackId, target.id, moveCount);
+  }
+
+  const stackState = splitPawnStack(state.stackState, {
+    sourceStackId: stack.id,
+    newStackId,
+    count: moveCount,
+    target,
+    name: stack.name,
+    ...(visual ? { placementId: visual.placement.id } : {}),
+    ...(visual ? { entityId: visual.entity.id } : {}),
+  });
+  const entityState = visual
+    ? {
+        entities: [
+          ...updateStackEntityCount(
+            state.entityState,
+            stack.entityId,
+            stack.count - moveCount,
+          ).entities,
+          visual.entity,
+        ],
+      }
+    : updateStackEntityCount(
+        state.entityState,
+        stack.entityId,
+        stack.count - moveCount,
+      );
+  const assetPlacements = visual
+    ? [...state.assetPlacements, visual.placement]
+    : state.assetPlacements;
+  const pawnSheets =
+    visual?.pawnSheet && visual.placement.category === "PAWN"
+      ? {
+          ...state.pawnSheets,
+          [visual.placement.id]: visual.pawnSheet,
+        }
+      : state.pawnSheets;
+
+  return {
+    stackId: newStackId,
+    patch: {
+      stackState,
+      entityState,
+      assetPlacements,
+      pawnSheets,
+      selectedPlacementId: visual?.placement.id ?? state.selectedPlacementId,
+    },
+  };
+}
+
+function getLocationOrThrow(board: BoardState, locationId: string) {
+  const location = board.locations.find((candidate) => candidate.id === locationId);
+
+  if (!location) {
+    throw new Error(`Location '${locationId}' was not found.`);
+  }
+
+  return location;
+}
+
+function removePlacementLocation(placement: AssetPlacement): AssetPlacement {
+  const { locationId: _locationId, ...nextPlacement } = placement;
+  return nextPlacement;
+}
+
+function removeEntityLocation<T extends { locationId?: string }>(entity: T): T {
+  const { locationId: _locationId, ...nextEntity } = entity;
+  return nextEntity as T;
+}
+
+function isNonNullableString(value: string | undefined): value is string {
+  return Boolean(value);
+}
+
 function createFrozenSetupSnapshot(
   state: Pick<
     BoardStore,
@@ -2625,6 +4122,8 @@ function createFrozenSetupSnapshot(
     | "pawnSheets"
     | "cardDeckState"
     | "diceState"
+    | "slotState"
+    | "stackState"
     | "boardState"
     | "locationStates"
     | "edgeStates"
@@ -2640,6 +4139,8 @@ function createFrozenSetupSnapshot(
     pawnSheets: state.pawnSheets,
     cardDeckState: state.cardDeckState,
     diceState: state.diceState,
+    slotState: state.slotState,
+    stackState: state.stackState,
     boardState: state.boardState,
     locationStates: state.locationStates,
     edgeStates: state.edgeStates,

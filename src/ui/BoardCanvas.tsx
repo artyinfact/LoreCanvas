@@ -1199,15 +1199,13 @@ function getPlacementCount(
   placement: AssetPlacement,
   entityById: Map<string, Entity>,
 ) {
-  if (placement.category !== "TOKEN") {
-    return null;
-  }
-
   const value = entityById.get(placement.entityId)?.state.count;
 
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.max(0, Math.trunc(value))
-    : 1;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.trunc(value));
+  }
+
+  return placement.category === "TOKEN" ? 1 : null;
 }
 
 function findNearestLocation(point: PointData, locations: BoardLocation[]) {

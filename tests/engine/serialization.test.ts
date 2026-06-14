@@ -82,6 +82,39 @@ describe("F-03 scenario serialization", () => {
       ],
       lastRollId: "roll-search-1",
     });
+    expect(restored.slotState.slots[0]).toMatchObject({
+      id: "slot-haven",
+      ownerType: "location",
+      ownerId: "loc-shire",
+      assetId: "asset-tile",
+      placementId: "tile-copy-1",
+    });
+    expect(restored.stackState).toMatchObject({
+      supplyZones: [
+        {
+          id: "supply-global",
+          name: "Global Supply",
+        },
+      ],
+      stacks: expect.arrayContaining([
+        expect.objectContaining({
+          id: "stack-threat",
+          assetId: "asset-token",
+          category: "TOKEN",
+          count: 3,
+          placementId: "token-copy-1",
+          entityId: "entity-threat",
+        }),
+        expect.objectContaining({
+          id: "stack-reserve",
+          container: {
+            type: "supply",
+            id: "supply-global",
+          },
+          count: 5,
+        }),
+      ]),
+    });
     expect(restored.viewport).toEqual({
       boardZoom: 1.4,
       boardPan: {
@@ -182,6 +215,47 @@ describe("F-03 scenario serialization", () => {
     );
   });
 
+  it("reports invalid slot and stack references", () => {
+    const invalidScenario = createSampleScenario();
+
+    invalidScenario.slotState!.slots[0] = {
+      ...invalidScenario.slotState!.slots[0]!,
+      assetId: "asset-card",
+      placementId: "missing-placement",
+    };
+    invalidScenario.stackState!.stacks[0] = {
+      ...invalidScenario.stackState!.stacks[0]!,
+      assetId: "missing-stack-asset",
+      container: {
+        type: "location",
+        id: "missing-location",
+      },
+    };
+
+    const issues = validateScenarioPackage({
+      format: "lorecanvas.scenario",
+      version: 1,
+      ...invalidScenario,
+      metadata: {},
+      viewport: {
+        boardZoom: 1,
+        boardPan: {
+          x: 0,
+          y: 0,
+        },
+      },
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "slot_asset_category" }),
+        expect.objectContaining({ code: "slot_placement_not_found" }),
+        expect.objectContaining({ code: "stack_asset_not_found" }),
+        expect.objectContaining({ code: "stack_container_not_found" }),
+      ]),
+    );
+  });
+
   it("throws a scenario validation error for malformed packages", () => {
     expect(() =>
       parseScenarioPackage(
@@ -247,6 +321,17 @@ function createSampleScenario(): ScenarioPackageInput {
         placementHeight: 32,
       },
       {
+        id: "asset-tile",
+        category: "TILE",
+        name: "Haven Tile.png",
+        url: "asset://haven-tile.png",
+        mimeType: "image/png",
+        size: 100,
+        maxCopies: 10,
+        placementWidth: 72,
+        placementHeight: 72,
+      },
+      {
         id: "asset-die",
         category: "TOKEN",
         kind: "die",
@@ -302,6 +387,28 @@ function createSampleScenario(): ScenarioPackageInput {
         width: 80,
         height: 80,
       },
+      {
+        id: "tile-copy-1",
+        assetId: "asset-tile",
+        category: "TILE",
+        entityId: "entity-slot-tile",
+        locationId: "loc-shire",
+        x: 0.1,
+        y: 0.2,
+        width: 72,
+        height: 72,
+      },
+      {
+        id: "token-copy-1",
+        assetId: "asset-token",
+        category: "TOKEN",
+        entityId: "entity-threat",
+        locationId: "loc-bree",
+        x: 0.2,
+        y: 0.25,
+        width: 32,
+        height: 32,
+      },
     ],
     entityState: {
       entities: [
@@ -315,6 +422,31 @@ function createSampleScenario(): ScenarioPackageInput {
             placementId: "pawn-copy-1",
             hp: 4,
             customFlags: ["hidden", "ready"],
+          },
+        },
+        {
+          id: "entity-slot-tile",
+          type: "TILE",
+          locationId: "loc-shire",
+          state: {
+            assetId: "asset-tile",
+            category: "TILE",
+            placementId: "tile-copy-1",
+            slotId: "slot-haven",
+            slotOwnerType: "location",
+            slotOwnerId: "loc-shire",
+          },
+        },
+        {
+          id: "entity-threat",
+          type: "TOKEN",
+          locationId: "loc-bree",
+          state: {
+            assetId: "asset-token",
+            category: "TOKEN",
+            placementId: "token-copy-1",
+            stackId: "stack-threat",
+            count: 3,
           },
         },
       ],
@@ -413,6 +545,64 @@ function createSampleScenario(): ScenarioPackageInput {
         },
       ],
       lastRollId: "roll-search-1",
+    },
+    slotState: {
+      slots: [
+        {
+          id: "slot-haven",
+          name: "Haven slot",
+          ownerType: "location",
+          ownerId: "loc-shire",
+          x: 0.1,
+          y: 0.2,
+          assetId: "asset-tile",
+          placementId: "tile-copy-1",
+          state: {
+            marker: "haven",
+          },
+        },
+      ],
+    },
+    stackState: {
+      supplyZones: [
+        {
+          id: "supply-global",
+          name: "Global Supply",
+          state: {},
+        },
+      ],
+      stacks: [
+        {
+          id: "stack-threat",
+          name: "Area threat",
+          assetId: "asset-token",
+          category: "TOKEN",
+          container: {
+            type: "location",
+            id: "loc-bree",
+          },
+          count: 3,
+          placementId: "token-copy-1",
+          entityId: "entity-threat",
+          state: {
+            scope: "area",
+          },
+        },
+        {
+          id: "stack-reserve",
+          name: "Global reserve",
+          assetId: "asset-token",
+          category: "TOKEN",
+          container: {
+            type: "supply",
+            id: "supply-global",
+          },
+          count: 5,
+          state: {
+            scope: "global",
+          },
+        },
+      ],
     },
     viewport: {
       boardZoom: 1.4,

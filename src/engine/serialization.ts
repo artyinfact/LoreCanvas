@@ -12,6 +12,18 @@ import type {
   DieDefinition,
   DieFaceRef,
 } from "./dice";
+import {
+  createEmptySlotState,
+  isSlotAssetCategory,
+  isSlotOwnerType,
+} from "./slot";
+import type { BoardSlot, SlotState } from "./slot";
+import {
+  createEmptyStackState,
+  isStackAssetCategory,
+  isStackContainerType,
+} from "./stack";
+import type { PawnStack, StackState, SupplyZone } from "./stack";
 import type { EntityState, JsonRecord, ResourceCategory } from "./entity";
 import { isResourceCategory } from "./entity";
 
@@ -85,6 +97,8 @@ export interface ScenarioFrozenSetup {
   pawnSheets: Record<string, ScenarioPawnSheet>;
   cardDeckState: CardDeckState;
   diceState: DiceState;
+  slotState: SlotState;
+  stackState: StackState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -103,6 +117,8 @@ export interface ScenarioPackage {
   pawnSheets: Record<string, ScenarioPawnSheet>;
   cardDeckState: CardDeckState;
   diceState: DiceState;
+  slotState: SlotState;
+  stackState: StackState;
   boardState: JsonRecord;
   locationStates: Record<string, JsonRecord>;
   edgeStates: Record<string, JsonRecord>;
@@ -166,6 +182,24 @@ export type ScenarioValidationCode =
   | "dice_roll_pool_not_found"
   | "dice_roll_die_not_found"
   | "dice_roll_face_not_found"
+  | "invalid_slot_state"
+  | "invalid_slot"
+  | "duplicate_slot_id"
+  | "slot_owner_not_found"
+  | "slot_asset_not_found"
+  | "slot_asset_category"
+  | "slot_placement_not_found"
+  | "slot_placement_mismatch"
+  | "invalid_stack_state"
+  | "invalid_supply_zone"
+  | "duplicate_supply_zone_id"
+  | "invalid_pawn_stack"
+  | "duplicate_pawn_stack_id"
+  | "stack_asset_not_found"
+  | "stack_asset_category"
+  | "stack_container_not_found"
+  | "stack_placement_not_found"
+  | "stack_placement_mismatch"
   | "invalid_viewport"
   | "invalid_mode"
   | "invalid_board_state"
@@ -200,6 +234,8 @@ export type ScenarioPackageInput = Omit<
   | "mode"
   | "cardDeckState"
   | "diceState"
+  | "slotState"
+  | "stackState"
   | "boardState"
   | "locationStates"
   | "edgeStates"
@@ -210,6 +246,8 @@ export type ScenarioPackageInput = Omit<
   mode?: ScenarioMode;
   cardDeckState?: CardDeckState;
   diceState?: DiceState;
+  slotState?: SlotState;
+  stackState?: StackState;
   boardState?: JsonRecord;
   locationStates?: Record<string, JsonRecord>;
   edgeStates?: Record<string, JsonRecord>;
@@ -229,6 +267,8 @@ export function createScenarioPackage(input: ScenarioPackageInput): ScenarioPack
     pawnSheets: cloneJson(input.pawnSheets),
     cardDeckState: cloneJson(input.cardDeckState ?? createEmptyCardDeckState()),
     diceState: cloneJson(input.diceState ?? createEmptyDiceState()),
+    slotState: cloneJson(input.slotState ?? createEmptySlotState()),
+    stackState: cloneJson(input.stackState ?? createEmptyStackState()),
     boardState: cloneJson(input.boardState ?? {}),
     locationStates: cloneJson(input.locationStates ?? {}),
     edgeStates: cloneJson(input.edgeStates ?? {}),
@@ -318,6 +358,8 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     ? value.cardDeckState
     : null;
   const diceState = isDiceState(value.diceState) ? value.diceState : null;
+  const slotState = isSlotState(value.slotState) ? value.slotState : null;
+  const stackState = isStackState(value.stackState) ? value.stackState : null;
 
   if (!assets) {
     issues.push({
@@ -368,6 +410,20 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     });
   }
 
+  if (!slotState) {
+    issues.push({
+      code: "invalid_slot_state",
+      message: "Scenario slotState must contain a slots array.",
+    });
+  }
+
+  if (!stackState) {
+    issues.push({
+      code: "invalid_stack_state",
+      message: "Scenario stackState must contain supplyZones and stacks arrays.",
+    });
+  }
+
   if (!isViewport(value.viewport)) {
     issues.push({
       code: "invalid_viewport",
@@ -403,7 +459,9 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
     !assetPlacements ||
     !pawnSheets ||
     !cardDeckState ||
-    !diceState
+    !diceState ||
+    !slotState ||
+    !stackState
   ) {
     return issues;
   }
@@ -416,6 +474,16 @@ export function validateScenarioPackage(value: unknown): ScenarioValidationIssue
   validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
   validateCardDeckState(cardDeckState, assets, assetIds, issues);
   validateDiceState(diceState, assets, assetIds, issues);
+  validateSlotState(slotState, assets, assetIds, assetPlacements, locationIds, issues);
+  validateStackState(
+    stackState,
+    assets,
+    assetIds,
+    assetPlacements,
+    entityIds,
+    locationIds,
+    issues,
+  );
   validateStateSurfaces(
     value.locationStates as Record<string, unknown>,
     value.edgeStates as Record<string, unknown>,
@@ -501,6 +569,8 @@ function validateFrozenSetup(
     ? value.cardDeckState
     : null;
   const diceState = isDiceState(value.diceState) ? value.diceState : null;
+  const slotState = isSlotState(value.slotState) ? value.slotState : null;
+  const stackState = isStackState(value.stackState) ? value.stackState : null;
 
   if (
     !assets ||
@@ -510,6 +580,8 @@ function validateFrozenSetup(
     !pawnSheets ||
     !cardDeckState ||
     !diceState ||
+    !slotState ||
+    !stackState ||
     !isRecord(value.boardState) ||
     !isRecord(value.locationStates) ||
     !isRecord(value.edgeStates) ||
@@ -538,6 +610,16 @@ function validateFrozenSetup(
   validatePawnSheets(pawnSheets, assetPlacements, assets, assetIds, issues);
   validateCardDeckState(cardDeckState, assets, assetIds, issues);
   validateDiceState(diceState, assets, assetIds, issues);
+  validateSlotState(slotState, assets, assetIds, assetPlacements, locationIds, issues);
+  validateStackState(
+    stackState,
+    assets,
+    assetIds,
+    assetPlacements,
+    entityIds,
+    locationIds,
+    issues,
+  );
   validateStateSurfaces(
     value.locationStates as Record<string, unknown>,
     value.edgeStates as Record<string, unknown>,
@@ -1148,6 +1230,211 @@ function validateDiceState(
   }
 }
 
+function validateSlotState(
+  slotState: SlotState,
+  assets: ScenarioAsset[],
+  assetIds: Set<string>,
+  placements: ScenarioAssetPlacement[],
+  locationIds: Set<string>,
+  issues: ScenarioValidationIssue[],
+) {
+  const slotIds = new Set<string>();
+  const placementById = new Map(placements.map((placement) => [placement.id, placement]));
+
+  for (const slot of slotState.slots) {
+    if (!isScenarioSlot(slot)) {
+      issues.push({
+        code: "invalid_slot",
+        message: "Every slot must have id, name, owner, coordinates, and JSON state.",
+      });
+      continue;
+    }
+
+    if (slotIds.has(slot.id)) {
+      issues.push({
+        code: "duplicate_slot_id",
+        message: `Slot id '${slot.id}' is duplicated.`,
+        id: slot.id,
+      });
+    }
+
+    slotIds.add(slot.id);
+
+    if (slot.ownerType === "location" && !locationIds.has(slot.ownerId)) {
+      issues.push({
+        code: "slot_owner_not_found",
+        message: `Slot '${slot.id}' references missing Location '${slot.ownerId}'.`,
+        id: slot.id,
+      });
+    }
+
+    if (!isNormalizedNumber(slot.x) || !isNormalizedNumber(slot.y)) {
+      issues.push({
+        code: "invalid_slot",
+        message: `Slot '${slot.id}' coordinates must be between 0 and 1.`,
+        id: slot.id,
+      });
+    }
+
+    if (slot.assetId) {
+      const asset = assets.find((candidate) => candidate.id === slot.assetId);
+
+      if (!assetIds.has(slot.assetId) || !asset) {
+        issues.push({
+          code: "slot_asset_not_found",
+          message: `Slot '${slot.id}' references missing asset '${slot.assetId}'.`,
+          id: slot.id,
+        });
+      } else if (!isSlotAssetCategory(asset.category)) {
+        issues.push({
+          code: "slot_asset_category",
+          message: `Slot '${slot.id}' must reference a TILE or TOKEN asset.`,
+          id: slot.id,
+        });
+      }
+    }
+
+    if (slot.placementId) {
+      const placement = placementById.get(slot.placementId);
+
+      if (!placement) {
+        issues.push({
+          code: "slot_placement_not_found",
+          message: `Slot '${slot.id}' references missing placement '${slot.placementId}'.`,
+          id: slot.id,
+        });
+      } else if (slot.assetId && placement.assetId !== slot.assetId) {
+        issues.push({
+          code: "slot_placement_mismatch",
+          message: `Slot '${slot.id}' placement does not use slot asset '${slot.assetId}'.`,
+          id: slot.id,
+        });
+      }
+    }
+  }
+}
+
+function validateStackState(
+  stackState: StackState,
+  assets: ScenarioAsset[],
+  assetIds: Set<string>,
+  placements: ScenarioAssetPlacement[],
+  entityIds: Set<string>,
+  locationIds: Set<string>,
+  issues: ScenarioValidationIssue[],
+) {
+  const supplyZoneIds = new Set<string>();
+  const stackIds = new Set<string>();
+  const placementById = new Map(placements.map((placement) => [placement.id, placement]));
+
+  for (const zone of stackState.supplyZones) {
+    if (!isScenarioSupplyZone(zone)) {
+      issues.push({
+        code: "invalid_supply_zone",
+        message: "Every supply zone must have id, name, and JSON state.",
+      });
+      continue;
+    }
+
+    if (supplyZoneIds.has(zone.id)) {
+      issues.push({
+        code: "duplicate_supply_zone_id",
+        message: `Supply zone id '${zone.id}' is duplicated.`,
+        id: zone.id,
+      });
+    }
+
+    supplyZoneIds.add(zone.id);
+  }
+
+  for (const stack of stackState.stacks) {
+    if (!isScenarioPawnStack(stack)) {
+      issues.push({
+        code: "invalid_pawn_stack",
+        message: "Every pawn stack must have id, asset, container, count, and JSON state.",
+      });
+      continue;
+    }
+
+    if (stackIds.has(stack.id)) {
+      issues.push({
+        code: "duplicate_pawn_stack_id",
+        message: `Pawn stack id '${stack.id}' is duplicated.`,
+        id: stack.id,
+      });
+    }
+
+    stackIds.add(stack.id);
+
+    const asset = assets.find((candidate) => candidate.id === stack.assetId);
+
+    if (!assetIds.has(stack.assetId) || !asset) {
+      issues.push({
+        code: "stack_asset_not_found",
+        message: `Stack '${stack.id}' references missing asset '${stack.assetId}'.`,
+        id: stack.id,
+      });
+    } else if (!isStackAssetCategory(asset.category)) {
+      issues.push({
+        code: "stack_asset_category",
+        message: `Stack '${stack.id}' must reference a PAWN or TOKEN asset.`,
+        id: stack.id,
+      });
+    }
+
+    if (
+      stack.container.type === "location" &&
+      !locationIds.has(stack.container.id)
+    ) {
+      issues.push({
+        code: "stack_container_not_found",
+        message: `Stack '${stack.id}' references missing Location '${stack.container.id}'.`,
+        id: stack.id,
+      });
+    }
+
+    if (
+      stack.container.type === "supply" &&
+      !supplyZoneIds.has(stack.container.id)
+    ) {
+      issues.push({
+        code: "stack_container_not_found",
+        message: `Stack '${stack.id}' references missing supply zone '${stack.container.id}'.`,
+        id: stack.id,
+      });
+    }
+
+    if (stack.placementId) {
+      const placement = placementById.get(stack.placementId);
+
+      if (!placement) {
+        issues.push({
+          code: "stack_placement_not_found",
+          message: `Stack '${stack.id}' references missing placement '${stack.placementId}'.`,
+          id: stack.id,
+        });
+      } else if (
+        placement.assetId !== stack.assetId ||
+        placement.category !== stack.category
+      ) {
+        issues.push({
+          code: "stack_placement_mismatch",
+          message: `Stack '${stack.id}' placement does not match stack asset/category.`,
+          id: stack.id,
+        });
+      }
+    }
+
+    if (stack.entityId && !entityIds.has(stack.entityId)) {
+      issues.push({
+        code: "stack_placement_mismatch",
+        message: `Stack '${stack.id}' references missing entity '${stack.entityId}'.`,
+        id: stack.id,
+      });
+    }
+  }
+}
+
 function getPawnSheetAssetIds(sheet: ScenarioPawnSheet) {
   return [
     ...(sheet.characterCardAssetId ? [sheet.characterCardAssetId] : []),
@@ -1180,6 +1467,18 @@ function isDiceState(value: unknown): value is DiceState {
     Array.isArray(value.pools) &&
     Array.isArray(value.rollHistory) &&
     (value.lastRollId === undefined || isNonEmptyString(value.lastRollId))
+  );
+}
+
+function isSlotState(value: unknown): value is SlotState {
+  return isRecord(value) && Array.isArray(value.slots);
+}
+
+function isStackState(value: unknown): value is StackState {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.supplyZones) &&
+    Array.isArray(value.stacks)
   );
 }
 
@@ -1276,6 +1575,55 @@ function isScenarioDiceRollResult(value: unknown): value is DiceRollResult {
   );
 }
 
+function isScenarioSlot(value: unknown): value is BoardSlot {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.name) &&
+    isSlotOwnerType(String(value.ownerType)) &&
+    isNonEmptyString(value.ownerId) &&
+    typeof value.x === "number" &&
+    typeof value.y === "number" &&
+    (value.assetId === undefined || isNonEmptyString(value.assetId)) &&
+    (value.placementId === undefined || isNonEmptyString(value.placementId)) &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioSupplyZone(value: unknown): value is SupplyZone {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.name) &&
+    isRecord(value.state)
+  );
+}
+
+function isScenarioPawnStack(value: unknown): value is PawnStack {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const category = String(value.category);
+
+  return (
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.name) &&
+    isNonEmptyString(value.assetId) &&
+    isResourceCategory(category) &&
+    isStackAssetCategory(category) &&
+    isRecord(value.container) &&
+    isStackContainerType(String(value.container.type)) &&
+    isNonEmptyString(value.container.id) &&
+    Number.isInteger(value.count) &&
+    Number(value.count) > 0 &&
+    (value.capacity === undefined ||
+      (Number.isInteger(value.capacity) && Number(value.capacity) > 0)) &&
+    (value.placementId === undefined || isNonEmptyString(value.placementId)) &&
+    (value.entityId === undefined || isNonEmptyString(value.entityId)) &&
+    isRecord(value.state)
+  );
+}
+
 function isScenarioPawnSheet(value: unknown): value is ScenarioPawnSheet {
   return (
     isRecord(value) &&
@@ -1315,6 +1663,8 @@ function normalizeScenarioPackage(value: unknown): unknown {
     mode: value.mode ?? "edit",
     cardDeckState: value.cardDeckState ?? createEmptyCardDeckState(),
     diceState: value.diceState ?? createEmptyDiceState(),
+    slotState: value.slotState ?? createEmptySlotState(),
+    stackState: value.stackState ?? createEmptyStackState(),
     boardState: value.boardState ?? {},
     locationStates: value.locationStates ?? {},
     edgeStates: value.edgeStates ?? {},
@@ -1331,6 +1681,8 @@ function normalizeFrozenSetup(value: unknown): unknown {
     ...value,
     cardDeckState: value.cardDeckState ?? createEmptyCardDeckState(),
     diceState: value.diceState ?? createEmptyDiceState(),
+    slotState: value.slotState ?? createEmptySlotState(),
+    stackState: value.stackState ?? createEmptyStackState(),
     boardState: value.boardState ?? {},
     locationStates: value.locationStates ?? {},
     edgeStates: value.edgeStates ?? {},

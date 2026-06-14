@@ -6,6 +6,10 @@ import { createEmptyCardDeckState } from "../../src/engine/cardDeck";
 import { createEmptyDiceState } from "../../src/engine/dice";
 import { createEmptyEntityState } from "../../src/engine/entity";
 import type { ResourceCategory } from "../../src/engine/entity";
+import { createEmptySlotState } from "../../src/engine/slot";
+import type { BoardSlot } from "../../src/engine/slot";
+import { createEmptyStackState } from "../../src/engine/stack";
+import type { PawnStack, SupplyZone } from "../../src/engine/stack";
 import {
   createScenarioPackage,
   serializeScenarioPackage,
@@ -37,6 +41,8 @@ describe("F-03 scenario store import/export", () => {
       pawnSheets: {},
       cardDeckState: createEmptyCardDeckState(),
       diceState: createEmptyDiceState(),
+      slotState: createEmptySlotState(),
+      stackState: createEmptyStackState(),
       selectedAssetId: null,
       selectedLocationId: null,
       selectedPlacementId: null,
@@ -213,6 +219,8 @@ describe("F-03 scenario store import/export", () => {
         pawnSheets: {},
         cardDeckState: createEmptyCardDeckState(),
         diceState: createEmptyDiceState(),
+        slotState: createEmptySlotState(),
+        stackState: createEmptyStackState(),
         boardState: {},
         locationStates: {},
         edgeStates: {},
@@ -313,6 +321,51 @@ describe("F-03 scenario store import/export", () => {
     expect(entityLocation(imported.entityState.entities, "entity-hope-marker")).toBe(
       "loc-hope-track-dot",
     );
+    expect(imported.slotState.slots).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "slot-eye-of-sauron",
+          ownerType: "location",
+          ownerId: "loc-eriador",
+          assetId: "token.eye-of-sauron-token",
+          placementId: "placement-eye-of-sauron",
+        }),
+        expect.objectContaining({
+          id: "slot-threat-rate-marker",
+          ownerType: "track",
+          ownerId: "threat",
+          assetId: "token.threat-rate-marker",
+          placementId: "placement-threat-rate-marker",
+        }),
+        expect.objectContaining({
+          id: "slot-hope-marker",
+          ownerType: "track",
+          ownerId: "hope",
+          assetId: "token.hope-marker",
+          placementId: "placement-hope-marker",
+        }),
+        expect.objectContaining({
+          id: "slot-haven-stronghold-reserve",
+          ownerType: "display",
+          ownerId: "tile-reserve",
+        }),
+      ]),
+    );
+    expect(totalStacks(imported.stackState.stacks, "friendlyTroop", "dwarven")).toBe(3);
+    expect(totalStacks(imported.stackState.stacks, "friendlyTroop", "elven")).toBe(4);
+    expect(totalStacks(imported.stackState.stacks, "friendlyTroop", "rohirrim")).toBe(3);
+    expect(totalStacks(imported.stackState.stacks, "friendlyTroop", "gondor")).toBe(5);
+    expect(totalStacks(imported.stackState.stacks, "shadowTroop")).toBe(18);
+    expect(totalStacks(imported.stackState.stacks, "nazgul")).toBe(9);
+    expect(imported.stackState.supplyZones.map((zone) => zone.id)).toEqual([
+      "supply-friendly",
+      "supply-shadow",
+    ]);
+    expect(totalStacks(imported.stackState.stacks, "friendlySupply", "dwarven")).toBe(5);
+    expect(totalStacks(imported.stackState.stacks, "friendlySupply", "elven")).toBe(5);
+    expect(totalStacks(imported.stackState.stacks, "friendlySupply", "rohirrim")).toBe(5);
+    expect(totalStacks(imported.stackState.stacks, "friendlySupply", "gondor")).toBe(5);
+    expect(totalStacks(imported.stackState.stacks, "shadowSupply")).toBe(21);
     expect(findEntityState(imported.entityState.entities, "entity-shadow-supply")).toMatchObject({
       count: 21,
     });
@@ -387,6 +440,8 @@ describe("F-03 scenario store import/export", () => {
     expect(reexported.assetPlacements).toEqual(scenario.assetPlacements);
     expect(reexported.cardDeckState).toEqual(scenario.cardDeckState);
     expect(reexported.diceState).toEqual(scenario.diceState);
+    expect(reexported.slotState).toEqual(scenario.slotState);
+    expect(reexported.stackState).toEqual(scenario.stackState);
   });
 });
 
@@ -437,15 +492,73 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
   const assets = manifest.entries.map(manifestEntryToAsset);
   const placements: ScenarioAssetPlacement[] = [];
   const entities = [];
+  const slots: BoardSlot[] = [
+    {
+      id: "slot-objective-display-1",
+      name: "Objective display slot 1",
+      ownerType: "display",
+      ownerId: "objective-display",
+      x: locationPoint("loc-objective-display").x,
+      y: locationPoint("loc-objective-display").y,
+      state: {
+        setupSource: "LOTRRule.pdf",
+      },
+    },
+    {
+      id: "slot-haven-stronghold-reserve",
+      name: "Haven/stronghold tile reserve",
+      ownerType: "display",
+      ownerId: "tile-reserve",
+      x: locationPoint("loc-supply").x,
+      y: locationPoint("loc-supply").y,
+      state: {
+        availableTileAssets: [
+          "tile.haven-stronghold-token",
+          "tile.shadow-stronghold-token",
+        ],
+        setupSource: "LOTRRule.pdf",
+      },
+    },
+  ];
+  const supplyZones: SupplyZone[] = [
+    {
+      id: "supply-friendly",
+      name: "Friendly troop supply",
+      state: {
+        setupSource: "LOTRRule.pdf",
+      },
+    },
+    {
+      id: "supply-shadow",
+      name: "Shadow troop supply",
+      state: {
+        setupSource: "LOTRRule.pdf",
+      },
+    },
+  ];
+  const stacks: PawnStack[] = [];
 
-  const placeStack = (input: StackInput) => {
+  const placeStack = (
+    input: StackInput,
+    options: { createStack?: boolean } = {},
+  ) => {
     const placementId = `placement-${input.id}`;
+    const entityId = `entity-${input.id}`;
+    const category = assetCategory(assets, input.assetId);
+    const state = {
+      assetId: input.assetId,
+      placementId,
+      role: input.role,
+      count: input.count,
+      ...(input.army ? { army: input.army } : {}),
+      setupSource: "LOTRRule.pdf",
+    };
 
     placements.push({
       id: placementId,
       assetId: input.assetId,
-      category: assetCategory(assets, input.assetId),
-      entityId: `entity-${input.id}`,
+      category,
+      entityId,
       locationId: input.locationId,
       x: locationPoint(input.locationId).x,
       y: locationPoint(input.locationId).y,
@@ -453,14 +566,36 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
       height: 56,
     });
     entities.push({
-      id: `entity-${input.id}`,
-      type: assetCategory(assets, input.assetId),
+      id: entityId,
+      type: category,
       locationId: input.locationId,
+      state:
+        options.createStack === false
+          ? state
+          : {
+              ...state,
+              stackId: `stack-${input.id}`,
+            },
+    });
+
+    if (options.createStack === false) {
+      return;
+    }
+
+    stacks.push({
+      id: `stack-${input.id}`,
+      name: input.id,
+      assetId: input.assetId,
+      category: stackCategory(assets, input.assetId),
+      container: {
+        type: "location",
+        id: input.locationId,
+      },
+      count: input.count,
+      placementId,
+      entityId,
       state: {
-        assetId: input.assetId,
-        placementId,
         role: input.role,
-        count: input.count,
         ...(input.army ? { army: input.army } : {}),
         setupSource: "LOTRRule.pdf",
       },
@@ -499,8 +634,63 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
   }
 
   for (const marker of MARKERS) {
-    placeStack(marker);
+    placeStack(marker, { createStack: false });
+    slots.push({
+      id: `slot-${marker.id}`,
+      name: marker.role,
+      ownerType:
+        marker.id === "eye-of-sauron" ? "location" : "track",
+      ownerId:
+        marker.id === "eye-of-sauron"
+          ? marker.locationId
+          : marker.id === "threat-rate-marker"
+            ? "threat"
+            : "hope",
+      x: locationPoint(marker.locationId).x,
+      y: locationPoint(marker.locationId).y,
+      assetId: marker.assetId,
+      placementId: `placement-${marker.id}`,
+      state: {
+        role: marker.role,
+        setupSource: "LOTRRule.pdf",
+      },
+    });
   }
+
+  for (const army of ["dwarven", "elven", "rohirrim", "gondor"] as const) {
+    stacks.push({
+      id: `stack-supply-${army}`,
+      name: `${army} reserve`,
+      assetId: `pawn.${army}-troop`,
+      category: "PAWN",
+      container: {
+        type: "supply",
+        id: "supply-friendly",
+      },
+      count: 5,
+      state: {
+        role: "friendlySupply",
+        army,
+        setupSource: "LOTRRule.pdf",
+      },
+    });
+  }
+
+  stacks.push({
+    id: "stack-supply-shadow",
+    name: "Shadow reserve",
+    assetId: "pawn.shadow-troop",
+    category: "PAWN",
+    container: {
+      type: "supply",
+      id: "supply-shadow",
+    },
+    count: 21,
+    state: {
+      role: "shadowSupply",
+      setupSource: "LOTRRule.pdf",
+    },
+  });
 
   entities.push(
     {
@@ -625,6 +815,13 @@ function buildLotrSetupScenario(manifest: Manifest): ScenarioPackage {
     pawnSheets: {},
     cardDeckState: buildLotrCardDeckState(),
     diceState: buildLotrDiceState(manifest),
+    slotState: {
+      slots,
+    },
+    stackState: {
+      supplyZones,
+      stacks,
+    },
     viewport: {
       boardZoom: 1,
       boardPan: {
@@ -918,6 +1115,19 @@ function assetCategory(assets: ScenarioAsset[], assetId: string): ResourceCatego
   return asset.category;
 }
 
+function stackCategory(
+  assets: ScenarioAsset[],
+  assetId: string,
+): "PAWN" | "TOKEN" {
+  const category = assetCategory(assets, assetId);
+
+  if (category !== "PAWN" && category !== "TOKEN") {
+    throw new Error(`LOTR stack asset must be PAWN or TOKEN: ${assetId}`);
+  }
+
+  return category;
+}
+
 function locationPoint(locationId: string) {
   const location = SETUP_LOCATIONS.find((candidate) => candidate.id === locationId);
 
@@ -939,6 +1149,18 @@ function totalEntities(
         entity.state.role === role && (!army || entity.state.army === army),
     )
     .reduce((total, entity) => total + Number(entity.state.count ?? 0), 0);
+}
+
+function totalStacks(
+  stacks: ScenarioPackage["stackState"]["stacks"],
+  role: string,
+  army?: string,
+) {
+  return stacks
+    .filter(
+      (stack) => stack.state.role === role && (!army || stack.state.army === army),
+    )
+    .reduce((total, stack) => total + stack.count, 0);
 }
 
 function entityLocation(

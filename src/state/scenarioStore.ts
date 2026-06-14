@@ -22,6 +22,8 @@ import type { BoardState } from "../engine/board";
 import type { CardDeckState } from "../engine/cardDeck";
 import type { DiceState } from "../engine/dice";
 import type { EntityState } from "../engine/entity";
+import type { SlotState } from "../engine/slot";
+import type { StackState } from "../engine/stack";
 
 export interface BoardStoreScenarioState {
   mode: ScenarioMode;
@@ -32,6 +34,8 @@ export interface BoardStoreScenarioState {
   pawnSheets: Record<string, PawnSheet>;
   cardDeckState: CardDeckState;
   diceState: DiceState;
+  slotState: SlotState;
+  stackState: StackState;
   boardState: Record<string, unknown>;
   locationStates: Record<string, Record<string, unknown>>;
   edgeStates: Record<string, Record<string, unknown>>;
@@ -49,6 +53,8 @@ export type BoardStoreScenarioInput = Pick<
   | "pawnSheets"
   | "cardDeckState"
   | "diceState"
+  | "slotState"
+  | "stackState"
   | "mode"
   | "boardState"
   | "locationStates"
@@ -72,6 +78,8 @@ export function exportBoardStoreScenario(
     pawnSheets: state.pawnSheets,
     cardDeckState: state.cardDeckState,
     diceState: state.diceState,
+    slotState: state.slotState,
+    stackState: state.stackState,
     boardState: state.boardState,
     locationStates: state.locationStates,
     edgeStates: state.edgeStates,
@@ -84,6 +92,8 @@ export function exportBoardStoreScenario(
           pawnSheets: state.frozenSetup.pawnSheets,
           cardDeckState: state.frozenSetup.cardDeckState,
           diceState: state.frozenSetup.diceState,
+          slotState: state.frozenSetup.slotState,
+          stackState: state.frozenSetup.stackState,
           boardState: state.frozenSetup.boardState,
           locationStates: state.frozenSetup.locationStates,
           edgeStates: state.frozenSetup.edgeStates,
@@ -119,6 +129,8 @@ export function importBoardStoreScenario(
     pawnSheets: scenario.pawnSheets,
     cardDeckState: scenario.cardDeckState,
     diceState: scenario.diceState,
+    slotState: scenario.slotState,
+    stackState: scenario.stackState,
     boardState: scenario.boardState,
     locationStates: scenario.locationStates,
     edgeStates: scenario.edgeStates,
@@ -131,6 +143,8 @@ export function importBoardStoreScenario(
           pawnSheets: scenario.frozenSetup.pawnSheets,
           cardDeckState: scenario.frozenSetup.cardDeckState,
           diceState: scenario.frozenSetup.diceState,
+          slotState: scenario.frozenSetup.slotState,
+          stackState: scenario.frozenSetup.stackState,
           boardState: scenario.frozenSetup.boardState,
           locationStates: scenario.frozenSetup.locationStates,
           edgeStates: scenario.frozenSetup.edgeStates,
