@@ -115,8 +115,56 @@ The active feature route in `feature_list.json` now supersedes the older pending
 
 ### Deferred After Manual MVP
 
-- `F-05-MovementValidation`: graph adjacency/connectivity validation only, no grid/A*/distance assumptions.
-- `F-06-GlobalTrackerState`: manually editable trackers serialized through `.lorecanvas`, without visual automation.
-- `F-07-RuleTriggerEngine`: generic JSON rule triggers after manual MVP.
-- `F-08-TheatricalRenderer`: CCFOLIA-style Cut-in renderer after rule actions exist.
-- `F-09-LOTR-FotF-Validation`: local E2E validation using `local-fixtures/lotr/LotR-FotF`, including `LOTRRule.pdf` as future auto-setup/event-trigger test input.
+Superseded by the 2026-06-14 Manual Setup Route Override below.
+
+## 2026-06-14 Manual Setup Route Override
+
+The active route in `feature_list.json` now prioritizes full manual setup readiness before movement validation or automation. This route is based on the already completed image import, graph editing, asset placement, selected-entity inspection, and the extracted setup section of `local-fixtures/lotr/LotR-FotF/LOTRRule.pdf`.
+
+### F-05-CardDeckZones Manual Card Decks, Piles, and Zones
+
+- CARD assets and card-slice collections can be represented as ordered card refs.
+- Named zones cover deck, discard, hand, display, objective area, set-aside, unused/box, and temporary setup piles.
+- Manual operations cover create zone, order cards, shuffle with deterministic test injection or explicit saved order, draw/deal/move, flip face up/down, and inspect pile contents.
+- Deck/zone state serializes through `.lorecanvas` and survives Edit/Run freeze plus save/load.
+- LOTR setup validation covers special shadow discard cards, shadow deck, objective display, Skies Darken set-aside, event-card player-count selection, player deck, starting hands, and unused cards.
+- No LOTR card effects, automatic setup parsing, or rule resolution is added.
+
+### F-06-DicePoolsAndRollState Manual Dice Pools and Roll State
+
+- TOKEN assets with die metadata define named dice and ordered faces.
+- Scenarios can define reusable dice pools.
+- Run mode can record manual or deterministic-test rolls, selected face overrides, last result, and roll history.
+- Dice state serializes through `.lorecanvas`.
+- LOTR fixture validation uses `dice-face-plan.json` for combat and search dice without implementing battle/search rules.
+
+### F-07-TileMarkerSlots Manual Tile and Marker Slots
+
+- Locations, tracks, and display zones can own named slots.
+- TILE/TOKEN/marker assets can be assigned, replaced, cleared, or moved between slots.
+- Visual placements stay synchronized with slot state.
+- LOTR setup validation covers threat/hope markers on dotted track spaces, the Eye marker in Eriador, available haven/stronghold tiles, and objective/display slots.
+- No visual filter automation or game-specific tile rules is added.
+
+### F-08-PawnStacksAndSupply Manual Pawn Stacks and Supply Pools
+
+- PAWN/TOKEN objects can be represented as count-bearing stacks at Locations or supply zones.
+- Edit mode can create setup stacks and configure count/capacity.
+- Run mode can split, merge, move, and adjust stacks without mutating frozen setup.
+- LOTR setup validation covers friendly troop stacks, friendly supply by army, shadow troop stacks, shadow supply, Nazgul stacks, Eye/marker objects, and character figure starting placements.
+- No LOTR troop movement, battle, or muster rules is added.
+
+### F-09-LOTR-ManualSetupValidation LOTR FotF Manual Setup Validation
+
+- E2E test reads only ignored files under `local-fixtures/lotr/LotR-FotF`.
+- The test imports the manifest and builds a generic scenario covering board, Locations, Edges, card zones/decks, dice definitions, tile/marker slots, pawn stacks, supply pools, objective display, player hands, set-aside/unused cards, and unresolved random setup instructions.
+- The test enters Run mode, freezes setup, saves, reloads, and proves setup state survives.
+- Missing local fixture should skip or clearly report fixture absence without committing fixture assets.
+- Product code must not contain LOTR-specific branches.
+
+### Deferred After Manual Setup Validation
+
+- `F-10-MovementValidation`: graph adjacency/connectivity validation only, no grid/A*/distance assumptions.
+- `F-11-GlobalTrackerState`: manually editable trackers serialized through `.lorecanvas`, without visual automation.
+- `F-12-RuleTriggerEngine`: generic JSON rule triggers after movement and tracker state, including card-zone, dice-roll, and stack-change trigger surfaces.
+- `F-13-TheatricalRenderer`: CCFOLIA-style Cut-in renderer after rule actions exist.

@@ -328,3 +328,32 @@
   - Browser console had no app errors or warnings; only Vite debug and React DevTools info messages appeared.
 - Local verification passed: `npm.cmd run check-types`, `npm.cmd exec -- vitest run tests/ui/boardCanvasFrame.test.ts tests/ui/workbenchSort.test.ts tests/state/boardStore.test.ts` (21 tests), `npm.cmd run test` (13 files / 54 tests), `npm.cmd run build`, and final `.\init.ps1` (13 files / 54 tests).
 - No git staging, commit, or push was performed.
+
+## 2026-06-14 Manual Setup Harness Replan
+
+- User asked to update the harness for the gap between the completed manual graph/asset/inspection work and a full manual American board-game setup, with special attention to card/deck, dice, tile, and pawn setup.
+- Opened the Product Design router and communication references because the request was at-mentioned through Product Design; this was a harness/planning update, not a visual prototype workflow.
+- Baseline before editing passed with `.\init.ps1`: harness valid, TypeScript green, 13 test files / 54 tests passed.
+- Installed local PDF tooling with `python -m pip install --user pypdf pdfplumber` after the user requested reading `LOTRRule.pdf` setup before changing the harness.
+- Extracted the setup section from `local-fixtures/lotr/LotR-FotF/LOTRRule.pdf` using `pdfplumber` with page-coordinate crops. Important setup requirements:
+  - Board starts as the central background; threat and hope markers start on dotted track spaces.
+  - Two special shadow cards start in shadow discard; remaining shadow cards form the shadow deck.
+  - Friendly troop stacks start at fixed colored Locations, with remaining friendly supply by army.
+  - Shadow troop stacks start at fixed red Locations; 9 shadow-card random deployments remain setup randomness; remaining shadow supply is preserved.
+  - Nazgul stacks and the Eye marker start in specified regions.
+  - Objective display includes Destroy the One Ring plus selected objectives; objective setup can drive character-card selection.
+  - Players receive character cards, reference cards, character figures at card-defined starting Locations, and starting hands.
+  - Skies Darken cards are set aside; event cards are selected by player count; selected event cards and region cards form the player deck; unused event/Skies cards leave play.
+  - Solo setup adds Frodo and Sam, four other faceup character cards, the solo token on the leftmost character, and starting figure placements.
+- Confirmed `local-fixtures/lotr/LotR-FotF/manifest.json` currently reports CARD, BOARD, OTHER, PAWN, TILE, and TOKEN entries, including one card-slice collection with 9 decks / 271 card faces and `dice-face-plan.json` for combat/search dice.
+- Updated `feature_list.json` to version `0.4.1` and replaced the next pending route:
+  - `F-05-CardDeckZones` is now the next pending feature and must implement generic manual card decks, piles, zones, shuffle/draw/deal/move/flip, and serialization.
+  - `F-06-DicePoolsAndRollState` adds generic dice definitions, dice pools, manual/deterministic roll state, selected face overrides, and serialization.
+  - `F-07-TileMarkerSlots` adds named Location/track/display slots for tiles and markers.
+  - `F-08-PawnStacksAndSupply` adds count-bearing pawn/token stacks and supply pools.
+  - `F-09-LOTR-ManualSetupValidation` validates the full PDF setup using ignored local fixtures without LOTR-specific product branches.
+  - Movement/tracker/rule/cut-in work is deferred to `F-10` through `F-13`.
+- Updated `clean-state-checklists.md` with the 2026-06-14 Manual Setup Route Override so the old movement-first route is no longer the active checklist.
+- Current next pending feature: `F-05-CardDeckZones`.
+- No product code was changed; this pass only updated harness/planning docs.
+- No git staging, commit, or push was performed.
