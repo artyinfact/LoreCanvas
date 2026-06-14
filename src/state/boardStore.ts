@@ -123,6 +123,7 @@ export interface BoardStore {
     patch: AssetPlacementConfigPatch,
   ) => void;
   setBackgroundAsset: (assetId: string) => void;
+  selectAsset: (assetId: string | null) => void;
   setActiveTool: (tool: BoardTool) => void;
   selectLocation: (locationId: string | null) => void;
   selectPlacement: (placementId: string | null) => void;
@@ -154,6 +155,7 @@ export interface BoardStore {
     placementId: string,
     patch: AccessoryPlacementPatch,
   ) => void;
+  adjustTokenPlacementCount: (placementId: string, delta: number) => void;
   deleteSelectedPlacement: () => void;
   setPawnCharacterCard: (placementId: string, assetId: string) => void;
   addPawnHeldCard: (placementId: string, assetId: string) => void;
@@ -604,6 +606,19 @@ export const useBoardStore = create<BoardStore>((set) => ({
       edgeDraftFromId: null,
       lastError: null,
     }),
+  selectAsset: (assetId) =>
+    set((state) => {
+      if (assetId && !state.assets.some((asset) => asset.id === assetId)) {
+        return {
+          lastError: `Image asset '${assetId}' was not found.`,
+        };
+      }
+
+      return {
+        selectedAssetId: assetId,
+        lastError: null,
+      };
+    }),
   selectLocation: (locationId) =>
     set({
       selectedLocationId: locationId,
@@ -1030,6 +1045,7 @@ export const useBoardStore = create<BoardStore>((set) => ({
               assetId,
               category: asset.category,
               placementId: id,
+              ...(asset.category === "TOKEN" ? { count: 1 } : {}),
             },
             ...(locationId ? { locationId } : {}),
           },
@@ -1105,6 +1121,73 @@ export const useBoardStore = create<BoardStore>((set) => ({
         assetPlacements: state.assetPlacements.map((candidate) =>
           candidate.id === placementId ? nextPlacement : candidate,
         ),
+        selectedLocationId: null,
+        selectedPlacementId: placementId,
+        selectedEdgeId: null,
+        lastError: null,
+      };
+    }),
+  adjustTokenPlacementCount: (placementId, delta) =>
+    set((state) => {
+      if (state.mode === "run") {
+        return {
+          lastError: RUN_MODE_LOCK_MESSAGE,
+        };
+      }
+
+      const placement = state.assetPlacements.find(
+        (candidate) => candidate.id === placementId,
+      );
+
+      if (!placement || placement.category !== "TOKEN") {
+        return {
+          lastError: `Token placement '${placementId}' was not found.`,
+        };
+      }
+
+      const entity = state.entityState.entities.find(
+        (candidate) => candidate.id === placement.entityId,
+      );
+
+      if (!entity) {
+        return {
+          lastError: `Entity '${placement.entityId}' was not found.`,
+        };
+      }
+
+      const nextCount = Math.max(
+        0,
+        getNumericCount(entity.state.count, 1) + Math.trunc(delta),
+      );
+
+      if (nextCount === 0) {
+        return {
+          entityState: removeEntity(state.entityState, entity.id),
+          assetPlacements: state.assetPlacements.filter(
+            (candidate) => candidate.id !== placementId,
+          ),
+          selectedPlacementId:
+            state.selectedPlacementId === placementId
+              ? null
+              : state.selectedPlacementId,
+          lastError: null,
+        };
+      }
+
+      return {
+        entityState: {
+          entities: state.entityState.entities.map((candidate) =>
+            candidate.id === entity.id
+              ? {
+                  ...candidate,
+                  state: {
+                    ...candidate.state,
+                    count: nextCount,
+                  },
+                }
+              : candidate,
+          ),
+        },
         selectedLocationId: null,
         selectedPlacementId: placementId,
         selectedEdgeId: null,
@@ -1841,6 +1924,12 @@ function getDefaultPlacementSize(asset: UploadedImageAsset) {
 
 function clampInteger(value: number, min: number, max: number) {
   return Math.round(clampNumber(value, min, max));
+}
+
+function getNumericCount(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : fallback;
 }
 
 function clampNumber(value: number, min: number, max: number) {

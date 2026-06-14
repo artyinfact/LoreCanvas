@@ -357,3 +357,13 @@
 - Current next pending feature: `F-05-CardDeckZones`.
 - No product code was changed; this pass only updated harness/planning docs.
 - No git staging, commit, or push was performed.
+
+## 2026-06-14 Free Token Placement And Count Controls
+
+- Addressed manual setup feedback that `TOKEN` assets must not be constrained to graph Locations like `PAWN` assets. `BoardCanvas` now only snaps/validates `PAWN` drops against nearby Locations; `TOKEN` drops use the exact board coordinate and create unbound Entities.
+- Added a compact token quick-pick section in the left Image Assets rail. It appears when token assets exist, supports token search, shows remaining copy availability, highlights the selected token, and reuses the existing asset drag payload. Selecting a token also arms click-to-place on blank map space for repeated manual setup.
+- Map token placements now initialize `entity.state.count` to `1`. Selected map tokens expose count +/- controls in the Context rail, keep existing width/height resize controls, render their count as a PixiJS badge above the token, and delete the placement plus generated Entity when count reaches 0.
+- Verification passed: `npm.cmd exec -- vitest run tests/state/boardStore.test.ts` (19 tests), `npm.cmd run check-types`, `npm.cmd run test` (13 files / 56 tests), `npm.cmd run build`, and final `.\init.ps1` (harness valid, TypeScript green, 13 files / 56 tests).
+- Browser plugin smoke verification against `http://127.0.0.1:5173/`: Maker page loaded, Creation and Context rails rendered, Pixi canvas mounted at `638 x 498` CSS pixels / `1276 x 996` backing pixels, and console errors were 0. Screenshot capture timed out; no browser-side file-upload validation was run in this pass.
+- Current next pending feature remains `F-05-CardDeckZones`.
+- No git staging, commit, or push was performed.

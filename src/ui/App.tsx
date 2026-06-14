@@ -24,6 +24,7 @@ import {
   Play,
   Pencil,
   RotateCcw,
+  Search,
   Shield,
   Trash2,
   Upload,
@@ -126,6 +127,7 @@ export function App() {
   const pawnSheets = useBoardStore((state) => state.pawnSheets);
   const frozenSetup = useBoardStore((state) => state.frozenSetup);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
+  const selectedAssetId = useBoardStore((state) => state.selectedAssetId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const selectedEdgeId = useBoardStore((state) => state.selectedEdgeId);
   const activeTool = useBoardStore((state) => state.activeTool);
@@ -148,6 +150,7 @@ export function App() {
     (state) => state.updateAssetPlacementConfig,
   );
   const setBackgroundAsset = useBoardStore((state) => state.setBackgroundAsset);
+  const selectAsset = useBoardStore((state) => state.selectAsset);
   const setActiveTool = useBoardStore((state) => state.setActiveTool);
   const setBoardZoom = useBoardStore((state) => state.setBoardZoom);
   const resetBoardView = useBoardStore((state) => state.resetBoardView);
@@ -162,6 +165,9 @@ export function App() {
   );
   const updateAssetPlacement = useBoardStore(
     (state) => state.updateAssetPlacement,
+  );
+  const adjustTokenPlacementCount = useBoardStore(
+    (state) => state.adjustTokenPlacementCount,
   );
   const deleteLocation = useBoardStore((state) => state.deleteLocation);
   const deleteEdgeById = useBoardStore((state) => state.deleteEdgeById);
@@ -386,8 +392,24 @@ export function App() {
   const [visibleAssetCounts, setVisibleAssetCounts] = useState<
     Partial<Record<ResourceCategory, number>>
   >({});
+  const [tokenSearch, setTokenSearch] = useState("");
   const [activeWorkbenchTab, setActiveWorkbenchTab] =
     useState<WorkbenchTab>("locations");
+  const tokenAssets = useMemo(
+    () => assets.filter((asset) => asset.category === "TOKEN"),
+    [assets],
+  );
+  const filteredTokenAssets = useMemo(() => {
+    const query = tokenSearch.trim().toLowerCase();
+
+    if (!query) {
+      return tokenAssets;
+    }
+
+    return tokenAssets.filter((asset) =>
+      `${asset.name} ${asset.id}`.toLowerCase().includes(query),
+    );
+  }, [tokenAssets, tokenSearch]);
   const toggleSection = useCallback((id: string) => {
     setCollapsedSections((current) => ({
       ...current,
@@ -499,6 +521,17 @@ export function App() {
                 isDisabled={mode === "run"}
                 onImport={handleImageImport}
                 progress={mediaProgress}
+              />
+              <TokenQuickPick
+                assetPlacements={assetPlacements}
+                assets={tokenAssets}
+                filteredAssets={filteredTokenAssets}
+                isDisabled={mode === "run"}
+                onSearchChange={setTokenSearch}
+                onSelectAsset={selectAsset}
+                pawnSheets={pawnSheets}
+                search={tokenSearch}
+                selectedAssetId={selectedAssetId}
               />
               <div className="asset-list">
                 {assets.length === 0 ? (
@@ -774,6 +807,8 @@ export function App() {
                 isDisabled={mode === "run"}
                 placement={selectedPlacement}
                 placementAsset={selectedPlacementAsset}
+                entity={selectedEntity}
+                adjustTokenPlacementCount={adjustTokenPlacementCount}
                 updateAssetPlacement={updateAssetPlacement}
               />
             ) : selectedLocation ? null : (
@@ -982,7 +1017,9 @@ function SelectionContext({
 }
 
 interface SelectedPlacementContextProps {
+  adjustTokenPlacementCount: (placementId: string, delta: number) => void;
   deleteSelectedPlacement: () => void;
+  entity: Entity | null;
   isDisabled: boolean;
   placement: AssetPlacement;
   placementAsset: UploadedImageAsset;
@@ -993,12 +1030,17 @@ interface SelectedPlacementContextProps {
 }
 
 function SelectedPlacementContext({
+  adjustTokenPlacementCount,
   deleteSelectedPlacement,
+  entity,
   isDisabled,
   placement,
   placementAsset,
   updateAssetPlacement,
 }: SelectedPlacementContextProps) {
+  const isToken = placement.category === "TOKEN";
+  const tokenCount = getTokenPlacementCount(entity);
+
   return (
     <section className="selected-placement-context" aria-label="Placed object">
       <div className="selected-piece-card">
@@ -1017,6 +1059,32 @@ function SelectedPlacementContext({
         <span>X {formatCoordinate(placement.x)}</span>
         <span>Y {formatCoordinate(placement.y)}</span>
       </div>
+      {isToken ? (
+        <div className="counter-adjust token-placement-count">
+          <span>Count</span>
+          <button
+            aria-label="Decrease token count"
+            className="icon-only icon-only--neutral"
+            disabled={isDisabled}
+            onClick={() => adjustTokenPlacementCount(placement.id, -1)}
+            title="Decrease token count"
+            type="button"
+          >
+            <Minus aria-hidden="true" size={15} />
+          </button>
+          <strong>{tokenCount}</strong>
+          <button
+            aria-label="Increase token count"
+            className="icon-only icon-only--neutral"
+            disabled={isDisabled}
+            onClick={() => adjustTokenPlacementCount(placement.id, 1)}
+            title="Increase token count"
+            type="button"
+          >
+            <Plus aria-hidden="true" size={15} />
+          </button>
+        </div>
+      ) : null}
       <div className="piece-controls piece-controls--wide">
         <label>
           <span>W</span>
@@ -2332,6 +2400,131 @@ function PawnSheetInspector({
   );
 }
 
+interface TokenQuickPickProps {
+  assetPlacements: AssetPlacement[];
+  assets: UploadedImageAsset[];
+  filteredAssets: UploadedImageAsset[];
+  isDisabled: boolean;
+  onSearchChange: (value: string) => void;
+  onSelectAsset: (assetId: string | null) => void;
+  pawnSheets: Record<string, PawnSheet>;
+  search: string;
+  selectedAssetId: string | null;
+}
+
+function TokenQuickPick({
+  assetPlacements,
+  assets,
+  filteredAssets,
+  isDisabled,
+  onSearchChange,
+  onSelectAsset,
+  pawnSheets,
+  search,
+  selectedAssetId,
+}: TokenQuickPickProps) {
+  if (assets.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="token-quick-pick" aria-label="Token quick pick">
+      <div className="token-quick-pick__heading">
+        <h3>
+          <Shield aria-hidden="true" size={14} />
+          Tokens
+        </h3>
+        <span>{assets.length}</span>
+      </div>
+      <label className="token-quick-search">
+        <Search aria-hidden="true" size={14} />
+        <input
+          aria-label="Search token assets"
+          onChange={(event) => onSearchChange(event.currentTarget.value)}
+          placeholder="Search tokens"
+          type="search"
+          value={search}
+        />
+      </label>
+      <div className="token-quick-grid">
+        {filteredAssets.length > 0 ? (
+          filteredAssets.map((asset) => (
+            <TokenQuickPickItem
+              asset={asset}
+              isDisabled={isDisabled}
+              isSelected={selectedAssetId === asset.id}
+              key={asset.id}
+              onSelectAsset={onSelectAsset}
+              remainingCopies={getAssetRemainingCopies(
+                assets,
+                assetPlacements,
+                pawnSheets,
+                asset.id,
+              )}
+            />
+          ))
+        ) : (
+          <p className="empty-state">No matching tokens</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+interface TokenQuickPickItemProps {
+  asset: UploadedImageAsset;
+  isDisabled: boolean;
+  isSelected: boolean;
+  onSelectAsset: (assetId: string | null) => void;
+  remainingCopies: number;
+}
+
+function TokenQuickPickItem({
+  asset,
+  isDisabled,
+  isSelected,
+  onSelectAsset,
+  remainingCopies,
+}: TokenQuickPickItemProps) {
+  const handleDragStart = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (isDisabled) {
+        event.preventDefault();
+        return;
+      }
+
+      event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData("application/x-lorecanvas-asset", asset.id);
+      event.dataTransfer.setData("text/plain", asset.name);
+    },
+    [asset.id, asset.name, isDisabled],
+  );
+
+  return (
+    <button
+      aria-pressed={isSelected}
+      className="token-quick-item"
+      data-selected={isSelected}
+      disabled={isDisabled}
+      draggable={!isDisabled}
+      onClick={() => onSelectAsset(isSelected ? null : asset.id)}
+      onDragStart={handleDragStart}
+      title={asset.name}
+      type="button"
+    >
+      {asset.thumbnailUrl ? (
+        <img alt="" decoding="async" loading="lazy" src={asset.thumbnailUrl} />
+      ) : (
+        <span aria-hidden="true" className="asset-thumb-pending">
+          <ImageIcon size={18} />
+        </span>
+      )}
+      <span>{asset.name}</span>
+      <small>{formatRemainingCopies(remainingCopies)}</small>
+    </button>
+  );
+}
+
 interface AssetItemProps {
   asset: UploadedImageAsset;
   copyCount: number;
@@ -2630,6 +2823,14 @@ function getStateNumber(state: JsonRecord, key: string) {
   const value = state[key];
 
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function getTokenPlacementCount(entity: Entity | null) {
+  const value = entity?.state.count;
+
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 1;
 }
 
 function getStateBoolean(state: JsonRecord, key: string) {

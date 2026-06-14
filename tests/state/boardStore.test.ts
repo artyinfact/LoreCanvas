@@ -118,6 +118,87 @@ describe("Maker image assets and entity placement", () => {
     expect(nextState.lastError).toContain("2 copy limit");
   });
 
+  it("creates a free map token with count state and no location binding", () => {
+    const store = useBoardStore.getState();
+
+    store.addAsset({
+      id: "asset-token",
+      category: "TOKEN",
+      name: "Threat.png",
+      url: "blob:threat",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 999,
+      placementWidth: 48,
+      placementHeight: 48,
+    });
+
+    const placementId = useBoardStore
+      .getState()
+      .createAssetPlacement("asset-token", 0.33, 0.44);
+    const nextState = useBoardStore.getState();
+
+    expect(placementId).toBe("token-copy-1");
+    expect(nextState.assetPlacements[0]).toMatchObject({
+      id: "token-copy-1",
+      assetId: "asset-token",
+      category: "TOKEN",
+      entityId: "entity-1",
+      x: 0.33,
+      y: 0.44,
+      width: 48,
+      height: 48,
+    });
+    expect(nextState.assetPlacements[0]?.locationId).toBeUndefined();
+    expect(nextState.entityState.entities[0]).toMatchObject({
+      id: "entity-1",
+      type: "TOKEN",
+      state: {
+        assetId: "asset-token",
+        category: "TOKEN",
+        placementId: "token-copy-1",
+        count: 1,
+      },
+    });
+    expect(nextState.entityState.entities[0]?.locationId).toBeUndefined();
+  });
+
+  it("adjusts map token count and deletes the token placement at zero", () => {
+    const store = useBoardStore.getState();
+
+    store.addAsset({
+      id: "asset-token",
+      category: "TOKEN",
+      name: "Progress.png",
+      url: "blob:progress",
+      mimeType: "image/png",
+      size: 1000,
+      maxCopies: 999,
+      placementWidth: 48,
+      placementHeight: 48,
+    });
+
+    const placementId = useBoardStore
+      .getState()
+      .createAssetPlacement("asset-token", 0.5, 0.5);
+
+    expect(placementId).toBe("token-copy-1");
+
+    useBoardStore.getState().adjustTokenPlacementCount("token-copy-1", 2);
+
+    let nextState = useBoardStore.getState();
+
+    expect(nextState.entityState.entities[0]?.state.count).toBe(3);
+    expect(nextState.selectedPlacementId).toBe("token-copy-1");
+
+    useBoardStore.getState().adjustTokenPlacementCount("token-copy-1", -3);
+    nextState = useBoardStore.getState();
+
+    expect(nextState.assetPlacements).toHaveLength(0);
+    expect(nextState.entityState.entities).toHaveLength(0);
+    expect(nextState.selectedPlacementId).toBeNull();
+  });
+
   it("adds imported image assets in one batch and ignores duplicate ids", () => {
     const store = useBoardStore.getState();
 

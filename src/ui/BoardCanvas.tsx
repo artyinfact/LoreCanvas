@@ -30,6 +30,7 @@ import type {
   ImageSize,
   ViewportSize,
 } from "./boardCanvasFrame";
+import type { Entity } from "../engine/entity";
 
 extend({
   Container,
@@ -62,11 +63,13 @@ export function BoardCanvas() {
   const boardZoom = useBoardStore((state) => state.boardZoom);
   const boardPan = useBoardStore((state) => state.boardPan);
   const selectedLocationId = useBoardStore((state) => state.selectedLocationId);
+  const selectedAssetId = useBoardStore((state) => state.selectedAssetId);
   const selectedPlacementId = useBoardStore((state) => state.selectedPlacementId);
   const selectedEdgeId = useBoardStore((state) => state.selectedEdgeId);
   const edgeDraftFromId = useBoardStore((state) => state.edgeDraftFromId);
   const assets = useBoardStore((state) => state.assets);
   const assetPlacements = useBoardStore((state) => state.assetPlacements);
+  const entityState = useBoardStore((state) => state.entityState);
   const createLocationAt = useBoardStore((state) => state.createLocationAt);
   const createAssetPlacement = useBoardStore(
     (state) => state.createAssetPlacement,
@@ -96,6 +99,17 @@ export function BoardCanvas() {
         assets.map((asset) => [asset.id, asset] as const),
       ),
     [assets],
+  );
+  const entityById = useMemo(
+    () =>
+      new Map(
+        entityState.entities.map((entity) => [entity.id, entity] as const),
+      ),
+    [entityState.entities],
+  );
+  const selectedQuickAsset = useMemo(
+    () => (selectedAssetId ? assetById.get(selectedAssetId) ?? null : null),
+    [assetById, selectedAssetId],
   );
   const backgroundAssetSize = useMemo<ImageSize | null>(() => {
     if (!board.background) {
@@ -229,6 +243,23 @@ export function BoardCanvas() {
   );
   const handleCanvasPointerDown = useCallback(
     (event: FederatedPointerEvent) => {
+      if (
+        activeTool === "select" &&
+        mode === "edit" &&
+        selectedQuickAsset?.category === "TOKEN"
+      ) {
+        const boardPoint = scenePointToBoardPoint(event.global, frame);
+
+        if (boardPoint) {
+          createAssetPlacement(
+            selectedQuickAsset.id,
+            boardPoint.x,
+            boardPoint.y,
+          );
+          return;
+        }
+      }
+
       if (activeTool === "select") {
         if (selectedLocationId || selectedPlacementId || selectedEdgeId) {
           selectLocation(null);
@@ -262,8 +293,10 @@ export function BoardCanvas() {
       activeTool,
       boardPan.x,
       boardPan.y,
+      createAssetPlacement,
       createLocationAt,
       frame,
+      selectedQuickAsset,
       selectLocation,
       selectPlacement,
       selectEdge,
@@ -414,11 +447,11 @@ export function BoardCanvas() {
         return;
       }
 
-      if (asset.category === "PAWN" || asset.category === "TOKEN") {
+      if (asset.category === "PAWN") {
         const nearestLocation = findNearestLocation(boardPoint, board.locations);
 
         if (!nearestLocation) {
-          setLastError(`${asset.category} assets must be dropped on a location.`);
+          setLastError("PAWN assets must be dropped on a location.");
           return;
         }
 
@@ -565,6 +598,7 @@ export function BoardCanvas() {
             placements={tilePlacements}
             selectedPlacementId={selectedPlacementId}
             assetById={assetById}
+            entityById={entityById}
           />
           <pixiGraphics draw={drawEdges} />
           <EdgeHitTargets
@@ -592,6 +626,7 @@ export function BoardCanvas() {
             placements={upperPlacements}
             selectedPlacementId={selectedPlacementId}
             assetById={assetById}
+            entityById={entityById}
           />
         </pixiContainer>
       </Application>
@@ -605,6 +640,7 @@ interface PlacementSpritesProps {
   placements: AssetPlacement[];
   selectedPlacementId: string | null;
   assetById: Map<string, UploadedImageAsset>;
+  entityById: Map<string, Entity>;
 }
 
 interface EdgeHitTargetsProps {
@@ -706,6 +742,7 @@ function EdgeHitTarget({
 
 function PlacementSprites({
   assetById,
+  entityById,
   frame,
   onPointerDown,
   placements,
@@ -729,6 +766,7 @@ function PlacementSprites({
             onPointerDown={onPointerDown}
             placementId={placement.id}
             asset={asset}
+            count={getPlacementCount(placement, entityById)}
             width={placement.width}
             x={placement.x}
             y={placement.y}
@@ -741,6 +779,7 @@ function PlacementSprites({
 
 interface PiecePlacementSpriteProps {
   asset: UploadedImageAsset;
+  count: number | null;
   frame: BoardFrame;
   height: number;
   isSelected: boolean;
@@ -753,6 +792,7 @@ interface PiecePlacementSpriteProps {
 
 function PiecePlacementSprite({
   asset,
+  count,
   frame,
   height,
   isSelected,
@@ -784,6 +824,23 @@ function PiecePlacementSprite({
     },
     [height, isSelected, width],
   );
+  const badgeText = count === null ? "" : String(count);
+  const badgeWidth = Math.max(24, badgeText.length * 10 + 14);
+  const drawCountBadge = useCallback(
+    (graphics: PixiGraphics) => {
+      graphics.clear();
+
+      if (count === null) {
+        return;
+      }
+
+      graphics
+        .roundRect(-badgeWidth / 2, -height / 2 - 30, badgeWidth, 22, 11)
+        .fill({ color: 0x111827, alpha: 0.86 })
+        .stroke({ color: 0xf8fafc, width: 2, alpha: 0.92 });
+    },
+    [badgeWidth, count, height],
+  );
   const handlePointerDown = useCallback(
     (event: FederatedPointerEvent) => {
       onPointerDown(placementId, event);
@@ -808,6 +865,23 @@ function PiecePlacementSprite({
         x={0}
         y={0}
       />
+      {count !== null ? (
+        <>
+          <pixiGraphics draw={drawCountBadge} />
+          <pixiText
+            anchor={0.5}
+            text={badgeText}
+            x={0}
+            y={-height / 2 - 19}
+            style={{
+              fill: "#f8fafc",
+              fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+              fontSize: 13,
+              fontWeight: "900",
+            }}
+          />
+        </>
+      ) : null}
       <pixiGraphics draw={drawSelection} />
     </pixiContainer>
   );
@@ -1119,6 +1193,21 @@ function scenePointToClampedBoardPoint(point: PointData, frame: BoardFrame) {
     x: clamp((point.x - frame.x) / frame.width),
     y: clamp((point.y - frame.y) / frame.height),
   };
+}
+
+function getPlacementCount(
+  placement: AssetPlacement,
+  entityById: Map<string, Entity>,
+) {
+  if (placement.category !== "TOKEN") {
+    return null;
+  }
+
+  const value = entityById.get(placement.entityId)?.state.count;
+
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 1;
 }
 
 function findNearestLocation(point: PointData, locations: BoardLocation[]) {
