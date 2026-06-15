@@ -445,3 +445,70 @@
   - `.\init.ps1` -> harness valid, TypeScript green, 22 files / 90 tests
 - Current next pending feature is `F-10-MovementValidation`.
 - No git staging, commit, or push was performed.
+
+## 2026-06-15 Centered Map Wheel Zoom Fix
+
+- Fixed the board canvas wheel-zoom behavior so map zoom no longer re-anchors around the mouse pointer. Wheel zoom now matches the toolbar zoom model: it updates `boardZoom` and preserves the current `boardPan`, so the map scales around the current map center.
+- Selected placement wheel scaling is unchanged; when a placed asset is selected in Edit mode, wheel input still resizes that placement instead of changing map zoom.
+- Added a regression test in `tests/ui/boardCanvasFrame.test.ts` proving that `computeBoardFrame` keeps the map center stable across zoom changes, including with a non-zero pan.
+- Verification passed:
+  - `npm.cmd exec -- vitest run tests/ui/boardCanvasFrame.test.ts` -> 1 file / 3 tests
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 22 files / 91 tests
+  - In-app Browser smoke against `http://127.0.0.1:5174/`: wheel input over the board changed zoom from `100%` to `131%`, page scroll stayed at `0`, and console warn/error count was 0.
+  - `.\init.ps1` -> harness valid, dependencies ready, TypeScript green, 22 files / 91 tests
+- During final harness, stale Vite processes on ports 5173/5174 were temporarily stopped because they locked `node_modules/@rolldown/binding-win32-x64-msvc/rolldown-binding.win32-x64-msvc.node` and caused `npm ci` to fail with `EPERM`. After harness passed, the local dev server was restored on `http://127.0.0.1:5173/`.
+- Current next pending feature remains `F-10-MovementValidation`.
+- No git staging, commit, or push was performed.
+
+## 2026-06-15 Browser Local Save Image Persistence Fix
+
+- Fixed local `Save` so it no longer stores raw `blob:` asset URLs in `localStorage`. It now uses the same portable asset embedding path as file `Export`, converting readable uploaded image URLs and thumbnails into `data:` URLs before writing the browser-local scenario.
+- Root cause: `blob:` URLs are scoped to the current browser document/session; after restarting the browser, `Load` could restore the scenario graph but image assets/backgrounds referenced dead `blob:` URLs.
+- `Load` remains a same-origin browser-local restore from `localStorage`; for large image-heavy scenarios that exceed browser storage quota, `Export` remains the reliable long-term save path.
+- Verification passed:
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 22 files / 91 tests
+  - `.\init.ps1` -> harness valid, dependencies ready, TypeScript green, 22 files / 91 tests
+- During final harness, active Vite dev servers were temporarily stopped to release the Windows Rolldown native binding lock. After harness passed, the local dev server was restored on `http://127.0.0.1:5173/`.
+- Current next pending feature remains `F-10-MovementValidation`.
+- No git staging, commit, or push was performed.
+
+## 2026-06-15 Scenario JSON + External Assets Folder Save/Load
+
+- Supersedes the two earlier browser-local image persistence attempts. Product direction is now: `Save` / `Load` handle a single `scenario.json` containing setup state and asset metadata only; image bytes live only in the user-provided assets folder.
+- Removed the IndexedDB asset-store approach from the App flow. Topbar `Export` / `Import` controls are no longer rendered; `Save` downloads `scenario.json`, and `Load` opens a `.json` file picker.
+- `Save` now writes external asset references such as `lorecanvas-asset-ref://...` instead of `blob:` or `data:` image contents. It preserves graph/setup data such as Location relative coordinates, Edges, placements, cards, dice, slots, stacks, trackers, viewport, and asset metadata.
+- Added a Save-complete modal so the user gets visible confirmation after `scenario.json` is generated.
+- Added asset-folder reconciliation:
+  - If the assets folder is imported before `scenario.json`, Load resolves scenario assets by `sourcePath`, then source hash, then unique name/category/mime/size.
+  - If `scenario.json` is loaded first, later asset-folder import reuses matching scenario asset ids instead of creating duplicates, so existing placements and setup references stay connected.
+- Added `tests/state/scenarioJsonAssets.test.ts`, covering image-free scenario JSON export, Location relative position preservation, sourcePath-based URL restoration, and post-load assets-folder reconciliation.
+- Verification passed:
+  - Browser plugin against `http://127.0.0.1:5173/`: page title `LoreCanvas`, meaningful DOM, no framework overlay, topbar has `Save` / `Load`, topbar has no `Export` / `Import`, Load input accepts `.json,application/json`, Save opens a `Save complete` dialog, no visible error banner, console warn/error count 0, screenshot captured.
+  - `npm.cmd exec -- vitest run tests/state/scenarioJsonAssets.test.ts` -> 1 file / 2 tests
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 23 files / 93 tests
+  - `.\init.ps1` -> harness valid, dependencies ready, TypeScript green, 23 files / 93 tests
+- Remaining note: a scenario JSON loaded without its matching assets folder can restore setup structure but cannot render images until the matching folder is imported.
+- During final harness, active Vite dev servers were temporarily stopped to release the Windows Rolldown native binding lock. After harness passed, the local dev server was restored on `http://127.0.0.1:5173/`.
+- Current next pending feature remains `F-10-MovementValidation`.
+- No git staging, commit, or push was performed.
+
+## 2026-06-15 Browser Local Save IndexedDB Asset Fix
+
+- Supersedes the previous localStorage-only image persistence attempt. The screenshot repro showed an 839 MB asset set, which cannot be reliably embedded into `localStorage`; saving image bytes as `data:` JSON was therefore the wrong persistence target.
+- Added `src/ui/localScenarioAssets.ts`, a browser-local asset store backed by IndexedDB. Local `Save` now stores image Blob data in IndexedDB and writes only lightweight `lorecanvas-local-asset://...` references into the `localStorage` scenario JSON.
+- Updated local `Load` to hydrate those references back into fresh `blob:` object URLs before applying the scenario to the board store, so restarted browser sessions can render thumbnails and board images again.
+- Updated file `Import` so imported `.lorecanvas` packages are applied normally, then cached into the same local IndexedDB-backed save slot instead of writing large `data:` packages directly into `localStorage`.
+- Added `tests/ui/localScenarioAssets.test.ts`, covering data-URL image persistence into a fake IndexedDB store, lightweight local JSON references, board background replacement, and hydration back to object URLs.
+- Verification passed:
+  - Browser plugin against `http://127.0.0.1:5173/`: page identity `LoreCanvas`, meaningful DOM, no framework overlay, Save button interaction completed with no visible error, console warn/error count 0. Browser screenshot capture still times out on this app via `Page.captureScreenshot`.
+  - `npm.cmd exec -- vitest run tests/ui/localScenarioAssets.test.ts` -> 1 file / 1 test
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 23 files / 92 tests
+  - `.\init.ps1` -> harness valid, dependencies ready, TypeScript green, 23 files / 92 tests
+- Limitation: already-broken old local saves that contain only expired `blob:` URLs cannot recover image bytes after browser restart; users must re-import/export or re-upload those images once, then Save again to populate IndexedDB.
+- During final harness, active Vite dev servers were temporarily stopped to release the Windows Rolldown native binding lock. After harness passed, the local dev server was restored on `http://127.0.0.1:5173/`.
+- Current next pending feature remains `F-10-MovementValidation`.
+- No git staging, commit, or push was performed.

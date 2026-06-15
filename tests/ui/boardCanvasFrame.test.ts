@@ -41,4 +41,34 @@ describe("board canvas frame sizing", () => {
     expect(resolvedBackground).toMatchObject({ width: 2400, height: 1200 });
     expect(frame.width / frame.height).toBeCloseTo(2, 5);
   });
+
+  it("keeps the map center stable while zoom changes", () => {
+    const viewport = { width: 1200, height: 800 };
+    const pan = { x: 48, y: -32 };
+    const normalFrame = computeBoardFrame(
+      viewport,
+      { ...background, width: 1600, height: 900 },
+      1,
+      pan,
+    );
+    const zoomedFrame = computeBoardFrame(
+      viewport,
+      { ...background, width: 1600, height: 900 },
+      2.5,
+      pan,
+    );
+
+    expect(normalFrame.x + normalFrame.width / 2).toBeCloseTo(
+      zoomedFrame.x + zoomedFrame.width / 2,
+    );
+    expect(normalFrame.y + normalFrame.height / 2).toBeCloseTo(
+      zoomedFrame.y + zoomedFrame.height / 2,
+    );
+    expect(zoomedFrame.x + zoomedFrame.width / 2).toBeCloseTo(
+      viewport.width / 2 + pan.x,
+    );
+    expect(zoomedFrame.y + zoomedFrame.height / 2).toBeCloseTo(
+      viewport.height / 2 + pan.y,
+    );
+  });
 });

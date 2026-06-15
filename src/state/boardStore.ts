@@ -467,24 +467,65 @@ export const useBoardStore = create<BoardStore>((set) => ({
         };
       }
 
-      const existingIds = new Set(state.assets.map((asset) => asset.id));
-      const nextAssets = assets.reduce<UploadedImageAsset[]>((result, asset) => {
-        if (existingIds.has(asset.id)) {
-          return result;
+      let didChange = false;
+      let selectedAssetId = state.selectedAssetId;
+      const nextAssets = [...state.assets];
+
+      for (const asset of assets) {
+        const normalizedAsset = normalizeAsset(asset);
+        const existingIndex = findAssetImportTargetIndex(
+          nextAssets,
+          normalizedAsset,
+        );
+
+        if (existingIndex >= 0) {
+          const existingAsset = nextAssets[existingIndex]!;
+          const mergedAsset = normalizeAsset({
+            ...existingAsset,
+            url: normalizedAsset.url,
+            thumbnailUrl: normalizedAsset.thumbnailUrl ?? existingAsset.thumbnailUrl,
+            mimeType: normalizedAsset.mimeType,
+            size: normalizedAsset.size,
+            width: normalizedAsset.width ?? existingAsset.width,
+            height: normalizedAsset.height ?? existingAsset.height,
+            sourcePath: existingAsset.sourcePath ?? normalizedAsset.sourcePath,
+            manifestPath: existingAsset.manifestPath ?? normalizedAsset.manifestPath,
+            sourceUrl: existingAsset.sourceUrl ?? normalizedAsset.sourceUrl,
+            sourceHash: existingAsset.sourceHash ?? normalizedAsset.sourceHash,
+            kind: existingAsset.kind ?? normalizedAsset.kind,
+            faces: existingAsset.faces ?? normalizedAsset.faces,
+          });
+
+          if (existingAsset.url !== mergedAsset.url && isObjectUrl(existingAsset.url)) {
+            URL.revokeObjectURL(existingAsset.url);
+          }
+
+          if (
+            existingAsset.thumbnailUrl &&
+            existingAsset.thumbnailUrl !== mergedAsset.thumbnailUrl &&
+            isObjectUrl(existingAsset.thumbnailUrl)
+          ) {
+            URL.revokeObjectURL(existingAsset.thumbnailUrl);
+          }
+
+          nextAssets[existingIndex] = mergedAsset;
+          selectedAssetId = mergedAsset.id;
+          didChange = true;
+          continue;
         }
 
-        existingIds.add(asset.id);
-        result.push(normalizeAsset(asset));
-        return result;
-      }, []);
+        nextAssets.push(normalizedAsset);
+        selectedAssetId = normalizedAsset.id;
+        didChange = true;
+      }
 
-      if (nextAssets.length === 0) {
+      if (!didChange) {
         return state;
       }
 
       return {
-        assets: [...state.assets, ...nextAssets],
-        selectedAssetId: nextAssets[nextAssets.length - 1]?.id ?? state.selectedAssetId,
+        assets: nextAssets,
+        selectedAssetId,
         lastError: null,
       };
     }),
@@ -4209,6 +4250,50 @@ function normalizeAsset(asset: UploadedImageAsset): UploadedImageAsset {
       640,
     ),
   };
+}
+
+function findAssetImportTargetIndex(
+  assets: readonly UploadedImageAsset[],
+  importedAsset: UploadedImageAsset,
+) {
+  const exactId = assets.findIndex((asset) => asset.id === importedAsset.id);
+
+  if (exactId >= 0) {
+    return exactId;
+  }
+
+  const sourcePath = normalizeAssetPath(importedAsset.sourcePath);
+
+  if (sourcePath) {
+    const byPath = assets.findIndex(
+      (asset) => normalizeAssetPath(asset.sourcePath) === sourcePath,
+    );
+
+    if (byPath >= 0) {
+      return byPath;
+    }
+  }
+
+  const fallbackMatches = assets
+    .map((asset, index) => ({ asset, index }))
+    .filter(
+      ({ asset }) =>
+        isScenarioAssetReferenceUrl(asset.url) &&
+        asset.name === importedAsset.name &&
+        asset.category === importedAsset.category &&
+        asset.mimeType === importedAsset.mimeType &&
+        asset.size === importedAsset.size,
+    );
+
+  return fallbackMatches.length === 1 ? fallbackMatches[0]!.index : -1;
+}
+
+function isScenarioAssetReferenceUrl(url: string) {
+  return url.startsWith("lorecanvas-asset-ref://");
+}
+
+function normalizeAssetPath(path: string | undefined) {
+  return path?.trim().replace(/\\/g, "/").toLowerCase() ?? "";
 }
 
 function getDefaultPlacementSize(asset: UploadedImageAsset) {

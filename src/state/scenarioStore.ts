@@ -4,6 +4,7 @@ import {
   parseScenarioPackage,
 } from "../engine/serialization";
 import type {
+  ScenarioAsset,
   ScenarioMetadata,
   ScenarioPackage,
   ScenarioPackageInput,
@@ -69,6 +70,8 @@ export interface PortableAssetData {
   url?: string;
 }
 
+export const SCENARIO_ASSET_REFERENCE_URL_PREFIX = "lorecanvas-asset-ref://";
+
 export type PortableAssetDataLoader = (
   asset: UploadedImageAsset,
 ) => Promise<PortableAssetData | null | undefined>;
@@ -119,6 +122,80 @@ export function exportBoardStoreScenario(
   };
 
   return createScenarioPackage(input);
+}
+
+export function exportBoardStoreScenarioJson(
+  state: BoardStoreScenarioInput,
+  metadata: ScenarioMetadata = {},
+): ScenarioPackage {
+  const scenario = exportBoardStoreScenario(state, {
+    ...metadata,
+    assetPersistence: "external-assets-folder",
+  });
+  const current = createExternalAssetReferenceMap(scenario.assets);
+  const frozenSetup = scenario.frozenSetup
+    ? {
+        ...scenario.frozenSetup,
+        assets: scenario.frozenSetup.assets.map(stripAssetImageUrls),
+      }
+    : null;
+  const frozen = scenario.frozenSetup
+    ? createExternalAssetReferenceMap(scenario.frozenSetup.assets)
+    : new Map<string, string>();
+
+  return {
+    ...scenario,
+    assets: scenario.assets.map(stripAssetImageUrls),
+    board: replaceBoardBackgroundExternalUrl(scenario.board, current),
+    frozenSetup: frozenSetup
+      ? {
+          ...frozenSetup,
+          board: replaceBoardBackgroundExternalUrl(frozenSetup.board, frozen),
+        }
+      : null,
+  };
+}
+
+export function resolveScenarioJsonAssetReferences(
+  source: ScenarioPackage | string,
+  availableAssets: readonly UploadedImageAsset[],
+): ScenarioPackage {
+  const scenario =
+    typeof source === "string"
+      ? parseScenarioPackage(source)
+      : assertValidScenarioPackage(source);
+  const current = resolveScenarioAssets(scenario.assets, availableAssets);
+  const frozenSetup = scenario.frozenSetup
+    ? {
+        ...scenario.frozenSetup,
+        ...resolveScenarioAssets(scenario.frozenSetup.assets, availableAssets),
+      }
+    : null;
+
+  return assertValidScenarioPackage({
+    ...scenario,
+    assets: current.assets,
+    board: replaceBoardBackgroundUrl(scenario.board, current.replacementByAssetId),
+    frozenSetup: frozenSetup
+      ? {
+          ...frozenSetup,
+          board: replaceBoardBackgroundUrl(
+            frozenSetup.board,
+            frozenSetup.replacementByAssetId,
+          ),
+        }
+      : null,
+  });
+}
+
+export function applyScenarioJsonToBoardStore(source: ScenarioPackage | string) {
+  const currentState = useBoardStore.getState();
+  const scenario = resolveScenarioJsonAssetReferences(source, [
+    ...currentState.assets,
+    ...(currentState.frozenSetup?.assets ?? []),
+  ]);
+
+  applyScenarioPackageToBoardStore(scenario);
 }
 
 export async function exportBoardStorePortableScenario(
@@ -179,6 +256,146 @@ export async function exportBoardStorePortableScenario(
         }
       : null,
   };
+}
+
+export function isScenarioAssetReferenceUrl(url: string) {
+  return url.startsWith(SCENARIO_ASSET_REFERENCE_URL_PREFIX);
+}
+
+function createExternalAssetReferenceMap(assets: readonly ScenarioAsset[]) {
+  return new Map(
+    assets.map((asset) => [asset.id, createExternalAssetReferenceUrl(asset)]),
+  );
+}
+
+function stripAssetImageUrls(asset: ScenarioAsset): ScenarioAsset {
+  const { thumbnailUrl: _thumbnailUrl, ...assetWithoutThumbnail } = asset;
+
+  return {
+    ...assetWithoutThumbnail,
+    url: createExternalAssetReferenceUrl(asset),
+  };
+}
+
+function createExternalAssetReferenceUrl(asset: ScenarioAsset) {
+  const reference = asset.sourcePath || asset.manifestPath || asset.sourceUrl || asset.id;
+
+  return `${SCENARIO_ASSET_REFERENCE_URL_PREFIX}${encodeURIComponent(reference)}`;
+}
+
+function replaceBoardBackgroundExternalUrl(
+  board: BoardState,
+  referenceByAssetId: ReadonlyMap<string, string>,
+): BoardState {
+  if (!board.background) {
+    return board;
+  }
+
+  const url = referenceByAssetId.get(board.background.assetId);
+
+  if (!url) {
+    return board;
+  }
+
+  return {
+    ...board,
+    background: {
+      ...board.background,
+      url,
+    },
+  };
+}
+
+function resolveScenarioAssets(
+  assets: readonly ScenarioAsset[],
+  availableAssets: readonly UploadedImageAsset[],
+) {
+  const replacementByAssetId = new Map<string, PortableAssetData>();
+  const resolvedAssets = assets.map((asset) => {
+    const matchingAsset = findMatchingAvailableAsset(asset, availableAssets);
+
+    if (!matchingAsset) {
+      return asset;
+    }
+
+    const replacement: PortableAssetData = {
+      url: matchingAsset.url,
+      ...(matchingAsset.thumbnailUrl
+        ? { thumbnailUrl: matchingAsset.thumbnailUrl }
+        : {}),
+    };
+
+    replacementByAssetId.set(asset.id, replacement);
+
+    return {
+      ...asset,
+      url: matchingAsset.url,
+      ...(matchingAsset.thumbnailUrl
+        ? { thumbnailUrl: matchingAsset.thumbnailUrl }
+        : {}),
+      ...(matchingAsset.width ? { width: matchingAsset.width } : {}),
+      ...(matchingAsset.height ? { height: matchingAsset.height } : {}),
+      sourcePath: asset.sourcePath ?? matchingAsset.sourcePath,
+      manifestPath: asset.manifestPath ?? matchingAsset.manifestPath,
+      sourceUrl: asset.sourceUrl ?? matchingAsset.sourceUrl,
+      sourceHash: asset.sourceHash ?? matchingAsset.sourceHash,
+    };
+  });
+
+  return {
+    assets: resolvedAssets,
+    replacementByAssetId,
+  };
+}
+
+function findMatchingAvailableAsset(
+  asset: ScenarioAsset,
+  availableAssets: readonly UploadedImageAsset[],
+) {
+  const candidates = availableAssets.filter(
+    (candidate) => !isScenarioAssetReferenceUrl(candidate.url),
+  );
+  const exactId = candidates.find((candidate) => candidate.id === asset.id);
+
+  if (exactId) {
+    return exactId;
+  }
+
+  const sourcePath = normalizeAssetPath(asset.sourcePath);
+
+  if (sourcePath) {
+    const byPath = candidates.find(
+      (candidate) => normalizeAssetPath(candidate.sourcePath) === sourcePath,
+    );
+
+    if (byPath) {
+      return byPath;
+    }
+  }
+
+  if (asset.sourceHash) {
+    const byHash = candidates.find(
+      (candidate) => candidate.sourceHash === asset.sourceHash,
+    );
+
+    if (byHash) {
+      return byHash;
+    }
+  }
+
+  const fallbackMatches = candidates.filter(
+    (candidate) =>
+      candidate.name === asset.name &&
+      candidate.category === asset.category &&
+      candidate.mimeType === asset.mimeType &&
+      candidate.size === asset.size,
+  );
+
+  return fallbackMatches.length === 1 ? fallbackMatches[0] : null;
+}
+
+export function normalizeAssetPath(path: string | undefined) {
+  return path?.trim().replace(/\\/g, "/").toLowerCase() ?? "";
 }
 
 export function importBoardStoreScenario(

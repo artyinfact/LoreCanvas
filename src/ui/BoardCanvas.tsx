@@ -508,45 +508,16 @@ export function BoardCanvas() {
         return;
       }
 
-      const hostRect = hostRef.current?.getBoundingClientRect();
-
-      if (!hostRect) {
-        return;
-      }
-
-      const pointer = {
-        x: event.clientX - hostRect.left,
-        y: event.clientY - hostRect.top,
-      };
-      const zoomRatio = nextZoom / boardZoom;
-      const nextFrameX = pointer.x + (frame.x - pointer.x) * zoomRatio;
-      const nextFrameY = pointer.y + (frame.y - pointer.y) * zoomRatio;
-      const nextBaseFrame = computeBoardFrame(
-        viewport,
-        board.background,
-        nextZoom,
-        { x: 0, y: 0 },
-      );
-
       setBoardZoom(nextZoom);
-      setBoardPan({
-        x: nextFrameX - nextBaseFrame.x,
-        y: nextFrameY - nextBaseFrame.y,
-      });
     },
     [
       activeTool,
-      board.background,
       boardZoom,
-      frame.x,
-      frame.y,
       mode,
       selectedLocationId,
       selectedPlacement,
-      setBoardPan,
       setBoardZoom,
       updateAssetPlacement,
-      viewport,
     ],
   );
   useEffect(() => {
