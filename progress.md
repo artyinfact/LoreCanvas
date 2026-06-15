@@ -512,3 +512,40 @@
 - During final harness, active Vite dev servers were temporarily stopped to release the Windows Rolldown native binding lock. After harness passed, the local dev server was restored on `http://127.0.0.1:5173/`.
 - Current next pending feature remains `F-10-MovementValidation`.
 - No git staging, commit, or push was performed.
+
+## 2026-06-15 Scenario Save/Open Picker Alignment
+
+- Aligned `Save` and `Load` around the single external-assets `scenario.json` flow. `Save` now uses the browser File System Access save picker when available, with suggested file name `scenario.json`; `Load` uses the matching open picker.
+- Both native picker calls share the same picker id (`lorecanvas-scenario-json`) and initial directory hint (`documents`), so Chromium-family browsers can remember the same default folder for saving and loading the scenario file.
+- Browsers that do not expose `showSaveFilePicker` / `showOpenFilePicker` fall back to the previous download / hidden file-input behavior, with the save-complete modal explicitly noting that the browser did not support choosing a save location.
+- Load errors no longer expose the internal `lorecanvas.scenario` schema name for format mismatches; the UI now asks for a `scenario.json` saved from LoreCanvas and kept with the matching assets folder.
+- Added `src/ui/scenarioFilePicker.ts` and `tests/ui/scenarioFilePicker.test.ts` to lock the save/open picker options, shared id, suggested file name, fallback behavior, and user-cancel handling.
+- Verification passed:
+  - `npm.cmd exec -- vitest run tests/ui/scenarioFilePicker.test.ts tests/state/scenarioJsonAssets.test.ts` -> 2 files / 6 tests
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 24 files / 97 tests
+  - `npm.cmd run build`
+  - Browser plugin against `http://127.0.0.1:5173/`: title `LoreCanvas`, one `Save`, one `Load`, no `Export` / `Import`, hidden Load fallback input accepts `.json,application/json`, no Vite overlay, and console warn/error count 0. The in-app Browser does not expose native file picker APIs, so native picker behavior is covered by unit tests.
+  - `.\init.ps1` -> harness valid, dependencies ready, TypeScript green, 24 files / 97 tests
+- During final harness, active Vite dev servers were temporarily stopped to release the Windows Rolldown native binding lock. After harness passed, the local dev server was restored on `http://127.0.0.1:5173/`.
+- Current next pending feature remains `F-10-MovementValidation`.
+- No git staging, commit, or push was performed.
+
+## 2026-06-15 Folder Asset Bulk Delete
+
+- Added one-click deletion for folder-imported image assets in the Maker asset import panel:
+  - Global `Assets folder` row now has a `Delete` button that removes all assets with a folder `sourcePath`.
+  - Each of the six category rows (`Board`, `Pawn`, `Token`, `Tile`, `Card`, `Other`) now has a trash button that removes folder-imported assets in that category only.
+- The category trash buttons intentionally target assets with `sourcePath`, so single-image uploads made through the `Image` buttons are not removed by folder-delete actions.
+- Added `removeAssets(assetIds)` to `src/state/boardStore.ts` so large folder deletes run as one store update while preserving existing cleanup semantics: board background, placements, entities, pawn sheets, card zones, dice refs, slots, stacks, selected ids, and object URLs are cleaned consistently.
+- Added regression coverage in `tests/state/boardStore.test.ts` proving batch removal deletes folder-backed board/token assets, clears background and placed entities, and keeps a single-image TOKEN asset intact.
+- Verification passed:
+  - `npm.cmd exec -- vitest run tests/state/boardStore.test.ts tests/ui/scenarioFilePicker.test.ts tests/state/scenarioJsonAssets.test.ts` -> 3 files / 26 tests
+  - `npm.cmd run check-types`
+  - `npm.cmd run test` -> 24 files / 98 tests
+  - `npm.cmd run build`
+  - Browser plugin against `http://127.0.0.1:5173/`: asset import panel rendered one global delete button, six category delete buttons, all empty-state delete buttons disabled, no Vite overlay, and console warn/error count 0.
+  - `.\init.ps1` -> harness valid, dependencies ready, TypeScript green, 24 files / 98 tests
+- During final harness, active Vite dev servers were temporarily stopped to release the Windows Rolldown native binding lock. After harness passed, the local dev server was restored on `http://127.0.0.1:5173/`.
+- Current next pending feature remains `F-10-MovementValidation`.
+- No git staging, commit, or push was performed.

@@ -628,6 +628,73 @@ describe("Maker image assets and entity placement", () => {
     expect(useBoardStore.getState().entityState.entities).toHaveLength(0);
   });
 
+  it("removes folder-imported assets in one batch while keeping single-image assets", () => {
+    const revokeSpy = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => {});
+    const store = useBoardStore.getState();
+
+    store.addAssets([
+      {
+        id: "asset-board-folder",
+        category: "BOARD",
+        name: "Board.png",
+        url: "blob:board-folder",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 1,
+        placementWidth: 64,
+        placementHeight: 64,
+        sourcePath: "assets/board/Board.png",
+      },
+      {
+        id: "asset-token-folder",
+        category: "TOKEN",
+        name: "Marker.png",
+        url: "blob:token-folder",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 999,
+        placementWidth: 64,
+        placementHeight: 64,
+        sourcePath: "assets/token/Marker.png",
+      },
+      {
+        id: "asset-token-single",
+        category: "TOKEN",
+        name: "Single.png",
+        url: "blob:token-single",
+        mimeType: "image/png",
+        size: 1000,
+        maxCopies: 999,
+        placementWidth: 64,
+        placementHeight: 64,
+      },
+    ]);
+    store.setBackgroundAsset("asset-board-folder");
+    useBoardStore.getState().createAssetPlacement("asset-token-folder", 0.5, 0.5);
+    useBoardStore.getState().selectAsset("asset-token-folder");
+
+    useBoardStore
+      .getState()
+      .removeAssets(["asset-board-folder", "asset-token-folder"]);
+
+    const nextState = useBoardStore.getState();
+
+    expect(nextState.assets.map((asset) => asset.id)).toEqual([
+      "asset-token-single",
+    ]);
+    expect(nextState.board.background).toBeNull();
+    expect(nextState.assetPlacements).toHaveLength(0);
+    expect(nextState.entityState.entities).toHaveLength(0);
+    expect(nextState.selectedAssetId).toBeNull();
+    expect(revokeSpy).toHaveBeenCalledWith("blob:board-folder");
+    expect(revokeSpy).toHaveBeenCalledWith("blob:token-folder");
+    expect(revokeSpy).not.toHaveBeenCalledWith("blob:token-single");
+
+    revokeSpy.mockRestore();
+  });
+
   it("configures a bound pawn with one character card and held cards", () => {
     const store = useBoardStore.getState();
 

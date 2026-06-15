@@ -198,6 +198,7 @@ export interface BoardStore {
   addAssets: (assets: UploadedImageAsset[]) => void;
   applyAssetMediaPatches: (patches: AssetMediaPatch[]) => void;
   removeAsset: (assetId: string) => void;
+  removeAssets: (assetIds: string[]) => void;
   updateAssetCategory: (assetId: string, category: ResourceCategory) => void;
   updateAssetPlacementConfig: (
     assetId: string,
@@ -608,65 +609,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
       };
     }),
   removeAsset: (assetId) =>
-    set((state) => {
-      if (state.mode === "run") {
-        return {
-          lastError: RUN_MODE_LOCK_MESSAGE,
-        };
-      }
-
-      const asset = state.assets.find((candidate) => candidate.id === assetId);
-      const removedPlacementIds = new Set(
-        state.assetPlacements
-          .filter((placement) => placement.assetId === assetId)
-          .map((placement) => placement.id),
-      );
-      const removedEntityIds = new Set(
-        state.assetPlacements
-          .filter((placement) => placement.assetId === assetId)
-          .map((placement) => placement.entityId),
-      );
-
-      if (asset) {
-        revokeAssetObjectUrls(asset);
-      }
-
-      return {
-        board:
-          state.board.background?.assetId === assetId
-            ? setBoardBackground(state.board, null)
-            : state.board,
-        assets: state.assets.filter((candidate) => candidate.id !== assetId),
-        entityState: {
-          entities: state.entityState.entities.filter(
-            (entity) => !removedEntityIds.has(entity.id),
-          ),
-        },
-        assetPlacements: state.assetPlacements.filter(
-          (placement) => placement.assetId !== assetId,
-        ),
-        pawnSheets: removeAssetFromPawnSheets(
-          removePawnSheetsByPlacementId(state.pawnSheets, removedPlacementIds),
-          assetId,
-        ),
-        cardDeckState: removeCardsByAssetId(state.cardDeckState, assetId),
-        diceState: removeDiceReferencesByAssetId(state.diceState, assetId),
-        slotState: removeSlotAssetsByAssetId(state.slotState, assetId),
-        stackState: removeStacksByAssetId(state.stackState, assetId),
-        selectedAssetId:
-          state.selectedAssetId === assetId ? null : state.selectedAssetId,
-        selectedPlacementId:
-          state.selectedPlacementId &&
-          state.assetPlacements.some(
-            (placement) =>
-              placement.id === state.selectedPlacementId &&
-              placement.assetId === assetId,
-          )
-            ? null
-            : state.selectedPlacementId,
-        lastError: null,
-      };
-    }),
+    set((state) => removeAssetsFromStoreState(state, [assetId])),
+  removeAssets: (assetIds) =>
+    set((state) => removeAssetsFromStoreState(state, assetIds)),
   updateAssetCategory: (assetId, category) =>
     set((state) => {
       if (state.mode === "run") {
@@ -3530,6 +3475,93 @@ function removeAssetFromPawnSheet(sheet: PawnSheet, assetId: string): PawnSheet 
       (heldAssetId) => heldAssetId !== assetId,
     ),
     counters: sheet.counters.filter((counter) => counter.assetId !== assetId),
+  };
+}
+
+function removeAssetsFromStoreState(
+  state: BoardStore,
+  assetIds: readonly string[],
+) {
+  if (state.mode === "run") {
+    return {
+      lastError: RUN_MODE_LOCK_MESSAGE,
+    };
+  }
+
+  const assetIdSet = new Set(assetIds);
+
+  if (assetIdSet.size === 0) {
+    return state;
+  }
+
+  const removedAssets = state.assets.filter((asset) => assetIdSet.has(asset.id));
+
+  if (removedAssets.length === 0) {
+    return {
+      lastError: null,
+    };
+  }
+
+  const removedPlacementIds = new Set(
+    state.assetPlacements
+      .filter((placement) => assetIdSet.has(placement.assetId))
+      .map((placement) => placement.id),
+  );
+  const removedEntityIds = new Set(
+    state.assetPlacements
+      .filter((placement) => assetIdSet.has(placement.assetId))
+      .map((placement) => placement.entityId),
+  );
+
+  for (const asset of removedAssets) {
+    revokeAssetObjectUrls(asset);
+  }
+
+  let pawnSheets = removePawnSheetsByPlacementId(
+    state.pawnSheets,
+    removedPlacementIds,
+  );
+  let cardDeckState = state.cardDeckState;
+  let diceState = state.diceState;
+  let slotState = state.slotState;
+  let stackState = state.stackState;
+
+  for (const assetId of assetIdSet) {
+    pawnSheets = removeAssetFromPawnSheets(pawnSheets, assetId);
+    cardDeckState = removeCardsByAssetId(cardDeckState, assetId);
+    diceState = removeDiceReferencesByAssetId(diceState, assetId);
+    slotState = removeSlotAssetsByAssetId(slotState, assetId);
+    stackState = removeStacksByAssetId(stackState, assetId);
+  }
+
+  return {
+    board:
+      state.board.background && assetIdSet.has(state.board.background.assetId)
+        ? setBoardBackground(state.board, null)
+        : state.board,
+    assets: state.assets.filter((asset) => !assetIdSet.has(asset.id)),
+    entityState: {
+      entities: state.entityState.entities.filter(
+        (entity) => !removedEntityIds.has(entity.id),
+      ),
+    },
+    assetPlacements: state.assetPlacements.filter(
+      (placement) => !assetIdSet.has(placement.assetId),
+    ),
+    pawnSheets,
+    cardDeckState,
+    diceState,
+    slotState,
+    stackState,
+    selectedAssetId:
+      state.selectedAssetId && assetIdSet.has(state.selectedAssetId)
+        ? null
+        : state.selectedAssetId,
+    selectedPlacementId:
+      state.selectedPlacementId && removedPlacementIds.has(state.selectedPlacementId)
+        ? null
+        : state.selectedPlacementId,
+    lastError: null,
   };
 }
 

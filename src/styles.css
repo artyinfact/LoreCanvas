@@ -162,6 +162,10 @@ button {
   display: none;
 }
 
+.scenario-load-input {
+  display: none;
+}
+
 .icon-button--primary {
   border-color: #214f52;
   background: #214f52;
@@ -674,6 +678,12 @@ button {
   color: #ffffff;
 }
 
+.asset-import-root-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
 .asset-import-root:hover {
   border-color: #183d40;
   background: #183d40;
@@ -703,8 +713,13 @@ button {
 .asset-import-category__actions {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr)) 32px;
   gap: 6px;
+}
+
+.asset-import-delete-button {
+  width: 32px;
+  height: 30px;
 }
 
 .token-quick-pick {
@@ -851,6 +866,12 @@ button {
 .mini-button[data-disabled="true"] {
   cursor: default;
   opacity: 0.65;
+  transform: none;
+}
+
+.mini-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
   transform: none;
 }
 

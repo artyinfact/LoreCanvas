@@ -82,6 +82,13 @@ import {
 } from "./assetImport";
 import { processAssetMedia } from "./assetMedia";
 import type { AssetMediaTask } from "./assetMedia";
+import {
+  isScenarioFilePickerAbort,
+  openScenarioTextFile,
+  saveScenarioTextFile,
+  SCENARIO_FILE_ACCEPT,
+  SCENARIO_FILE_NAME,
+} from "./scenarioFilePicker";
 
 const EMPTY_JSON_STATE: JsonRecord = {};
 const ASSET_CATEGORY_VISIBLE_INCREMENT = 32;
@@ -171,6 +178,7 @@ export function App() {
   const lastError = useBoardStore((state) => state.lastError);
   const addAssets = useBoardStore((state) => state.addAssets);
   const removeAsset = useBoardStore((state) => state.removeAsset);
+  const removeAssets = useBoardStore((state) => state.removeAssets);
   const updateAssetCategory = useBoardStore((state) => state.updateAssetCategory);
   const updateAssetPlacementConfig = useBoardStore(
     (state) => state.updateAssetPlacementConfig,
@@ -260,6 +268,7 @@ export function App() {
   const mediaCountsRef = useRef<MediaProgress>({ done: 0, total: 0 });
   const isUnmountedRef = useRef(false);
   const mapWorkspaceRef = useRef<HTMLElement>(null);
+  const scenarioLoadInputRef = useRef<HTMLInputElement>(null);
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
 
   useEffect(() => {
@@ -412,19 +421,43 @@ export function App() {
     },
     [addAssets, runMediaPipeline, setBackgroundAsset],
   );
-  const handleSaveScenario = useCallback(() => {
+  const handleClearFolderAssets = useCallback(
+    (category?: ResourceCategory) => {
+      const assetIds = getFolderImportedAssetIds(
+        useBoardStore.getState().assets,
+        category,
+      );
+
+      if (assetIds.length === 0) {
+        return;
+      }
+
+      removeAssets(assetIds);
+    },
+    [removeAssets],
+  );
+  const handleSaveScenario = useCallback(async () => {
     try {
       const scenario = exportBoardStoreScenarioJson(useBoardStore.getState(), {
         savedAt: new Date().toISOString(),
       });
+      const contents = serializeScenarioPackage(scenario);
+      const usedNativeSavePicker = await saveScenarioTextFile(contents);
 
-      downloadTextFile(
-        "scenario.json",
-        serializeScenarioPackage(scenario),
-        "application/json",
+      setSaveNoticeMessage(
+        usedNativeSavePicker
+          ? "scenario.json was saved. Keep it with the matching assets folder."
+          : "scenario.json was downloaded. This browser does not support choosing a save location.",
       );
+      if (!usedNativeSavePicker) {
+        downloadTextFile(SCENARIO_FILE_NAME, contents, "application/json");
+      }
       setSaveNoticeOpen(true);
     } catch (error) {
+      if (isScenarioFilePickerAbort(error)) {
+        return;
+      }
+
       setLastError(getErrorMessage(error));
     }
   }, [setLastError]);
@@ -442,11 +475,29 @@ export function App() {
       try {
         applyScenarioJsonToBoardStore(await file.text());
       } catch (error) {
-        setLastError(getErrorMessage(error));
+        setLastError(getScenarioLoadErrorMessage(error));
       }
     },
     [setLastError],
   );
+  const handleLoadScenario = useCallback(async () => {
+    try {
+      const contents = await openScenarioTextFile();
+
+      if (contents === null) {
+        scenarioLoadInputRef.current?.click();
+        return;
+      }
+
+      applyScenarioJsonToBoardStore(contents);
+    } catch (error) {
+      if (isScenarioFilePickerAbort(error)) {
+        return;
+      }
+
+      setLastError(getScenarioLoadErrorMessage(error));
+    }
+  }, [setLastError]);
   const [collapsedSections, setCollapsedSections] = useState<
     Record<string, boolean>
   >({});
@@ -455,6 +506,7 @@ export function App() {
   >({});
   const [tokenSearch, setTokenSearch] = useState("");
   const [isSaveNoticeOpen, setSaveNoticeOpen] = useState(false);
+  const [saveNoticeMessage, setSaveNoticeMessage] = useState("");
   const [activeWorkbenchTab, setActiveWorkbenchTab] =
     useState<WorkbenchTab>("locations");
   const tokenAssets = useMemo(
@@ -542,16 +594,22 @@ export function App() {
             <Save aria-hidden="true" size={17} />
             <span>Save</span>
           </button>
-          <label className="icon-button scenario-load-button">
+          <button
+            className="icon-button scenario-load-button"
+            onClick={handleLoadScenario}
+            type="button"
+          >
             <FileInput aria-hidden="true" size={17} />
             <span>Load</span>
-            <input
-              accept=".json,application/json"
-              aria-label="Load scenario JSON"
-              onChange={handleLoadScenarioFile}
-              type="file"
-            />
-          </label>
+          </button>
+          <input
+            accept={SCENARIO_FILE_ACCEPT}
+            aria-label="Load scenario JSON"
+            className="scenario-load-input"
+            onChange={handleLoadScenarioFile}
+            ref={scenarioLoadInputRef}
+            type="file"
+          />
         </div>
       </header>
 
@@ -564,7 +622,7 @@ export function App() {
             role="dialog"
           >
             <strong>Save complete</strong>
-            <p>scenario.json is ready. Keep it with the matching assets folder.</p>
+            <p>{saveNoticeMessage}</p>
             <button
               className="icon-button icon-button--primary"
               onClick={() => setSaveNoticeOpen(false)}
@@ -603,7 +661,9 @@ export function App() {
               trailing={<span>{formatBytes(totalBytes(assets))}</span>}
             >
               <AssetImportPanel
+                assets={assets}
                 isDisabled={mode === "run"}
+                onClearFolderAssets={handleClearFolderAssets}
                 onImport={handleImageImport}
                 progress={mediaProgress}
               />
@@ -4552,7 +4612,9 @@ function JsonStateEditor({
 }
 
 interface AssetImportPanelProps {
+  assets: UploadedImageAsset[];
   isDisabled: boolean;
+  onClearFolderAssets: (category?: ResourceCategory) => void;
   onImport: (
     event: ChangeEvent<HTMLInputElement>,
     options?: ImageImportOptions,
@@ -4565,7 +4627,15 @@ const DIRECTORY_INPUT_PROPS = {
   webkitdirectory: "",
 } as Record<string, string>;
 
-function AssetImportPanel({ isDisabled, onImport, progress }: AssetImportPanelProps) {
+function AssetImportPanel({
+  assets,
+  isDisabled,
+  onClearFolderAssets,
+  onImport,
+  progress,
+}: AssetImportPanelProps) {
+  const rootFolderAssetCount = countFolderImportedAssets(assets);
+
   return (
     <div className="asset-import-panel" data-disabled={isDisabled}>
       {progress ? (
@@ -4577,64 +4647,100 @@ function AssetImportPanel({ isDisabled, onImport, progress }: AssetImportPanelPr
           Processing images {progress.done} / {progress.total}
         </p>
       ) : null}
-      <label
-        aria-disabled={isDisabled}
-        className="mini-button asset-import-root"
-        data-disabled={isDisabled}
-      >
-        <FolderOpen aria-hidden="true" size={14} />
-        <span>Assets folder</span>
-        <input
-          {...DIRECTORY_INPUT_PROPS}
-          accept="image/*"
-          disabled={isDisabled}
-          multiple
-          onChange={(event) =>
-            onImport(event, { inferCategoryFromPath: true })
+      <div className="asset-import-root-actions">
+        <label
+          aria-disabled={isDisabled}
+          className="mini-button asset-import-root"
+          data-disabled={isDisabled}
+        >
+          <FolderOpen aria-hidden="true" size={14} />
+          <span>Assets folder</span>
+          <input
+            {...DIRECTORY_INPUT_PROPS}
+            accept="image/*"
+            disabled={isDisabled}
+            multiple
+            onChange={(event) =>
+              onImport(event, { inferCategoryFromPath: true })
+            }
+            type="file"
+          />
+        </label>
+        <button
+          aria-label={`Delete ${rootFolderAssetCount} folder-imported assets`}
+          className="mini-button mini-button--danger"
+          disabled={isDisabled || rootFolderAssetCount === 0}
+          onClick={() => onClearFolderAssets()}
+          title={
+            rootFolderAssetCount === 0
+              ? "No folder-imported assets"
+              : `Delete ${rootFolderAssetCount} folder-imported assets`
           }
-          type="file"
-        />
-      </label>
+          type="button"
+        >
+          <Trash2 aria-hidden="true" size={14} />
+          <span>Delete</span>
+        </button>
+      </div>
 
       <div className="asset-import-category-list">
-        {RESOURCE_CATEGORIES.map((category) => (
-          <div className="asset-import-category" key={category}>
-            <strong>{RESOURCE_CATEGORY_DEFINITIONS[category].label}</strong>
-            <div className="asset-import-category__actions">
-              <label
-                aria-disabled={isDisabled}
-                className="mini-button"
-                data-disabled={isDisabled}
-              >
-                <FolderOpen aria-hidden="true" size={13} />
-                <span>Folder</span>
-                <input
-                  {...DIRECTORY_INPUT_PROPS}
-                  accept="image/*"
-                  disabled={isDisabled}
-                  multiple
-                  onChange={(event) => onImport(event, { category })}
-                  type="file"
-                />
-              </label>
-              <label
-                aria-disabled={isDisabled}
-                className="mini-button"
-                data-disabled={isDisabled}
-              >
-                <Upload aria-hidden="true" size={13} />
-                <span>Image</span>
-                <input
-                  accept="image/*"
-                  disabled={isDisabled}
-                  multiple
-                  onChange={(event) => onImport(event, { category })}
-                  type="file"
-                />
-              </label>
+        {RESOURCE_CATEGORIES.map((category) => {
+          const label = RESOURCE_CATEGORY_DEFINITIONS[category].label;
+          const folderAssetCount = countFolderImportedAssets(assets, category);
+
+          return (
+            <div className="asset-import-category" key={category}>
+              <strong>{label}</strong>
+              <div className="asset-import-category__actions">
+                <label
+                  aria-disabled={isDisabled}
+                  className="mini-button"
+                  data-disabled={isDisabled}
+                >
+                  <FolderOpen aria-hidden="true" size={13} />
+                  <span>Folder</span>
+                  <input
+                    {...DIRECTORY_INPUT_PROPS}
+                    accept="image/*"
+                    disabled={isDisabled}
+                    multiple
+                    onChange={(event) => onImport(event, { category })}
+                    type="file"
+                  />
+                </label>
+                <label
+                  aria-disabled={isDisabled}
+                  className="mini-button"
+                  data-disabled={isDisabled}
+                >
+                  <Upload aria-hidden="true" size={13} />
+                  <span>Image</span>
+                  <input
+                    accept="image/*"
+                    disabled={isDisabled}
+                    multiple
+                    onChange={(event) => onImport(event, { category })}
+                    type="file"
+                  />
+                </label>
+                <button
+                  aria-label={`Delete ${label} folder assets`}
+                  className="icon-only icon-only--danger asset-import-delete-button"
+                  disabled={isDisabled || folderAssetCount === 0}
+                  onClick={() => onClearFolderAssets(category)}
+                  title={
+                    folderAssetCount === 0
+                      ? `No ${label} folder assets`
+                      : `Delete ${folderAssetCount} ${label} folder assets`
+                  }
+                  type="button"
+                >
+                  <Trash2 aria-hidden="true" size={14} />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -5180,6 +5286,26 @@ function findAsset(assets: UploadedImageAsset[], assetId: string) {
   return assets.find((asset) => asset.id === assetId) ?? null;
 }
 
+function getFolderImportedAssetIds(
+  assets: UploadedImageAsset[],
+  category?: ResourceCategory,
+) {
+  return assets
+    .filter(
+      (asset) =>
+        normalizeAssetPath(asset.sourcePath).length > 0 &&
+        (category === undefined || asset.category === category),
+    )
+    .map((asset) => asset.id);
+}
+
+function countFolderImportedAssets(
+  assets: UploadedImageAsset[],
+  category?: ResourceCategory,
+) {
+  return getFolderImportedAssetIds(assets, category).length;
+}
+
 function findExistingAssetForImportedAsset(
   assets: readonly UploadedImageAsset[],
   importedAsset: UploadedImageAsset,
@@ -5470,4 +5596,17 @@ function isPlainObject(value: unknown): value is JsonRecord {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Action failed.";
+}
+
+function getScenarioLoadErrorMessage(error: unknown) {
+  const message = getErrorMessage(error);
+
+  if (
+    message.includes("Scenario package format") ||
+    message.includes("lorecanvas.scenario")
+  ) {
+    return "Load expects a scenario.json saved from LoreCanvas. Keep it with the matching assets folder.";
+  }
+
+  return message;
 }
