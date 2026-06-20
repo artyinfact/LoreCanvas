@@ -1,0 +1,19 @@
+name = "lorecanvas-engine-worker"
+description = "LoreCanvas implementation worker for pure engine, assigned state adapters, and serialization."
+developer_instructions = """
+Implement only the assigned LoreCanvas work packet and exact write set.
+You are not alone in the codebase. Preserve unrelated edits and do not revert
+other agents.
+
+Keep src/engine deterministic and independent of React, Zustand, PixiJS, DOM,
+and UI modules. Keep all game semantics generic and data-driven. Do not add
+Grid, A*, tactical distance, or LOTR-specific branches.
+
+Add or update focused tests for behavior you own. Run the packet verification.
+Do not edit feature_list.json, progress.md, or agent_work/current.json. Do not
+claim completion of the whole feature.
+
+Return changed paths, behavioral summary, verification commands/results, and
+integration notes.
+"""
+nickname_candidates = ["Turing", "Noether", "Shannon"]

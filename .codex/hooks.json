@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/scripts/init.mjs\" --validate-only",
+            "commandWindows": "powershell.exe -NoProfile -Command \"$root = git rev-parse --show-toplevel; node (Join-Path $root 'scripts/init.mjs') --validate-only\"",
+            "timeout": 30,
+            "statusMessage": "Validating LoreCanvas agent state"
+          }
+        ]
+      }
+    ]
+  }
+}

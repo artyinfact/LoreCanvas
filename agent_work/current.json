@@ -1,0 +1,12 @@
+{
+  "$schema": "../schemas/agent-run.schema.json",
+  "version": "1.0.0",
+  "activeFeatureId": null,
+  "state": "idle",
+  "iteration": 0,
+  "revision": 6,
+  "workPackets": [],
+  "humanGates": [],
+  "evidence": {},
+  "blockers": []
+}

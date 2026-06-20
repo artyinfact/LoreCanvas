@@ -2,226 +2,72 @@ import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  printValidationResult,
+  validateRepositoryState,
+} from "./validate-agent-harness.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-const gitCommand = process.platform === "win32" ? "git.exe" : "git";
+const options = new Set(process.argv.slice(2));
+const validateOnly = options.has("--validate-only");
+const noInstall = options.has("--no-install");
 
 process.chdir(root);
 
 main();
 
 function main() {
-  console.log("[1/6] Checking harness files...");
-  checkRequiredFiles();
-  console.log("[1/6] Harness files are present.");
+  console.log("[1/7] Validating feature and agent harness state...");
+  const validation = validateRepositoryState(root);
+  printValidationResult(validation);
+  if (validation.errors.length > 0) {
+    process.exit(1);
+  }
+  console.log("[1/7] Harness state is valid.");
 
-  console.log("[2/6] Validating harness state...");
-  validateHarnessState();
-  console.log("[2/6] Harness state is valid.");
+  if (validateOnly) {
+    console.log("Validation-only mode completed without installing dependencies.");
+    return;
+  }
 
-  console.log("[3/6] Checking implementation scaffold...");
+  console.log("[2/7] Checking implementation scaffold...");
   if (!existsSync("package.json")) {
     console.log(
-      "[3/6] package.json not found. This is expected before the implementation scaffold exists.",
+      "[2/7] package.json not found. This is expected before the implementation scaffold exists.",
     );
-    console.log("[4/6] Skipping dependency installation.");
-    console.log("[5/6] Skipping TypeScript and Vitest checks.");
+    console.log("[3/7] Skipping dependency installation.");
+    console.log("[4/7] Skipping TypeScript, Vitest, and build checks.");
     console.log(
-      "[6/6] Next required task: complete the smallest-priority pending feature in feature_list.json.",
+      "[7/7] Next required task: run the LoreCanvas feature loop.",
     );
     console.log("Harness is ready; implementation scaffold is still pending.");
     return;
   }
 
-  console.log("[4/6] Installing npm dependencies...");
-  installDependencies();
-  installMissingLinuxRolldownBinding();
-  console.log("[4/6] Dependencies are ready.");
-
-  console.log("[5/6] Running TypeScript checks...");
-  run(npmCommand, ["run", "check-types", "--if-present"]);
-  console.log("[5/6] Project type-check script passed.");
-
-  console.log("[6/6] Running Vitest...");
-  run(npmCommand, ["run", "test"]);
-  console.log("[6/6] Vitest passed.");
-
-  console.log("Implementation baseline is healthy.");
-  console.log("LoreCanvas is ready for the next pending feature.");
-}
-
-function checkRequiredFiles() {
-  const requiredFiles = [
-    "AGENTS.md",
-    "feature_list.json",
-    "progress.md",
-    "docs/product.md",
-    "clean-state-checklists.md",
-    ".gitignore",
-    ".gitattributes",
-    ".nvmrc",
-    "init.sh",
-    "init.ps1",
-    "scripts/init.mjs",
-    "scripts/run-with-modern-node.mjs",
-  ];
-
-  const missing = requiredFiles.filter((file) => !existsSync(file));
-
-  if (missing.length > 0) {
-    fail(`Missing required harness file(s): ${missing.join(", ")}`);
-  }
-}
-
-function validateHarnessState() {
-  const data = readJson("feature_list.json");
-  const errors = [];
-  const requiredTop = ["project", "version", "harnessDocs", "features"];
-
-  for (const field of requiredTop) {
-    if (!(field in data)) {
-      errors.push(`Missing top-level field: ${field}`);
-    }
-  }
-
-  const features = Array.isArray(data.features) ? data.features : [];
-  if (features.length === 0) {
-    errors.push("features must be a non-empty list");
-  }
-
-  const ids = new Set();
-  const allowedStatuses = new Set([
-    "pending",
-    "in_progress",
-    "blocked",
-    "completed",
-  ]);
-  const inProgress = [];
-
-  features.forEach((feature, index) => {
-    if (!isObject(feature)) {
-      errors.push(`Feature at index ${index} must be an object`);
-      return;
-    }
-
-    const requiredFeature = [
-      "id",
-      "priority",
-      "title",
-      "description",
-      "status",
-      "dependencies",
-      "verification",
-      "evidence",
-    ];
-
-    for (const field of requiredFeature) {
-      if (!(field in feature)) {
-        errors.push(`Feature at index ${index} missing field: ${field}`);
-      }
-    }
-
-    const featureId = feature.id;
-    if (typeof featureId !== "string" || featureId.length === 0) {
-      errors.push(`Feature at index ${index} has invalid id`);
-    } else if (ids.has(featureId)) {
-      errors.push(`Duplicate feature id: ${featureId}`);
-    } else {
-      ids.add(featureId);
-    }
-
-    if (!Number.isInteger(feature.priority)) {
-      errors.push(`Feature ${featureId || index} has non-integer priority`);
-    }
-
-    if (!allowedStatuses.has(feature.status)) {
-      errors.push(`Feature ${featureId || index} has invalid status: ${feature.status}`);
-    }
-
-    if (feature.status === "in_progress") {
-      inProgress.push(featureId || String(index));
-    }
-
-    if (feature.status === "completed" && !feature.evidence) {
-      errors.push(`Completed feature ${featureId || index} must include evidence`);
-    }
-
-    if (!Array.isArray(feature.dependencies)) {
-      errors.push(`Feature ${featureId || index} dependencies must be a list`);
-    } else {
-      for (const dependency of feature.dependencies) {
-        if (typeof dependency !== "string") {
-          errors.push(`Feature ${featureId || index} has non-string dependency`);
-        }
-      }
-    }
-  });
-
-  if (inProgress.length > 1) {
-    errors.push(`Only one feature may be in_progress, found: ${inProgress.join(", ")}`);
-  }
-
-  for (const feature of features) {
-    if (!isObject(feature) || !Array.isArray(feature.dependencies)) {
-      continue;
-    }
-
-    for (const dependency of feature.dependencies) {
-      if (!ids.has(dependency)) {
-        errors.push(`Feature ${feature.id} depends on unknown feature ${dependency}`);
-      }
-    }
-  }
-
-  if (!Array.isArray(data.harnessDocs)) {
-    errors.push("harnessDocs must be a list");
+  if (noInstall) {
+    console.log("[3/7] Skipping dependency installation (--no-install).");
   } else {
-    for (const doc of data.harnessDocs) {
-      if (typeof doc !== "string" || !existsSync(doc)) {
-        errors.push(`harnessDocs entry does not exist: ${doc}`);
-      }
-    }
+    console.log("[3/7] Installing npm dependencies...");
+    installDependencies();
+    installMissingLinuxRolldownBinding();
+    console.log("[3/7] Dependencies are ready.");
   }
 
-  validateLocalFixtureIgnored(errors);
+  console.log("[4/7] Running TypeScript checks...");
+  run(npmCommand, ["run", "check-types", "--if-present"]);
+  console.log("[4/7] Project type-check script passed.");
 
-  if (errors.length > 0) {
-    for (const error of errors) {
-      console.error(`ERROR: ${error}`);
-    }
+  console.log("[5/7] Running Vitest...");
+  run(npmCommand, ["run", "test"]);
+  console.log("[5/7] Vitest passed.");
 
-    process.exit(1);
-  }
+  console.log("[6/7] Running production build...");
+  run(npmCommand, ["run", "build", "--if-present"]);
+  console.log("[6/7] Production build passed.");
 
-  console.log("feature_list.json structure is valid.");
-}
-
-function validateLocalFixtureIgnored(errors) {
-  const fixturePath = "local-fixtures/lotr/tts-save.json";
-
-  if (!existsSync(fixturePath)) {
-    return;
-  }
-
-  const insideWorkTree = spawnSync(
-    gitCommand,
-    ["rev-parse", "--is-inside-work-tree"],
-    { stdio: "ignore", shell: false },
-  );
-
-  if (insideWorkTree.status !== 0) {
-    return;
-  }
-
-  const checkIgnore = spawnSync(gitCommand, ["check-ignore", "-q", fixturePath], {
-    stdio: "ignore",
-    shell: false,
-  });
-
-  if (checkIgnore.status !== 0) {
-    errors.push("local LOTR fixture is not ignored by git.");
-  }
+  console.log("[7/7] Implementation baseline is healthy.");
+  console.log("LoreCanvas is ready for the multi-agent feature loop.");
 }
 
 function installDependencies() {
@@ -291,10 +137,6 @@ function readJson(filePath) {
   } catch (error) {
     fail(`${filePath} is not valid JSON: ${getErrorMessage(error)}`);
   }
-}
-
-function isObject(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function fail(message) {

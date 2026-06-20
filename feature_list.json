@@ -7,6 +7,14 @@
   "validationScenario": "Local testing only: MVP and later E2E validation use ignored LOTR fixture at local-fixtures/lotr/LotR-FotF, including image-pack manifest, sliced cards, board assets, and LOTRRule.pdf.",
   "harnessDocs": [
     "docs/product.md",
+    "docs/agent-system.md",
+    "docs/architecture.md",
+    "docs/human-gates.md",
+    "docs/codex-capabilities.md",
+    "agent_harness.json",
+    "agent_work/current.json",
+    "schemas/agent-run.schema.json",
+    "schemas/evidence.schema.json",
     "clean-state-checklists.md",
     "progress.md"
   ],
@@ -633,47 +641,35 @@
     }
   ],
   "mvpFocus": {
-    "updatedAt": "2026-06-14",
-    "phase": "Manual setup component readiness",
-    "summary": "The Edit/Run board MVP and Maker map editor are stable enough for graph editing, image import, asset placement, and selected-object inspection. The next gap is full manual setup for complex American/story board games: card decks and zones, custom dice, tile/marker slots, pawn stacks, and supply pools must be first-class enough to reproduce LOTRRule.pdf setup before movement validation or automation work resumes.",
+    "updatedAt": "2026-06-20",
+    "phase": "Generic automation foundation",
+    "summary": "The manual Edit/Run setup surface and LOTR expressiveness validation are complete. Development now proceeds through the multi-agent feature loop: F-10 graph movement validation, F-11 manual global trackers, F-12 generic JSON rule triggers, and F-13 the theatrical renderer.",
     "modeModel": {
       "editMode": "Edits setup definition only through four state surfaces plus structural assets: Board State for global scenario state, Object State for Entity/Object state, Location State for per-Location semantic state, and Edge State for per-connection semantic state. It also edits asset manifest, Board Template, background, Locations, Edges, zones, default placement slots, and Setup Preset entities/cards/tokens/counters. It does not create runtime scenario state.",
       "runMode": "Consumes a finalized scenario definition, freezes Board Template and Setup Preset, derives an initial runtime snapshot, then allows manual runtime operations such as moving Location-bound Entities, adjusting stacks/counters, moving cards between zones, and saving/reloading current runtime state."
     },
-    "setupGapAnalysis": {
-      "source": "local-fixtures/lotr/LotR-FotF/LOTRRule.pdf setup section extracted with pdfplumber on 2026-06-14; local-fixtures/lotr/LotR-FotF/manifest.json reports CARD, BOARD, OTHER, PAWN, TILE, and TOKEN assets including one card-slice collection with 9 decks / 271 card faces and dice-face-plan.json with combat and search dice.",
-      "alreadyCovered": [
-        "Large image asset import, thumbnails, and category inference",
-        "Board background, Location, and Edge creation/editing",
-        "Direct PAWN/TOKEN/TILE/CARD asset placement and selected-entity inspection",
-        "Generic Object/Location/Edge/Board JSON state panels",
-        "Edit/Run freeze and local save/load"
-      ],
-      "missingBeforeFullManualSetup": [
-        "Ordered card decks, discard piles, hands, displays, set-aside/unused piles, shuffle/draw/deal/flip operations, and card-zone serialization",
-        "Custom dice definitions, dice pools, manual/deterministic rolls, selected face overrides, and roll-state serialization",
-        "Named tile/marker slots for Locations, tracks, and displays, with assign/replace/clear behavior synced to visual placements",
-        "Count-bearing pawn stacks and supply pools with split/merge/move/adjust operations",
-        "A LOTR setup validation that proves all of the above can express the PDF setup without product-level LOTR branches"
-      ],
-      "lotrSetupRequirements": [
-        "Board is placed as the central background; threat and hope markers start on dotted track spaces.",
-        "Two special shadow cards begin in shadow discard; remaining shadow cards form the shadow deck.",
-        "Friendly troop stacks start at named colored Locations with remaining supply by army.",
-        "Shadow troop stacks start at named red Locations, with 9 random shadow-card deployments recorded as unresolved setup randomness and remaining shadow supply preserved.",
-        "Nazgul stacks and Eye marker start in specified regions.",
-        "Objective display includes Destroy the One Ring plus other selected objectives; objective setup instructions may require character-card selection.",
-        "Each player receives two character cards, reference cards, character figure placements, and a starting hand from the player deck.",
-        "Skies Darken cards are set aside; event cards are selected by player count; selected events and region cards form the player deck; unused event/Skies cards leave play.",
-        "Solo setup adds Frodo and Sam, four other faceup character cards, a solo token on the leftmost character, and starting figure placements."
-      ]
-    },
-    "deferredForMvp": [
+    "completedManualFoundation": [
+      "Large image asset import, thumbnails, and category inference",
+      "Board background, Location, and Edge creation/editing",
+      "Direct PAWN/TOKEN/TILE/CARD asset placement and selected-entity inspection",
+      "Generic Object/Location/Edge/Board JSON state panels",
+      "Edit/Run freeze and scenario.json plus external-assets save/load",
+      "Ordered card zones and manual card operations",
+      "Custom dice definitions, pools, rolls, and overrides",
+      "Named tile and marker slots",
+      "Count-bearing pawn/token stacks and supply pools",
+      "LOTR manual setup validation without product-specific branches"
+    ],
+    "nextSequence": [
+      "F-10-MovementValidation",
+      "F-11-GlobalTrackerState",
+      "F-12-RuleTriggerEngine",
+      "F-13-TheatricalRenderer"
+    ],
+    "stillDeferred": [
       "automatic setup parsing",
-      "automatic rule trigger resolution",
-      "movement validation until manual setup is validated",
-      "Cut-in theatrical rendering",
-      "visual filter automation",
+      "automatic game-specific setup resolution",
+      "online multiplayer and cloud persistence",
       "game-specific LOTR rules"
     ],
     "fixtureNotes": [

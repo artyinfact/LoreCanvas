@@ -4,6 +4,11 @@ new_feature_list.json
 node_modules/
 dist/
 coverage/
+agent_work/.mutation.lock
+agent_work/*.tmp
+agent_work/pending-transaction.json
+agent_work/dev-server.json
+agent_work/dev-server.json.tmp
 .vercel/
 .env
 .env.*

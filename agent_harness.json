@@ -1,0 +1,148 @@
+{
+  "$schema": "LoreCanvas-Agent-Harness",
+  "version": "1.0.0",
+  "taskSource": "feature_list.json",
+  "activeRun": "agent_work/current.json",
+  "orchestratorSkill": ".agents/skills/lorecanvas-feature-loop/SKILL.md",
+  "maxActiveFeatures": 1,
+  "maxParallelWriteAgents": 2,
+  "roles": [
+    {
+      "id": "planner",
+      "agent": ".codex/agents/lorecanvas-planner.toml",
+      "mode": "read",
+      "owns": ["requirements", "work-packets", "human-gates"]
+    },
+    {
+      "id": "engine",
+      "agent": ".codex/agents/lorecanvas-engine-worker.toml",
+      "mode": "write",
+      "owns": ["src/engine/**", "assigned src/state/**"]
+    },
+    {
+      "id": "web",
+      "agent": ".codex/agents/lorecanvas-web-worker.toml",
+      "mode": "write",
+      "owns": ["src/ui/**", "src/styles.css", "assigned src/state/**"]
+    },
+    {
+      "id": "test",
+      "agent": ".codex/agents/lorecanvas-test-worker.toml",
+      "mode": "write",
+      "owns": ["tests/**"]
+    },
+    {
+      "id": "browser-qa",
+      "agent": ".codex/agents/lorecanvas-browser-qa.toml",
+      "mode": "read",
+      "owns": ["browser evidence"]
+    },
+    {
+      "id": "reviewer",
+      "agent": ".codex/agents/lorecanvas-reviewer.toml",
+      "mode": "read",
+      "owns": ["independent review", "boundary audit"]
+    }
+  ],
+  "sharedFiles": [
+    "src/state/boardStore.ts",
+    "src/state/scenarioStore.ts",
+    "src/ui/App.tsx",
+    "src/ui/BoardCanvas.tsx",
+    "src/styles.css",
+    "feature_list.json",
+    "progress.md",
+    "agent_work/current.json"
+  ],
+  "states": [
+    "idle",
+    "planning",
+    "awaiting_human",
+    "ready",
+    "implementing",
+    "verifying",
+    "reviewing",
+    "repairing",
+    "blocked",
+    "completed"
+  ],
+  "loop": [
+    {
+      "id": "select",
+      "owner": "planner",
+      "exit": "one dependency-ready pending feature is selected"
+    },
+    {
+      "id": "plan",
+      "owner": "planner",
+      "exit": "acceptance, risks, gates, work packets, write sets, and verification are explicit"
+    },
+    {
+      "id": "human-gate",
+      "owner": "planner",
+      "exit": "required human decisions are approved or the run is awaiting_human"
+    },
+    {
+      "id": "implement",
+      "owner": "engine",
+      "exit": "assigned implementation and focused tests are complete"
+    },
+    {
+      "id": "verify",
+      "owner": "test",
+      "exit": "focused tests, typecheck, build, and full test suite pass"
+    },
+    {
+      "id": "browser-qa",
+      "owner": "browser-qa",
+      "exit": "required rendered-flow evidence is recorded"
+    },
+    {
+      "id": "review",
+      "owner": "reviewer",
+      "exit": "no unresolved P0/P1 correctness or product-boundary finding remains"
+    },
+    {
+      "id": "repair",
+      "owner": "engine",
+      "exit": "review or verification findings are fixed and reverified",
+      "maxIterations": 3
+    },
+    {
+      "id": "close",
+      "owner": "planner",
+      "exit": "feature evidence, progress handoff, and active run state agree"
+    }
+  ],
+  "humanGates": [
+    {
+      "id": "domain",
+      "document": "docs/human-gates.md",
+      "triggers": ["game-rule meaning", "scenario semantics", "fixture interpretation"]
+    },
+    {
+      "id": "visual",
+      "document": "docs/human-gates.md",
+      "triggers": ["layout direction", "art direction", "animation taste", "accessibility tradeoff"]
+    },
+    {
+      "id": "external",
+      "document": "docs/human-gates.md",
+      "triggers": ["production deploy", "credential", "permission", "destructive external action"]
+    }
+  ],
+  "evidenceRequired": [
+    "changedFiles",
+    "focusedVerification",
+    "fullHarness",
+    "review",
+    "humanGateDecisions",
+    "browserVerificationWhenRequired"
+  ],
+  "automation": {
+    "patternMinerSkill": ".agents/skills/lorecanvas-pattern-miner/SKILL.md",
+    "candidateLog": "docs/skill-candidates.md",
+    "minimumOccurrences": 3,
+    "rule": "Automate only stable, reviewable workflows with deterministic success criteria."
+  }
+}

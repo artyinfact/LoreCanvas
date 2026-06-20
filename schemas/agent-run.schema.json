@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lorecanvas.local/schemas/agent-run.schema.json",
+  "title": "LoreCanvas Agent Run",
+  "type": "object",
+  "required": [
+    "version",
+    "activeFeatureId",
+    "state",
+    "iteration",
+    "revision",
+    "workPackets",
+    "humanGates",
+    "evidence",
+    "blockers"
+  ],
+  "properties": {
+    "version": { "type": "string" },
+    "activeFeatureId": { "type": ["string", "null"] },
+    "state": {
+      "enum": [
+        "idle",
+        "planning",
+        "awaiting_human",
+        "ready",
+        "implementing",
+        "verifying",
+        "reviewing",
+        "repairing",
+        "blocked",
+        "completed"
+      ]
+    },
+    "iteration": { "type": "integer", "minimum": 0, "maximum": 3 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "workPackets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "owner",
+          "status",
+          "objective",
+          "writeSet",
+          "dependsOn",
+          "verification",
+          "browserRequired",
+          "humanGateIds"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "owner": { "type": "string", "minLength": 1 },
+          "status": {
+            "enum": ["pending", "ready", "in_progress", "blocked", "completed"]
+          },
+          "objective": { "type": "string", "minLength": 1 },
+          "writeSet": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "verification": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "browserRequired": { "type": "boolean" },
+          "humanGateIds": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "humanGates": { "type": "array" },
+    "evidence": { "type": "object" },
+    "blockers": { "type": "array" }
+  }
+}

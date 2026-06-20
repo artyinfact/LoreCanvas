@@ -1,0 +1,4 @@
+interface:
+  display_name: "LoreCanvas Feature Loop"
+  short_description: "Orchestrate a multi-agent feature loop"
+  default_prompt: "Use $lorecanvas-feature-loop to plan, delegate, verify, and close the next LoreCanvas feature."

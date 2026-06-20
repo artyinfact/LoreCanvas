@@ -1,8 +1,29 @@
 # 功能验收清单
 
+## Multi-Agent Harness
+
+- `npm.cmd run harness:validate` performs read-only validation without
+  installing dependencies.
+- `agent_harness.json`, `agent_work/current.json`, `.codex/agents/`, and the
+  three LoreCanvas repository skills exist and pass validation.
+- At most one product feature is active. Parallel subagents have disjoint write
+  sets, and shared integration files have one writer.
+- The planner records domain, visual, and external-action human gates before
+  implementation.
+- UI/PixiJS changes include structured Browser QA evidence. The in-app Browser
+  is preferred; Computer Use is reserved for Windows-native gaps.
+- An independent reviewer reports no unresolved P0/P1 issue before closure.
+- The repair loop stops after three iterations with the same root cause.
+- `feature_list.json`, `progress.md`, and `agent_work/current.json` agree when a
+  feature is completed.
+- Repeated-work candidates require three linked occurrences before promotion to
+  a skill, script, hook, or automation.
+
 ## Cross-Platform Harness
 
 - Canonical implementation: `node ./scripts/init.mjs`.
+- Read-only validation: `node ./scripts/init.mjs --validate-only`.
+- No-install full check: `node ./scripts/init.mjs --no-install`.
 - Windows / PowerShell accepted baseline commands: `.\init.ps1`, `.\init.cmd`, or `npm.cmd run harness`.
 - POSIX / Git Bash accepted baseline command: `./init.sh`.
 - A failure from `C:\Windows\System32\bash.exe` when WSL is not installed is not a project baseline failure; rerun the harness through `.\init.ps1` or `npm.cmd run harness`.
@@ -12,8 +33,10 @@
 ## 全局清洁状态
 
 - `./init.sh` 可运行；没有 `package.json` 时应清楚报告实现脚手架尚未创建。
-- `./init.sh` 的 harness state validation 通过，包括 `feature_list.json` 结构、依赖、状态和 evidence 校验。
+- Harness state validation 通过，包括 feature DAG、agent roles、active run、
+  write-set ownership、状态和 evidence 基础校验。
 - 已有实现阶段中，`npx vitest run` 必须全绿。
+- Production build 必须通过。
 - `feature_list.json`、`progress.md` 和本清单保持一致。
 - `local-fixtures/lotr/` 必须处于 `.gitignore` 覆盖范围内，不得作为正式资产提交。
 - 新实现不得为了 LOTR 场景写入游戏专属分支。

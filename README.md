@@ -1,8 +1,9 @@
 # LoreCanvas
 
 LoreCanvas is a theatrical virtual tabletop engine for story-driven board games.
-The current build is the first pure-manual MVP: it focuses on image asset import,
-graph-board setup, generic object state, and local scenario save/load.
+The current build is a pure-manual MVP with image asset import, graph-board
+setup, generic setup/runtime state, cards, dice, slots, stacks, and local
+`scenario.json` save/load using an external assets folder.
 
 ## Current Scope
 
@@ -14,14 +15,15 @@ This version supports:
 - A node-graph board: background image, Locations, Edges, and placed object images.
 - Generic JSON state panels for Board, Object, Location, and Edge state.
 - Run-mode manual operations: move bound objects between Locations, adjust counts, and move card-like objects to zone ids.
-- Browser-local scenario Save/Load for the current manual workflow.
+- Manual card zones, custom dice pools, tile/marker slots, pawn/token stacks, and supply zones.
+- Scenario `Save`/`Load` through a JSON file kept beside the source assets folder.
 
 This version intentionally does not include online multiplayer, automatic setup parsing,
 movement validation, rule triggers, Cut-in animations, or game-specific LOTR logic.
 
 ## Requirements
 
-- Node.js `>=18.19.0`
+- Node.js `>=22.12.0` (the repository `.nvmrc` pins Node 24)
 - npm
 - Windows PowerShell, CMD, or a POSIX/Git Bash shell
 
@@ -65,7 +67,16 @@ http://localhost:5173/
 ```
 
 If `.\init.ps1` fails because a Vite dev server is locking files under `node_modules`,
-stop the dev server and run the harness again.
+run:
+
+```powershell
+.\scripts\with-vite-stopped.ps1
+```
+
+The `npm run dev` wrapper records the exact LoreCanvas repository root and Vite
+child PID. The script stops only that registered child after verifying its
+absolute Vite entry path, runs the full harness, and restarts the same arguments.
+It refuses stale or malformed metadata.
 
 ## Recommended Asset Pack Layout
 
@@ -106,8 +117,8 @@ inside an `assets/<category>` folder.
 6. Select a Location, Edge, or placed object and edit its JSON state in the Inspector.
 7. Click `Run` to freeze the setup and play manually.
 8. In Run mode, select an object to move it by Location, adjust its count, or set a card/zone id.
-9. Click `Save` to store the current scenario snapshot in browser localStorage.
-10. Click `Load` to restore the last saved local scenario.
+9. Click `Save` to write `scenario.json`.
+10. Keep `scenario.json` with the matching assets folder and use `Load` to restore it.
 
 ## State Panels
 
@@ -121,16 +132,36 @@ set it to `null` or replace the scenario by loading a saved snapshot.
 
 ## Save/Load Notes
 
-The current `Save`/`Load` buttons are browser-local MVP controls. They preserve the
-scenario JSON state in localStorage, including asset references and generated thumbnail
-references, but they do not create a portable binary archive.
+`Save` writes scenario structure and asset metadata to `scenario.json`; it does
+not embed image bytes. Images remain in the user-provided assets folder.
 
-Practical implications:
+- Keep `scenario.json` with the matching assets folder.
+- Importing the folder before or after loading the JSON reconciles assets by
+  source path and metadata.
+- A scenario loaded without its matching assets can restore structure, but
+  images remain unresolved until the folder is imported.
+- The long-term `.lorecanvas` package contract remains a product decision; do
+  not treat the current JSON file flow as a binary archive.
 
-- Save/Load works best within the same browser session after importing the image pack.
-- Imported images are browser object URLs, so a future portable `.lorecanvas` package
-  still needs asset-file resolution or embedded assets.
-- Keep the source `assets` folder as the durable source of image files.
+## Multi-Agent Development
+
+The repository uses a product-level single-feature loop with parallel,
+write-set-isolated subagents inside the feature.
+
+```powershell
+npm.cmd run harness:validate
+npm.cmd run agent:status
+npm.cmd run agent:next
+```
+
+Start implementation by invoking `$lorecanvas-feature-loop`. Project custom
+agents live in `.codex/agents/`; reusable workflows live in
+`.agents/skills/`. See `docs/agent-system.md` for ownership, human decision
+gates, Browser/Computer Use routing, repair limits, and evidence requirements.
+
+`npm.cmd run harness:validate` is read-only and does not install dependencies.
+`npm.cmd run harness:quick` runs typecheck, tests, and build without `npm ci`.
+The full `.\init.ps1` baseline still installs locked dependencies.
 
 ## Development Commands
 

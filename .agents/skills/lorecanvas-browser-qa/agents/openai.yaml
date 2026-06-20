@@ -1,0 +1,4 @@
+interface:
+  display_name: "LoreCanvas Browser QA"
+  short_description: "Verify LoreCanvas UI with browser evidence"
+  default_prompt: "Use $lorecanvas-browser-qa to verify the changed LoreCanvas flow and return reproducible evidence."

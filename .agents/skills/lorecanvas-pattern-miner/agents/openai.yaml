@@ -1,0 +1,4 @@
+interface:
+  display_name: "LoreCanvas Pattern Miner"
+  short_description: "Turn repeated work into skill candidates"
+  default_prompt: "Use $lorecanvas-pattern-miner to find repeated LoreCanvas workflows and propose a reusable skill."

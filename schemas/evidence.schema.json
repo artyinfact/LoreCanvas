@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lorecanvas.local/schemas/evidence.schema.json",
+  "title": "LoreCanvas Verification Evidence",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "featureId",
+    "kind",
+    "sourceCommit",
+    "startedAt",
+    "finishedAt",
+    "environment",
+    "checks",
+    "artifacts",
+    "failures",
+    "verdict"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "featureId": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["test", "browser-qa", "review", "integration"] },
+    "sourceCommit": { "type": "string", "minLength": 7 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "environment": { "type": "object" },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "requirement", "result", "evidence"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "requirement": { "type": "string", "minLength": 1 },
+          "action": { "type": "string" },
+          "oracle": { "type": "string" },
+          "result": { "enum": ["pass", "fail", "blocked"] },
+          "evidence": { "type": "array" }
+        }
+      }
+    },
+    "artifacts": { "type": "array" },
+    "failures": { "type": "array" },
+    "verdict": { "enum": ["pass", "fail", "blocked"] }
+  }
+}

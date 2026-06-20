@@ -13,14 +13,15 @@ import {
   LOTR_MANIFEST_PATH,
   LOTR_RULE_PATH,
   readManifest,
-} from "../state/scenarioStore.test";
+} from "../fixtures/lotrScenario";
+
+const hasLotrFixture =
+  existsSync(LOTR_MANIFEST_PATH) && existsSync(LOTR_RULE_PATH);
 
 describe("F-09 LOTR manual setup validation", () => {
-  it("freezes and round-trips the generic manual LOTR setup without product branches", () => {
-    if (!existsSync(LOTR_MANIFEST_PATH) || !existsSync(LOTR_RULE_PATH)) {
-      return;
-    }
-
+  it.skipIf(!hasLotrFixture)(
+    "freezes and round-trips the generic manual LOTR setup without product branches",
+    () => {
     const manifest = readManifest();
     const scenario = buildLotrSetupScenario(manifest);
 
@@ -164,7 +165,8 @@ describe("F-09 LOTR manual setup validation", () => {
     );
 
     expect(scanProductCodeForLotrBranches()).toEqual([]);
-  });
+    },
+  );
 });
 
 function cloneSetupSlices(state: {

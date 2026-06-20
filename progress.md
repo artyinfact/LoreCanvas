@@ -2,6 +2,103 @@
  
 这是 `LoreCanvas` 的长时任务系统事实来源。每次会话开始时先读本文件，结束时写回已验证状态、下一步和 blocker。
 
+> Current snapshot: 2026-06-20. The sections immediately below supersede older
+> appended history. `feature_list.json`, `agent_harness.json`, and
+> `agent_work/current.json` are the machine-readable sources of truth.
+
+## 2026-06-20 Current Snapshot
+
+- The development system has been migrated from a single-agent prompt loop to a
+  multi-agent feature loop.
+- Product-level concurrency remains one active feature. Inside that feature,
+  planner, engine, web, test, browser-QA, and reviewer agents can work in
+  parallel when write sets are disjoint.
+- The main agent is the only integrator for shared files and final evidence.
+- Machine-readable orchestration:
+  - `agent_harness.json`
+  - `agent_work/current.json`
+  - `scripts/agent-run.mjs`
+- Human-readable operating documents:
+  - `docs/agent-system.md`
+  - `docs/architecture.md`
+  - `docs/human-gates.md`
+  - `docs/codex-capabilities.md`
+- Project custom agents live under `.codex/agents/`.
+- Repository workflows:
+  - `$lorecanvas-feature-loop`
+  - `$lorecanvas-browser-qa`
+  - `$lorecanvas-pattern-miner`
+- A trusted-project `Stop` hook is configured to run read-only harness
+  validation. Codex must ask the human to trust the hook before it executes.
+- The Codex app automation `lorecanvas-pattern-miner` runs Mondays at 09:00
+  Europe/Stockholm in an isolated worktree.
+
+## Current Verification
+
+- `npm.cmd run harness:validate`: passed.
+- `npm.cmd run harness:quick`: passed before the final review fixes.
+  - TypeScript passed.
+  - Vitest passed: 24 files / 98 tests.
+  - Production build passed.
+- `.\scripts\with-vite-stopped.ps1`: passed after the registered
+  dev-server safety rework; it verified the wrapper→Vite parent relationship and
+  absolute repository Vite entry, completed full install and restored the same
+  server arguments.
+- Restored dev server returned HTTP 200 with the LoreCanvas title; final cleanup
+  removed the dev-server metadata.
+- A concurrent claim test started F-10 and F-11 simultaneously: one claim won,
+  the other exited with `another run is active`, and release restored the idle
+  state without leaking the lock or recovery journal.
+- `tests/harness/agentHarness.test.ts`: 5 tests cover exact, parent-child,
+  internal-dot, Windows case, glob, repository-root, shared-file, role-mode, and
+  max parallel writer validation.
+- Independent review found and drove fixes for write-set bypasses and unsafe
+  Vite process attribution. The final scoped review returned `CLEAR`.
+- Final `.\init.ps1`: passed with no harness warnings; TypeScript, 25 test files
+  / 99 unique tests, and production build are green.
+- LOTR setup builders now live in `tests/fixtures/lotrScenario.ts`; tests no
+  longer import another `.test.ts`, and missing local fixtures are explicit
+  skips instead of silent passes.
+- All three repository skills passed the official skill-creator validator.
+- Independent multi-agent audits covered product/harness, architecture,
+  test/browser QA, and current Codex capabilities.
+- In-app Browser verification:
+  - `http://127.0.0.1:5173/` loaded as LoreCanvas.
+  - No Vite error overlay and no console warn/error.
+  - Default viewport rendered a PixiJS canvas at 638 × 498 CSS pixels with DPR
+    backing size 1276 × 996.
+  - Mobile viewport 390 × 844 had no document overflow; the PixiJS canvas
+    rendered at 349 × 538.
+- Computer Use is present but its June 20 health check failed inside the bundled
+  `@oai/sky` runtime because a Windows client package subpath was not exported.
+  This is recorded as a capability limitation, not a LoreCanvas baseline
+  failure.
+
+## Current Risks / Debt
+
+- `App.tsx`, `boardStore.ts`, `serialization.ts`, `BoardCanvas.tsx`, and
+  `styles.css` are high-conflict integration hotspots. They have one writer at a
+  time.
+- The stable product document still describes `.lorecanvas`, while the current
+  MVP UI uses `scenario.json` plus an external assets folder. This is a product
+  contract decision and requires the domain/product human gate before changing
+  `docs/product.md`.
+- Browser Developer mode is documented as the preferred route for CDP
+  diagnostics, but this session did not advertise full CDP capability. Do not
+  claim it was used.
+
+## Next Action
+
+1. Invoke `$lorecanvas-feature-loop`.
+2. Start `F-10-MovementValidation`, the lowest-priority dependency-ready
+   feature.
+3. Use the planner/engine/test/browser-QA/reviewer packet split returned by the
+   validated feature-loop forward test.
+4. Do not start F-11 concurrently at the product level even though its
+   dependencies are ready; use parallel lanes inside F-10 instead.
+
+No git staging, commit, push, PR, or deployment was performed.
+
 ## 当前会话目标
 
 - 已完成 F-00 收尾确认，并完成 `F-01-GraphBoard`（大地图编辑模式 / 核心图谱 Board）。
